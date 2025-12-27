@@ -1,0 +1,116 @@
+# English Stopwords for Moodle Search
+# Docker Edition - Pure Docker Solution
+# Optimized for English educational content
+
+# Articles
+a
+an
+the
+
+# Pronouns
+i
+me
+my
+we
+our
+you
+your
+he
+him
+his
+she
+her
+it
+its
+they
+them
+their
+
+# Prepositions
+in
+on
+at
+to
+for
+of
+with
+from
+by
+about
+as
+into
+through
+during
+before
+after
+above
+below
+between
+under
+over
+
+# Conjunctions
+and
+or
+but
+if
+because
+while
+where
+when
+than
+that
+which
+who
+whom
+
+# Common verbs
+is
+are
+was
+were
+be
+been
+being
+have
+has
+had
+do
+does
+did
+will
+would
+should
+could
+may
+might
+can
+
+# Common adverbs
+not
+no
+all
+just
+more
+most
+very
+also
+only
+such
+so
+than
+too
+then
+there
+these
+those
+
+# Moodle-specific (English)
+course
+courses
+lesson
+lessons
+assignment
+assignments
+quiz
+quizzes

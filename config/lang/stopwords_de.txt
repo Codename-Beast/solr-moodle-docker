@@ -1,0 +1,94 @@
+# German Stopwords for Moodle Search
+# Docker Edition - Pure Docker Solution
+# Optimized for German educational content
+
+# Articles
+der
+die
+das
+den
+dem
+des
+ein
+eine
+einer
+eines
+einem
+einen
+
+# Pronouns
+ich
+du
+er
+sie
+es
+wir
+ihr
+ihm
+ihn
+mich
+dich
+sich
+
+# Prepositions
+in
+auf
+an
+von
+mit
+zu
+bei
+aus
+nach
+über
+unter
+vor
+durch
+für
+um
+
+# Conjunctions
+und
+oder
+aber
+denn
+dass
+wenn
+weil
+als
+ob
+bis
+
+# Common verbs
+ist
+sind
+war
+waren
+wird
+werden
+sein
+haben
+hat
+hatte
+hatten
+
+# Common adverbs
+auch
+noch
+nicht
+nur
+schon
+sehr
+mehr
+wie
+wo
+was
+warum
+
+# Moodle-specific (German)
+kurs
+kurse
+lektion
+lektionen
+aufgabe
+aufgaben
