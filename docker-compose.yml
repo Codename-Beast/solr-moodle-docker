@@ -1,0 +1,155 @@
+# =========================================
+# Solr for Moodle
+# Developer: Bernd Schreistetter
+# Company: Eledia.de
+# Version: v2.0
+# =========================================
+
+services:
+  # =================================
+  # [SETUP] Generate .env
+  # =================================
+  moodle_setup:
+    image: alpine:3.20
+    profiles: ["setup"]
+    container_name: ${INSTANCE_NAME:-solr}_setup
+    working_dir: /workspace
+    volumes:
+      - ./init:/init:ro
+      - ./eledia-workplace:/eledia-workplace
+    entrypoint: ["/bin/sh", "/init/generate_env.sh"]
+    environment:
+      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
+    restart: "no"
+
+  # =================================
+  # [BOOTSTRAP]
+  # =================================
+  solr-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.init
+    image: solr-init:v2.0
+    container_name: ${INSTANCE_NAME:-solr}_init
+    user: "0:0"
+    volumes:
+      - solr_data:/var/solr/data
+      - prometheus_config:/prometheus-config
+      - ./eledia-workplace:/eledia-workplace:ro
+    environment:
+      ENV_FILE_PATH: /eledia-workplace/.env
+      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
+      SOLR_CORE_NAME: ${SOLR_CORE_NAME:-moodle_core}
+      SOLR_VERSION: ${SOLR_VERSION:-9.10.0}
+      SOLR_HEAP: ${SOLR_HEAP:-2g}
+      SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
+      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:-admin}
+      SOLR_ADMIN_PASSWORD: ${SOLR_ADMIN_PASSWORD:-eledia_default}
+      SOLR_SUPPORT_USER: ${SOLR_SUPPORT_USER:-support}
+      SOLR_SUPPORT_PASSWORD: ${SOLR_SUPPORT_PASSWORD:-eledia_default}
+      SOLR_MOODLE_USER: ${SOLR_MOODLE_USER:-moodle}
+      SOLR_MOODLE_PASSWORD: ${SOLR_MOODLE_PASSWORD:-eledia_default}
+    networks:
+      - solr_network
+    restart: "no"
+  # =================================
+  # Main service
+  # =================================
+  solr:
+    image: solr:${SOLR_VERSION:-9.10.0}
+    container_name: ${INSTANCE_NAME:-solr}_solr
+    depends_on:
+      solr-init:
+        condition: service_completed_successfully
+    ports:
+      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:8983"
+    user: "8983:8983"
+    volumes:
+      - solr_data:/var/solr/data
+    environment:
+      SOLR_HEAP: ${SOLR_HEAP:-2g}
+      SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - solr_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8983/solr/admin/ping | grep -qE '(200|401)'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # =================================
+  # [PROMETHEUS] monitoring
+  # =================================
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["monitoring"]
+    container_name: ${INSTANCE_NAME:-solr}_prometheus
+    user: "65534:65534"
+    depends_on:
+      solr:
+        condition: service_healthy
+    ports:
+      - "${PROMETHEUS_BIND:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - prometheus_config:/etc/prometheus:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.listen-address=:9090"
+    networks:
+      - solr_network
+    restart: unless-stopped
+
+  # =================================
+  # [GRAFANA] visualization
+  # =================================
+  grafana:
+    image: grafana/grafana:11.3.2
+    profiles: ["monitoring"]
+    container_name: ${INSTANCE_NAME:-solr}_grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - solr_network
+    restart: unless-stopped
+
+# =================================
+# Volumes
+# =================================
+volumes:
+  solr_data:
+    name: solr_data_${INSTANCE_NAME:-solr}
+  prometheus_data:
+    name: prometheus_data_${INSTANCE_NAME:-solr}
+  prometheus_config:
+    name: prometheus_config_${INSTANCE_NAME:-solr}
+  grafana_data:
+    name: grafana_data_${INSTANCE_NAME:-solr}
+
+# =================================
+# Network
+# =================================
+networks:
+  solr_network:
+    name: ${INSTANCE_NAME:-solr}_network
+    driver: bridge

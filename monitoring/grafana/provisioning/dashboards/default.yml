@@ -1,0 +1,17 @@
+# =========================================
+# Grafana Dashboard Provisioning
+# Developer: BSC Bernd Schreistetter
+# Company: Eledia.de
+# Version: v2.0
+# =========================================
+apiVersion: 1
+
+providers:
+  - name: 'Solr Monitoring'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

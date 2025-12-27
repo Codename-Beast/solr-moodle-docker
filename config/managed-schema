@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ Moodle Solr Managed Schema
+ Author: BSC (Bernd Schreistetter)
+
+ Compatible with: Moodle 4.x, 5.x
+ Solr Version: 9.x
+
+ This is a managed-schema that allows Moodle to add/modify fields via Schema API.
+ Pre-populated with required Moodle fields for immediate functionality.
+-->
+<schema name="moodle" version="1.6">
+
+  <!-- ===============================
+       Field Types (Solr 9.x compatible)
+  ================================== -->
+
+  <!-- String: exact match, not tokenized -->
+  <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
+
+  <!-- Boolean -->
+  <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
+
+  <!-- Numeric Point Types (Solr 7+ standard) -->
+  <fieldType name="pint" class="solr.IntPointField" docValues="true"/>
+  <fieldType name="plong" class="solr.LongPointField" docValues="true"/>
+  <fieldType name="pfloat" class="solr.FloatPointField" docValues="true"/>
+  <fieldType name="pdouble" class="solr.DoublePointField" docValues="true"/>
+  <fieldType name="pdate" class="solr.DatePointField" docValues="true"/>
+
+  <!-- Text: general multilingual search -->
+  <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+    <analyzer type="index">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.StopFilterFactory" ignoreCase="true" words="lang/stopwords.txt"/>
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.StopFilterFactory" ignoreCase="true" words="lang/stopwords.txt"/>
+    </analyzer>
+  </fieldType>
+
+  <!-- ===============================
+       Moodle Required Fields
+       (from search_solr\document::get_default_fields_definition)
+  ================================== -->
+
+  <!-- Unique document identifier -->
+  <field name="id" type="string" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Document title -->
+  <field name="title" type="text_general" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- Document content (main searchable text) -->
+  <field name="content" type="text_general" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- Descriptions -->
+  <field name="description1" type="text_general" indexed="true" stored="true" multiValued="false"/>
+  <field name="description2" type="text_general" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- Moodle context ID (required) -->
+  <field name="contextid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Moodle course ID (required) -->
+  <field name="courseid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Owner user ID (required) -->
+  <field name="owneruserid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Modification timestamp (required) -->
+  <field name="modified" type="pdate" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Document type (required) - integer type for Moodle -->
+  <field name="type" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Search area ID (required) -->
+  <field name="areaid" type="string" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- Moodle item ID (required) -->
+  <field name="itemid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+
+  <!-- ===============================
+       Moodle Optional Fields
+  ================================== -->
+
+  <!-- User ID -->
+  <field name="userid" type="pint" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- Group ID -->
+  <field name="groupid" type="pint" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- Introduction/Summary -->
+  <field name="intro" type="text_general" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- ===============================
+       Moodle File Indexing Fields
+       (Solr-specific fields for file search)
+  ================================== -->
+
+  <!-- File grouping ID -->
+  <field name="solr_filegroupingid" type="string" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- File ID -->
+  <field name="solr_fileid" type="string" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- File content hash -->
+  <field name="solr_filecontenthash" type="string" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- File indexing status -->
+  <field name="solr_fileindexstatus" type="pint" indexed="true" stored="true" multiValued="false"/>
+
+  <!-- File content (not stored, only indexed for search) -->
+  <field name="solr_filecontent" type="text_general" indexed="true" stored="false" multiValued="false"/>
+
+  <!-- ===============================
+       System Fields
+  ================================== -->
+
+  <!-- Version field for optimistic concurrency -->
+  <field name="_version_" type="plong" indexed="false" stored="false"/>
+
+  <!-- Root field for nested documents -->
+  <field name="_root_" type="string" indexed="true" stored="false" docValues="false"/>
+
+  <!-- Catch-all text field -->
+  <field name="_text_" type="text_general" indexed="true" stored="false" multiValued="true"/>
+
+  <!-- ===============================
+       Dynamic Fields (for flexibility)
+  ================================== -->
+  <dynamicField name="*_txt" type="text_general" indexed="true" stored="true"/>
+  <dynamicField name="*_s" type="string" indexed="true" stored="true"/>
+  <dynamicField name="*_i" type="pint" indexed="true" stored="true"/>
+  <dynamicField name="*_l" type="plong" indexed="true" stored="true"/>
+  <dynamicField name="*_b" type="boolean" indexed="true" stored="true"/>
+  <dynamicField name="*_dt" type="pdate" indexed="true" stored="true"/>
+
+  <!-- Unique Key -->
+  <uniqueKey>id</uniqueKey>
+
+  <!-- Copy Fields to catch-all -->
+  <copyField source="title" dest="_text_"/>
+  <copyField source="content" dest="_text_"/>
+  <copyField source="description1" dest="_text_"/>
+  <copyField source="description2" dest="_text_"/>
+  <copyField source="intro" dest="_text_"/>
+
+</schema>

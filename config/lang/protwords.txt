@@ -1,0 +1,32 @@
+# Protected Words for Moodle Search
+# Docker Edition - Pure Docker Solution
+# These words will not be stemmed during indexing
+
+# Moodle-specific technical terms
+Moodle
+SCORM
+LTI
+API
+SQL
+PHP
+HTML
+CSS
+JavaScript
+JSON
+XML
+
+# Educational terms that should not be stemmed
+Quiz
+Forum
+Assignment
+Course
+Lesson
+Grade
+Certificate
+
+# Technical terms
+Admin
+User
+Plugin
+Module
+Database
