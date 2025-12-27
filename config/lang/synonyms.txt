@@ -1,0 +1,50 @@
+# Synonyms for Moodle Search (Multi-Language)
+# Docker Edition - Pure Docker Solution
+# Format: word1, word2, word3 => normalized_form
+# OR: word1, word2, word3 (all equal)
+
+# Educational Terms (English/German)
+course, kurs, class, klasse
+lesson, lektion, unit, einheit
+assignment, aufgabe, task, arbeit
+quiz, test, exam, prüfung, examination
+student, schüler, learner, lerner, pupil
+teacher, lehrer, instructor, dozent, professor
+grade, note, mark, bewertung
+forum, discussion, diskussion
+file, datei, document, dokument
+video, film, movie
+image, bild, picture, foto, photo
+upload, hochladen, submit, einreichen
+download, herunterladen, get, holen
+
+# Moodle-specific
+activity, aktivität
+resource, ressource, material
+module, modul
+plugin, erweiterung, extension
+theme, design, template
+user, benutzer, nutzer
+group, gruppe, team
+category, kategorie, bereich
+section, abschnitt, bereich
+
+# Common synonyms
+search, suche, find, finden
+help, hilfe, support, unterstützung
+settings, einstellungen, configuration, konfiguration
+edit, bearbeiten, modify, ändern
+delete, löschen, remove, entfernen
+create, erstellen, add, hinzufügen, new, neu
+save, speichern, store
+cancel, abbrechen, abort
+yes, ja, ok
+no, nein, cancel
+
+# Time-related
+today, heute
+tomorrow, morgen
+yesterday, gestern
+week, woche
+month, monat
+year, jahr

@@ -1,0 +1,89 @@
+#!/bin/sh
+# =====================================================
+# /init/generate_env.sh
+# Purpose:
+#   Generate /eledia-workplace/.env on the host system
+#   Works safely under SELinux (Fedora / RHEL)
+# =====================================================
+
+set -eu
+
+# Absolute path inside container (host-mounted)
+TARGET_DIR="/eledia-workplace"
+ENV_FILE="${TARGET_DIR}/.env"
+
+# Helper: generate random 32-char secret
+rand() { openssl rand -hex 16; }
+
+# Ensure directory exists
+mkdir -p "${TARGET_DIR}"
+
+# Skip if already exists
+if [ -f "${ENV_FILE}" ]; then
+  echo "⚠ ${ENV_FILE} already exists — Das fass ich nicht an !."
+  echo "   Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
+  echo "   Permissions:      $(stat -c '%A' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
+  exit 0
+fi
+
+# Dependencies
+apk add --no-cache openssl >/dev/null 2>&1
+
+# Generate random passwords
+ADMIN_PASS="$(rand)"
+SUPPORT_PASS="$(rand)"
+MOODLE_PASS="$(rand)"
+GRAFANA_PASS="$(rand)"
+
+# Write .env file
+cat > "${ENV_FILE}" <<EOF
+# =========================================
+# Solr for Moodle - Environment
+# =========================================
+# Instance name
+INSTANCE_NAME=${INSTANCE_NAME:-solr}
+
+# Solr
+SOLR_VERSION=9.10.0
+SOLR_PORT=8983
+SOLR_BIND=127.0.0.1
+SOLR_CORE_NAME=moodle_core
+SOLR_CORES=
+SOLR_HEAP=2g
+SOLR_LOG_LEVEL=INFO
+
+# Network
+SOLR_NETWORK_NAME=solr_network
+
+# Users (used for security.json generation)
+SOLR_ADMIN_USER=admin
+SOLR_ADMIN_PASSWORD=${ADMIN_PASS}
+SOLR_SUPPORT_USER=support
+SOLR_SUPPORT_PASSWORD=${SUPPORT_PASS}
+SOLR_MOODLE_USER=moodle
+SOLR_MOODLE_PASSWORD=${MOODLE_PASS}
+
+# Monitoring (v1.5)
+MONITORING_BIND_IP=127.0.0.1
+SOLR_METRICS_PORT=9854
+PROMETHEUS_PORT=9090
+PROMETHEUS_BIND=127.0.0.1
+GRAFANA_PORT=3005
+GRAFANA_BIND=127.0.0.1
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
+
+# =========================================
+# Info / Documentation (not used in code)
+# =========================================
+# CUSTOMER_NAME=<customer name for admin reference>
+# NOTES=<additional notes>
+EOF
+
+# Set ownership to Solr (UID 8983) but keep readable for host user
+chown 8983:1000 "${ENV_FILE}" 2>/dev/null || true
+chmod 640 "${ENV_FILE}"
+
+echo "Created ${ENV_FILE}"
+echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
+echo "Permissions: $(stat -c '%A' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
