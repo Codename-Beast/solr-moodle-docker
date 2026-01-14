@@ -19,6 +19,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 # 1. Setup (.env mit sicheren Passwörtern)
 docker compose --profile setup up moodle_setup
 
+# Optional: Mit custom Core-Namen
+SOLR_CORE_NAME=my_custom_core docker compose --profile setup up moodle_setup
+
 # 2. Start
 docker compose up -d
 
