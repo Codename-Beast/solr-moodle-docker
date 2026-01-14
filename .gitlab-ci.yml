@@ -66,6 +66,7 @@ solr-test:
 
     - echo "Testing automatic password generation..."
     - docker compose down -v
+    - rm -f .env
     - |
       cat > .env <<'EOF'
       INSTANCE_NAME=solr
@@ -102,6 +103,7 @@ solr-test:
     - docker compose down -v
 
     - echo "Testing dynamic core management..."
+    - rm -f .env
     - |
       cat > .env <<EOF
       INSTANCE_NAME=solr

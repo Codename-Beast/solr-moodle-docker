@@ -86,6 +86,7 @@ jobs:
       run: |
         echo "Testing automatic password generation..."
         docker compose down -v
+        rm -f .env
 
         cat > .env <<'EOF'
         INSTANCE_NAME=solr
@@ -133,6 +134,7 @@ jobs:
     - name: Test dynamic core management
       run: |
         echo "Testing dynamic core management..."
+        rm -f .env
 
         cat > .env <<'EOF'
         INSTANCE_NAME=solr
