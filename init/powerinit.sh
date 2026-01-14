@@ -286,9 +286,17 @@ echo "→ Fixing permissions..."
 chown -R 8983:8983 "${DATA_DIR}" || true
 chmod -R 755 "${DATA_DIR}" || true
 chown -R 65534:65534 "${PROM_CFG_DIR}" || true
-# Secure sensitive files (600 = owner read/write only)
-chmod 600 "${DATA_DIR}/security.json" || true
-chmod 600 "${DATA_DIR}/.password_checksum" || true
+
+# Secure sensitive files AFTER recursive chmod (600 = owner read/write only)
+# These must be set explicitly to override the recursive 755 above
+if [ -f "${DATA_DIR}/security.json" ]; then
+    chmod 600 "${DATA_DIR}/security.json"
+    echo "  → security.json: 600"
+fi
+if [ -f "${DATA_DIR}/.password_checksum" ]; then
+    chmod 600 "${DATA_DIR}/.password_checksum"
+    echo "  → .password_checksum: 600"
+fi
 echo "✓ Permissions set"
 
 # Ensure all filesystem changes are written to disk before exiting
