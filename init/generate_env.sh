@@ -2,14 +2,14 @@
 # =====================================================
 # /init/generate_env.sh
 # Purpose:
-#   Generate .env file in the root directory
+#   Generate .env file in the root directory (where docker-compose.yml is)
 #   Works safely under SELinux (Fedora / RHEL)
 # =====================================================
 
 set -eu
 
 # Absolute path inside container (host-mounted root directory)
-TARGET_DIR="/workspace"
+TARGET_DIR="/app"
 ENV_FILE="${TARGET_DIR}/.env"
 
 # Helper: generate random 32-char secret
