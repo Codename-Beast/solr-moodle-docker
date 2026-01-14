@@ -39,7 +39,7 @@ services:
     env_file:
       - .env
     environment:
-      ENV_FILE_PATH: /workspace/.env
+      ENV_FILE_PATH: /.env
     networks:
       - solr_network
     restart: "no"
