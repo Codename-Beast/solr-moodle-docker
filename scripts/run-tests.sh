@@ -96,7 +96,7 @@ unit_tests() {
         "init/generate_env.sh"
         "config/managed-schema"
         "config/solrconfig.xml"
-        "config/security.json.template"
+        "init/security.json.template"
     )
     local missing=0
     for file in "${required_files[@]}"; do
