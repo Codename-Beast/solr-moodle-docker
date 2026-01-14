@@ -201,9 +201,10 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
 EOJ
   fi
 
-  chmod 644 "${DATA_DIR}/security.json"
+  chmod 600 "${DATA_DIR}/security.json"
   echo "$CURRENT_PASS_HASH" > "$PASS_HASH_FILE"
-  chmod 644 "$PASS_HASH_FILE"
+  chmod 600 "$PASS_HASH_FILE"
+  chown 8983:8983 "${DATA_DIR}/security.json" "$PASS_HASH_FILE" 2>/dev/null || true
   echo "✓ security.json created/updated"
 fi
 
@@ -242,7 +243,12 @@ echo "→ Setting correct permissions..."
 chown -R 8983:8983 "${DATA_DIR}"
 chmod -R 755 "${DATA_DIR}"
 chown -R 65534:65534 "${PROM_CFG_DIR}"
+
+# Secure sensitive files AFTER recursive chmod (600 = owner read/write only)
 chmod 600 "${DATA_DIR}/security.json"
+chmod 600 "${DATA_DIR}/.password_checksum" 2>/dev/null || true
+echo "  → security.json: 600"
+echo "  → .password_checksum: 600"
 
 # Sync filesystem before exiting (prevents race condition)
 sync
