@@ -18,6 +18,9 @@ RUN mkdir -p /config /workspace /var/solr/data /prometheus-config
 # Copy configuration files into image
 COPY config/ /config/
 
+# Copy security template (not exposed in config folder)
+COPY init/security.json.template /init/security.json.template
+
 # Set working directory
 WORKDIR /
 
@@ -63,12 +66,19 @@ else
   echo "⚠ No external .env found — using defaults"
 fi
 
+# Helper: generate secure password
+generate_secure_password() {
+  openssl rand -hex 16
+}
+
 # Load or generate defaults
 for var in SOLR_ADMIN_PASSWORD SOLR_SUPPORT_PASSWORD SOLR_MOODLE_PASSWORD; do
   val="$(eval echo \${$var:-})"
-  if [ -z "$val" ]; then
-    eval "$var='eledia_default'"
-    echo "→ Using default for $var"
+  # Generate secure password if empty or contains CHANGE_ME
+  if [ -z "$val" ] || echo "$val" | grep -qi "CHANGE_ME"; then
+    generated_pass="$(generate_secure_password)"
+    eval "$var='$generated_pass'"
+    echo "→ Generated secure password for $var"
   fi
 done
 
@@ -160,14 +170,14 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
   SUPPORT_CRED="$(hash_password "${SUPPORT_PASS_PLAIN}")"
   MOODLE_CRED="$(hash_password "${MOODLE_PASS_PLAIN}")"
 
-  if [ -f "${CONF_SRC}/security.json.template" ]; then
+  if [ -f "/init/security.json.template" ]; then
     sed -e "s#__ADMIN_USER__#${ADMIN_USER}#g" \
         -e "s#__SUPPORT_USER__#${SUPPORT_USER}#g" \
         -e "s#__MOODLE_USER__#${MOODLE_USER}#g" \
         -e "s#__ADMIN_HASH__#${ADMIN_CRED}#g" \
         -e "s#__SUPPORT_HASH__#${SUPPORT_CRED}#g" \
         -e "s#__MOODLE_HASH__#${MOODLE_CRED}#g" \
-        "${CONF_SRC}/security.json.template" > "${DATA_DIR}/security.json"
+        "/init/security.json.template" > "${DATA_DIR}/security.json"
   else
     cat > "${DATA_DIR}/security.json" <<EOJ
 {
