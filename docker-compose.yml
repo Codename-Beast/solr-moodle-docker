@@ -13,10 +13,10 @@ services:
     image: alpine:3.20
     profiles: ["setup"]
     container_name: ${INSTANCE_NAME:-solr}-setup
-    working_dir: /workspace
+    working_dir: /
     volumes:
       - ./init:/init:ro
-      - ./:/workspace
+      - ./:/
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
@@ -35,7 +35,7 @@ services:
     volumes:
       - solr_data:/var/solr/data
       - prometheus_config:/prometheus-config
-      - ./.env:/workspace/.env:ro
+      - ./.env:/.env:ro
     env_file:
       - .env
     environment:
