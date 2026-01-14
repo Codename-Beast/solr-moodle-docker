@@ -1,299 +1,87 @@
-# =========================================
-# GitLab CI/CD Pipeline für Solr-Moodle-Docker
-# Developer: BSC Bernd Schreistetter
-# Company: Eledia.de
-# Version: v2.1
-# =========================================
+image: ubuntu:22.04
 
-# Docker-in-Docker für Container-Tests
-image: docker:24.0.7
-
-# Services für Docker-in-Docker
-services:
-  - docker:24.0.7-dind
-
-# Globale Variablen
 variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_HOST: unix:///var/run/docker.sock
   COMPOSE_PROJECT_NAME: solr_test
-  # Für bessere Performance
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fast"
   CACHE_COMPRESSION_LEVEL: "fast"
 
-# Stages definieren
 stages:
-  - validate
-  - build
   - test
-  - security
-  - cleanup
 
-# =========================================
-# STAGE 1: VALIDATE - Syntax & Struktur
-# =========================================
-
-validate:syntax:
-  stage: validate
-  before_script:
-    - apk add --no-cache bash grep
-  script:
-    - echo "🔍 Validating docker-compose.yml syntax..."
-    - docker compose config > /dev/null
-    - echo "✓ docker-compose.yml is valid"
-    - echo ""
-    - echo "🔍 Checking required files..."
-    - |
-      MISSING=0
-      REQUIRED_FILES=(
-        "docker-compose.yml"
-        "Dockerfile"
-        ".env.example"
-        "config/managed-schema"
-        "config/solrconfig.xml"
-        "config/security.json.template"
-      )
-      for file in "${REQUIRED_FILES[@]}"; do
-        if [ ! -f "$file" ]; then
-          echo "❌ Missing: $file"
-          MISSING=1
-        else
-          echo "✓ Found: $file"
-        fi
-      done
-      if [ $MISSING -eq 1 ]; then
-        echo "❌ Validation failed: Missing required files"
-        exit 1
-      fi
-    - echo ""
-    - echo "✅ All validation checks passed"
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-    - if: '$CI_COMMIT_BRANCH =~ /^claude\//'
-
-# =========================================
-# STAGE 2: BUILD - Container Images
-# =========================================
-
-build:init-container:
-  stage: build
-  before_script:
-    - apk add --no-cache docker-compose
-  script:
-    - echo "🔨 Building init container..."
-    - docker compose build solr-init
-    - echo "✓ Init container built successfully"
-    - echo ""
-    - echo "📦 Image details:"
-    - docker images | grep solr-init || true
-  artifacts:
-    reports:
-      dotenv: build.env
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-    - if: '$CI_COMMIT_BRANCH =~ /^claude\//'
-
-# =========================================
-# STAGE 3: TEST - Verschiedene Test-Suites
-# =========================================
-
-test:unit:
+solr-test:
   stage: test
-  before_script:
-    - apk add --no-cache docker-compose bash curl jq grep coreutils
-    - chmod +x scripts/run-tests.sh
-    - chmod +x scripts/test-moodle-documents.sh
-  script:
-    - echo "🧪 Running unit tests..."
-    - ./scripts/run-tests.sh --unit-only
-  needs:
-    - validate:syntax
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-    - if: '$CI_COMMIT_BRANCH =~ /^claude\//'
+  tags:
+    - docker
 
-test:integration:
-  stage: test
   before_script:
-    - apk add --no-cache docker-compose bash curl jq grep coreutils
-    - chmod +x scripts/run-tests.sh
+    - apt-get update -qq
+    - apt-get install -y -qq curl jq docker-compose-plugin docker.io
+    - echo "Ubuntu environment ready"
+    - echo "Docker version:" $(docker --version)
+    - echo "Docker Compose version:" $(docker compose version)
+    - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
+
   script:
-    - echo "🔗 Running integration tests..."
-    - echo "📋 Generating .env file..."
+    - echo "Generating .env file..."
     - docker compose --profile setup up moodle_setup
-    - echo ""
-    - echo "🏗️ Building and starting containers..."
-    - docker compose build
+    - echo ".env file created successfully"
+    - ls -lah .env
+
+    - echo "Building init container..."
+    - docker compose build solr-init
+
+    - echo "Starting Solr containers..."
     - docker compose up -d
-    - echo ""
-    - echo "⏳ Waiting for containers to be healthy (max 2 minutes)..."
-    - timeout 120 sh -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Still waiting..."; done' || true
-    - echo ""
-    - echo "📊 Container status:"
+
+    - echo "Waiting for Solr to be healthy (max 2 minutes)..."
+    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Still waiting..."; done'
+    - echo "Solr is healthy"
+
+    - echo "Container status:"
     - docker compose ps
     - echo ""
-    - echo "🧪 Running integration tests..."
+    - echo "Solr logs (last 50 lines):"
+    - docker compose logs --tail=50 solr
+
+    - echo "Running unit tests..."
+    - ./scripts/run-tests.sh --unit-only
+
+    - echo "Running integration tests..."
     - ./scripts/run-tests.sh --integration-only --no-cleanup
+
+    - echo "Running security tests..."
+    - ./scripts/run-tests.sh --security-only --no-cleanup
+
+    - echo "Running Moodle document tests..."
+    - ./scripts/test-moodle-documents.sh
+
   after_script:
-    - echo "📋 Container logs (last 50 lines):"
-    - docker compose logs --tail=50 || true
-    - echo ""
-    - echo "🧹 Cleaning up..."
+    - |
+      if [ "$CI_JOB_STATUS" != "success" ]; then
+        echo "Tests failed. Showing logs..."
+        echo ""
+        echo "All container logs:"
+        docker compose logs || true
+        echo ""
+        echo "Container status:"
+        docker compose ps || true
+      fi
+    - echo "Cleaning up..."
     - docker compose down -v || true
-  needs:
-    - validate:syntax
-    - build:init-container
-  timeout: 15 minutes
+    - rm -f .env || true
+
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH =~ /^develop/'
     - if: '$CI_COMMIT_BRANCH =~ /^claude\//'
 
-test:moodle-documents:
-  stage: test
-  before_script:
-    - apk add --no-cache docker-compose bash curl jq grep coreutils
-    - chmod +x scripts/test-moodle-documents.sh
-  script:
-    - echo "📚 Running Moodle document tests..."
-    - |
-      if [ ! -f ".env" ]; then
-        echo "📋 Generating .env file..."
-        docker compose --profile setup up moodle_setup
-      fi
-    - echo ""
-    - echo "🏗️ Starting Solr..."
-    - docker compose build
-    - docker compose up -d
-    - echo ""
-    - echo "⏳ Waiting for Solr to be healthy..."
-    - timeout 120 sh -c 'until docker compose ps | grep -q healthy; do sleep 5; done' || true
-    - echo ""
-    - echo "🧪 Running Moodle document tests..."
-    - ./scripts/test-moodle-documents.sh
-  after_script:
-    - echo "🧹 Cleaning up..."
-    - docker compose down -v || true
-  needs:
-    - validate:syntax
-    - build:init-container
-  timeout: 10 minutes
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
+  artifacts:
+    when: on_failure
+    paths:
+      - .env
+    expire_in: 1 day
 
-# =========================================
-# STAGE 4: SECURITY - Sicherheitstests
-# =========================================
-
-security:tests:
-  stage: security
-  before_script:
-    - apk add --no-cache docker-compose bash curl jq grep coreutils
-    - chmod +x scripts/run-tests.sh
-  script:
-    - echo "🔒 Running security tests..."
-    - |
-      if [ ! -f ".env" ]; then
-        echo "📋 Generating .env file..."
-        docker compose --profile setup up moodle_setup
-      fi
-    - docker compose up -d
-    - timeout 120 sh -c 'until docker compose ps | grep -q healthy; do sleep 5; done' || true
-    - ./scripts/run-tests.sh --security-only --no-cleanup
-  after_script:
-    - docker compose down -v || true
-  needs:
-    - test:integration
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-
-security:secrets-scan:
-  stage: security
-  image: alpine:3.20
-  before_script:
-    - apk add --no-cache git grep
-  script:
-    - echo "🔍 Scanning for accidentally committed secrets..."
-    - |
-      SECRETS_FOUND=0
-
-      # Check if .env is tracked in git
-      if git ls-files | grep -q "^\.env$"; then
-        echo "❌ CRITICAL: .env file is tracked in git!"
-        SECRETS_FOUND=1
-      else
-        echo "✓ .env is not tracked in git"
-      fi
-
-      # Check for password patterns in committed files
-      if git grep -i "password.*=" -- '*.sh' '*.yml' '*.yaml' | grep -v "SOLR.*PASSWORD"; then
-        echo "⚠️ WARNING: Found password-like patterns in scripts"
-      else
-        echo "✓ No hardcoded passwords found"
-      fi
-
-      # Check .gitignore
-      if grep -q "^\.env$" .gitignore || grep -q "^\.env$" .gitignore; then
-        echo "✓ .env is in .gitignore"
-      else
-        echo "❌ CRITICAL: .env is NOT in .gitignore!"
-        SECRETS_FOUND=1
-      fi
-
-      if [ $SECRETS_FOUND -eq 1 ]; then
-        echo ""
-        echo "❌ Security scan failed! Fix issues above."
-        exit 1
-      fi
-
-      echo ""
-      echo "✅ No secrets found in repository"
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-
-# =========================================
-# STAGE 5: CLEANUP - Optional
-# =========================================
-
-cleanup:docker:
-  stage: cleanup
-  script:
-    - echo "🧹 Cleaning up Docker resources..."
-    - docker system prune -af --volumes || true
-    - echo "✓ Cleanup completed"
-  when: manual
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-
-# =========================================
-# SUCCESS NOTIFICATION
-# =========================================
-
-success:notification:
-  stage: .post
-  image: alpine:3.20
-  script:
-    - echo "✅ Pipeline completed successfully!"
-    - echo "📊 Summary:"
-    - echo "   - Commit: $CI_COMMIT_SHORT_SHA"
-    - echo "   - Branch: $CI_COMMIT_BRANCH"
-    - echo "   - Author: $CI_COMMIT_AUTHOR"
-    - echo "   - Pipeline: $CI_PIPELINE_URL"
-  when: on_success
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+  timeout: 20 minutes

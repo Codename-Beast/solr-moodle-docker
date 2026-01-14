@@ -560,17 +560,17 @@ EOF
         echo -e "${BOLD}Success Rate:${NC}  ${success_rate}%"
 
         if [ $success_rate -ge 90 ]; then
-            echo -e "\n${GREEN}${BOLD}✓ TEST SUITE PASSED${NC}"
+            echo -e "\n${GREEN}${BOLD}TEST SUITE PASSED${NC}"
             exit 0
         elif [ $success_rate -ge 70 ]; then
-            echo -e "\n${YELLOW}${BOLD}⚠ TEST SUITE PASSED WITH WARNINGS${NC}"
+            echo -e "\n${YELLOW}${BOLD}TEST SUITE PASSED WITH WARNINGS${NC}"
             exit 0
         else
-            echo -e "\n${RED}${BOLD}✗ TEST SUITE FAILED${NC}"
+            echo -e "\n${RED}${BOLD}TEST SUITE FAILED${NC}"
             exit 1
         fi
     else
-        echo -e "\n${YELLOW}${BOLD}⚠ NO TESTS RUN${NC}"
+        echo -e "\n${YELLOW}${BOLD}NO TESTS RUN${NC}"
         exit 1
     fi
 }

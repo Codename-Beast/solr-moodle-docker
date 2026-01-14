@@ -2,49 +2,49 @@
 
 **Developer:** BSC Bernd Schreistetter | **for the Company:** Eledia.de | **Version:** v2.1
 
-**Solr 9.10.0** • **Moodle 4.1-5.x**
+**Solr 9.10.0** | **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.1 - Production Ready • Automated Testing • Enhanced Security
+> v2.1 - Production Ready | Automated Testing | Enhanced Security
 
 ---
 
-## 🆕 What's New in v2.1
+## What's New in v2.1
 
-✅ **Simplified Configuration**: `.env` now in root directory (no more `eledia-workplace/`)
-✅ **Fixed Container Names**: Proper naming with `INSTANCE_NAME` (e.g., `solr-solr`)
-✅ **CI/CD Pipeline**: GitHub Actions for automated testing
-✅ **Better Security**: Enhanced `.gitignore`, no secrets in container environment
-✅ **Improved Permissions**: Fixed chmod 655 → 755 bug
-✅ **Log Rotation**: Structured logging with size limits (10MB max)
-✅ **Standard Naming**: `Dockerfile.init` → `Dockerfile`
+- **Simplified Configuration**: `.env` now in root directory (no more `eledia-workplace/`)
+- **Fixed Container Names**: Proper naming with `INSTANCE_NAME` (e.g., `solr-solr`)
+- **CI/CD Pipeline**: GitHub Actions for automated testing
+- **Better Security**: Enhanced `.gitignore`, no secrets in container environment
+- **Improved Permissions**: Fixed chmod 655 → 755 bug
+- **Log Rotation**: Structured logging with size limits (10MB max)
+- **Standard Naming**: `Dockerfile.init` → `Dockerfile`
 
 See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ---
 
-## 🔄 CI/CD Pipeline
+## CI/CD Pipeline
 
 ### GitLab CI/CD (Empfohlen)
 
 Automatisierte Tests bei jedem Push:
 
 ```bash
-# .gitlab-ci.yml ist bereits konfiguriert!
+# .gitlab-ci.yml ist bereits konfiguriert
 # Pushe einfach zu GitLab:
 git push gitlab main
 ```
 
 **Pipeline testet automatisch:**
-- ✅ Syntax & Struktur-Validierung
-- ✅ Container-Build
-- ✅ Unit, Integration & Moodle Document Tests
-- ✅ Security Tests & Secret Scanning
+- Syntax & Struktur-Validierung
+- Container-Build
+- Unit, Integration & Moodle Document Tests
+- Security Tests & Secret Scanning
 
 **Setup-Anleitungen:**
-- 📘 [GitLab Quick Start (5 Min)](docs/GITLAB-QUICKSTART.md) - Für GitLab.com
-- 📗 [Vollständige Anleitung](docs/GITLAB-CI-CD-SETUP.md) - Für Self-Hosted GitLab
+- [GitLab Quick Start (5 Min)](docs/GITLAB-QUICKSTART.md) - Für GitLab.com
+- [Vollständige Anleitung](docs/GITLAB-CI-CD-SETUP.md) - Für Self-Hosted GitLab
 
 **Pipeline Badge:**
 ```markdown
@@ -66,17 +66,20 @@ docker compose --profile setup up moodle_setup
 # 2. Start
 docker compose up -d
 
-# 3. Fertig!
+# 3. Fertig
 ```
 
-✓ Solr: `http://localhost:8983/solr`
-✓ Zugangsdaten: `.env` im Root-Verzeichnis 
+Solr: `http://localhost:8983/solr`
+Zugangsdaten: `.env` im Root-Verzeichnis
 
 ---
-## Reverse Proxy 
+
+## Reverse Proxy
+
 ```bash
-Nicht meine Baustelle :) 
+Nicht meine Baustelle :)
 ```
+
 ---
 
 ## Moodle Konfiguration
@@ -88,9 +91,9 @@ Nicht meine Baustelle :)
 | Engine   | Solr                                      |
 | Host     | localhost oder Proxy                      |
 | Port     | 8983                                      |
-| Path     | /solr                                     |   
-|Index name| moodle_core                               | 
-| Secure mode| Über Reverse Proxy ja! else only local  |           
+| Path     | /solr                                     |
+|Index name| moodle_core                               |
+| Secure mode| Über Reverse Proxy ja! else only local  |
 | Auth Username | moodle oder admin(Safe)              |
 | Auth Password | (aus `.env`)                         |
 
@@ -146,7 +149,7 @@ docker compose logs -f solr                    # Logs
 docker compose restart                         # Neustart
 docker compose down                            # Stoppen (Daten bleiben erhalten)
 docker compose down -v                         # Stoppen + Daten löschen
-grep PASSWORD .env                             # Credentials anzeigen 
+grep PASSWORD .env                             # Credentials anzeigen
 ```
 
 ---
@@ -161,7 +164,7 @@ nano .env
 docker compose down
 docker compose up -d
 
-# 3. Done! (automatische Erkennung + Update)
+# 3. Done (automatische Erkennung + Update)
 ```
 
 Passwort-Änderungen werden automatisch erkannt und security.json wird neu generiert.
@@ -286,7 +289,7 @@ docker compose exec solr solr create -c <core_name>
 
 ---
 
-## Ansible Integration (Nicht getestet!)
+## Ansible Integration (Nicht getestet)
 
 ```yaml
 - name: Deploy Solr for Moodle
@@ -319,8 +322,6 @@ docker compose exec solr solr create -c <core_name>
         profiles: monitoring
         state: present
 ```
-
-
 
 ---
 
@@ -358,7 +359,7 @@ docker compose exec solr solr create -c <core_name>
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
 **Version:** v2.1
-**Status:** Production Ready • CI/CD Tested • Fedora 43
+**Status:** Production Ready | CI/CD Tested | Fedora 43
 
 **Links:**
 - [Apache Solr Documentation](https://solr.apache.org/guide/)

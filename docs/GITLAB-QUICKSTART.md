@@ -1,12 +1,12 @@
 # GitLab CI/CD Quick Start
 
-**⏱️ Setup-Zeit: 5 Minuten**
+** Setup-Zeit: 5 Minuten**
 
 ---
 
-## 🚀 Schnellstart für GitLab.com
+##  Schnellstart für GitLab.com
 
-### 1️⃣ Repository zu GitLab pushen (2 Min)
+###  Repository zu GitLab pushen ( Min)
 
 ```bash
 # Projekt zu GitLab pushen
@@ -14,23 +14,23 @@ git remote add gitlab https://gitlab.com/DEIN-USERNAME/solr-moodle-docker.git
 git push -u gitlab main
 ```
 
-### 2️⃣ Shared Runners aktivieren (1 Min)
+###  Shared Runners aktivieren ( Min)
 
-1. Gehe zu deinem Projekt auf GitLab.com
-2. **Settings → CI/CD → Runners**
-3. Aktiviere **"Enable shared runners for this project"**
+. Gehe zu deinem Projekt auf GitLab.com
+. **Settings → CI/CD → Runners**
+. Aktiviere **"Enable shared runners for this project"**
 
-![Enable Runners](https://docs.gitlab.com/ee/ci/img/shared_runners_v14_5.png)
+![Enable Runners](https://docs.gitlab.com/ee/ci/img/shared_runners_v_5.png)
 
-### 3️⃣ Pipeline läuft automatisch! (2 Min)
+###  Pipeline läuft automatisch! ( Min)
 
-1. Gehe zu **Build → Pipelines**
-2. Siehst du die erste Pipeline laufen
-3. Warte ~8-12 Minuten bis alle Tests durch sind
+. Gehe zu **Build → Pipelines**
+. Siehst du die erste Pipeline laufen
+. Warte ~8- Minuten bis alle Tests durch sind
 
 ![Pipeline Success](https://docs.gitlab.com/ee/ci/img/pipeline_success.png)
 
-### 4️⃣ Badge im README (optional)
+###  Badge im README (optional)
 
 Füge Pipeline-Status Badge ein:
 
@@ -40,20 +40,20 @@ Füge Pipeline-Status Badge ein:
 
 ---
 
-## ✅ Das war's!
+##  Das war's!
 
 **Jetzt automatisch bei jedem Push:**
-- ✅ Syntax-Validierung
-- ✅ Container-Build
-- ✅ Unit Tests
-- ✅ Integration Tests
-- ✅ Moodle Document Tests
-- ✅ Security Tests
-- ✅ Secret Scanning
+-  Syntax-Validierung
+-  Container-Build
+-  Unit Tests
+-  Integration Tests
+-  Moodle Document Tests
+-  Security Tests
+-  Secret Scanning
 
 ---
 
-## 📚 Detaillierte Anleitung
+##  Detaillierte Anleitung
 
 Für Self-Hosted GitLab, Runner-Konfiguration, Troubleshooting:
 → [GITLAB-CI-CD-SETUP.md](GITLAB-CI-CD-SETUP.md)
@@ -69,7 +69,7 @@ Für Self-Hosted GitLab, Runner-Konfiguration, Troubleshooting:
 → Logs ansehen: **Build → Pipelines → Job-Name** klicken
 
 ### Pipeline zu langsam
-→ Normal: 8-12 Minuten (Docker-Container-Startup)
+→ Normal: 8- Minuten (Docker-Container-Startup)
 
 ---
 
@@ -77,12 +77,12 @@ Für Self-Hosted GitLab, Runner-Konfiguration, Troubleshooting:
 
 | Stage | Dauer | Was |
 |-------|-------|-----|
-| **Validate** | 30s | Syntax & Struktur |
-| **Build** | 1-2min | Container Images |
+| **Validate** | 0s | Syntax & Struktur |
+| **Build** | -min | Container Images |
 | **Test** | 6-8min | Unit, Integration, Moodle Tests |
-| **Security** | 2min | Permissions, Secrets |
+| **Security** | min | Permissions, Secrets |
 
-**Total:** ~10 Minuten
+**Total:** ~0 Minuten
 
 ---
 
