@@ -14,46 +14,13 @@ Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring
 
 - **Simplified Configuration**: `.env` now in root directory (no more `eledia-workplace/`)
 - **Fixed Container Names**: Proper naming with `INSTANCE_NAME` (e.g., `solr-solr`)
-- **CI/CD Pipeline**: GitHub Actions for automated testing
+- **CI/CD Pipeline**: GitHub Actions & GitLab CI for automated testing
 - **Better Security**: Enhanced `.gitignore`, no secrets in container environment
 - **Improved Permissions**: Fixed chmod 655 → 755 bug
 - **Log Rotation**: Structured logging with size limits (10MB max)
 - **Standard Naming**: `Dockerfile.init` → `Dockerfile`
 
 See [CHANGELOG.md](CHANGELOG.md) for full details.
-
----
-
-## CI/CD Pipeline
-
-### GitLab CI/CD (Empfohlen)
-
-Automatisierte Tests bei jedem Push:
-
-```bash
-# .gitlab-ci.yml ist bereits konfiguriert
-# Pushe einfach zu GitLab:
-git push gitlab main
-```
-
-**Pipeline testet automatisch:**
-- Syntax & Struktur-Validierung
-- Container-Build
-- Unit, Integration & Moodle Document Tests
-- Security Tests & Secret Scanning
-
-**Setup-Anleitungen:**
-- [GitLab Quick Start (5 Min)](docs/GITLAB-QUICKSTART.md) - Für GitLab.com
-- [Vollständige Anleitung](docs/GITLAB-CI-CD-SETUP.md) - Für Self-Hosted GitLab
-
-**Pipeline Badge:**
-```markdown
-[![Pipeline](https://gitlab.com/USER/solr-moodle-docker/badges/main/pipeline.svg)](https://gitlab.com/USER/solr-moodle-docker/-/pipelines)
-```
-
-### GitHub Actions (Alternative)
-
-Falls du GitHub verwendest: [.github/workflows/test.yml](.github/workflows/test.yml)
 
 ---
 
@@ -107,7 +74,7 @@ php admin/cli/search.php --reindex
 
 ## Multi-Core Setup
 
-**`eledia-workplace/.env oder /.env` bearbeiten:**
+**`.env` bearbeiten:**
 ```bash
 # Single-Core (Standard)
 SOLR_CORE_NAME=moodle_core
@@ -175,7 +142,7 @@ Passwort-Änderungen werden automatisch erkannt und security.json wird neu gener
 
 **`.env` (automatisch generiert):**
 ```bash
-INSTANCE_NAME=solr                # Container-Prefix (Verbuggt ????)
+INSTANCE_NAME=solr                # Container-Prefix
 SOLR_VERSION=9.10.0               # Solr Version
 SOLR_HEAP=2g                      # RAM: 8GB→2g, 16GB→8g, 32GB→20g
 SOLR_CORE_NAME=moodle_core        # Single-Core
@@ -183,7 +150,7 @@ SOLR_CORES=core1,core2            # Multi-Core (alternativ)
 SOLR_BIND=127.0.0.1               # Localhost-only
 ```
 
-**Heap Size Empfehlungen Laut Doku ob das Stimmt, Testen :) :**
+**Heap Size Empfehlungen:**
 - 8 GB RAM → `SOLR_HEAP=2g`
 - 16 GB RAM → `SOLR_HEAP=8g`
 - 32 GB RAM → `SOLR_HEAP=20g`
@@ -346,11 +313,19 @@ docker compose exec solr solr create -c <core_name>
 ### Volumes:
 - `solr_data_<instance>` - Solr Index + Config + security.json
 - `prometheus_data_<instance>` - Prometheus TSDB
-- `prometheus_config_<instance>` - Prometheus Config (optional kann auch Standalone ohne Grafana also nur für Metriken diese sind getestet und funktionieren.)
-- `grafana_data_<instance>` - Grafana Dashboards (optional hat auch Fehler wie Dashbaord wird nicht Automatisch erstellt, aber Grafana läuft :) )
+- `prometheus_config_<instance>` - Prometheus Config
+- `grafana_data_<instance>` - Grafana Dashboards
 
 ### Networks:
 - `<instance>_network` - Bridge Network
+
+---
+
+## CI/CD & Testing
+
+Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
+
+**Dokumentation:** [docs/CI-CD.md](docs/CI-CD.md)
 
 ---
 
