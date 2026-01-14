@@ -33,7 +33,12 @@ KEEP_DOCUMENTS=false
 WAIT_TIME=0
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="8983"
-SOLR_CORE="moodle_core"
+
+# Load SOLR_CORE_NAME from .env or use default
+if [ -f ".env" ]; then
+    source .env
+fi
+SOLR_CORE="${SOLR_CORE_NAME:-moodle_core}"
 
 # Counters
 TESTS_RUN=0

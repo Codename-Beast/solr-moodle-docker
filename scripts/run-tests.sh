@@ -35,6 +35,7 @@ INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 SOLR_HOST="127.0.0.1"
+SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
 
 # Helper functions
 print_header() {
@@ -176,10 +177,10 @@ integration_tests() {
 
     # Test 2: Solr Core Creation
     print_test "Solr core creation"
-    if docker exec "$SOLR_CONTAINER" test -d /var/solr/data/moodle_core 2>/dev/null; then
-        print_pass "Moodle core directory created"
+    if docker exec "$SOLR_CONTAINER" test -d "/var/solr/data/${SOLR_CORE_NAME}" 2>/dev/null; then
+        print_pass "Core directory created (${SOLR_CORE_NAME})"
     else
-        print_fail "Moodle core directory not found"
+        print_fail "Core directory not found (${SOLR_CORE_NAME})"
     fi
 
     # Test 3: security.json creation
@@ -217,10 +218,10 @@ integration_tests() {
     # Test 6: Core status API
     print_test "Core status API"
     local core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS&wt=json")
-    if echo "$core_response" | grep -q '"moodle_core"'; then
-        print_pass "Core status API returns moodle_core"
+    if echo "$core_response" | grep -q "\"${SOLR_CORE_NAME}\""; then
+        print_pass "Core status API returns ${SOLR_CORE_NAME}"
     else
-        print_fail "Core status API does not return moodle_core"
+        print_fail "Core status API does not return ${SOLR_CORE_NAME}"
     fi
 
     # Test 7: Password change detection
