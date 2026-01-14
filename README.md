@@ -24,6 +24,39 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ---
 
+## 🔄 CI/CD Pipeline
+
+### GitLab CI/CD (Empfohlen)
+
+Automatisierte Tests bei jedem Push:
+
+```bash
+# .gitlab-ci.yml ist bereits konfiguriert!
+# Pushe einfach zu GitLab:
+git push gitlab main
+```
+
+**Pipeline testet automatisch:**
+- ✅ Syntax & Struktur-Validierung
+- ✅ Container-Build
+- ✅ Unit, Integration & Moodle Document Tests
+- ✅ Security Tests & Secret Scanning
+
+**Setup-Anleitungen:**
+- 📘 [GitLab Quick Start (5 Min)](docs/GITLAB-QUICKSTART.md) - Für GitLab.com
+- 📗 [Vollständige Anleitung](docs/GITLAB-CI-CD-SETUP.md) - Für Self-Hosted GitLab
+
+**Pipeline Badge:**
+```markdown
+[![Pipeline](https://gitlab.com/USER/solr-moodle-docker/badges/main/pipeline.svg)](https://gitlab.com/USER/solr-moodle-docker/-/pipelines)
+```
+
+### GitHub Actions (Alternative)
+
+Falls du GitHub verwendest: [.github/workflows/test.yml](.github/workflows/test.yml)
+
+---
+
 ## Quick Installation
 
 ```bash
