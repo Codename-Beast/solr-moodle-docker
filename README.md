@@ -9,17 +9,6 @@ Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring
 > v2.1 - Production Ready | Automated Testing | Enhanced Security
 
 ---
-
-## What's New in v2.1
-
-- **Simplified Configuration**: `.env` now in root directory (no more `eledia-workplace/`)
-- **Fixed Container Names**: Proper naming with `INSTANCE_NAME` (e.g., `solr-solr`)
-- **CI/CD Pipeline**: GitHub Actions & GitLab CI for automated testing
-- **Better Security**: Enhanced `.gitignore`, no secrets in container environment
-- **Improved Permissions**: Fixed chmod 655 → 755 bug
-- **Log Rotation**: Structured logging with size limits (10MB max)
-- **Standard Naming**: `Dockerfile.init` → `Dockerfile`
-
 See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ---
