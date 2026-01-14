@@ -194,7 +194,6 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "health-check-ping", "path": "/admin/ping", "role": null },
       { "name": "health-check-detailed", "path": "/admin/health", "role": null },
       { "name": "health-check-simple", "path": "/admin/healthcheck", "role": null },
-      { "name": "metrics-admin", "path": "/admin/metrics", "role": ["admin", "support"] },
       { "name": "config-read", "role": ["admin", "support"] },
       { "name": "metrics-read", "role": ["admin", "support"] },
       { "name": "health", "role": ["admin", "support"] },
