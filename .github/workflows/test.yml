@@ -67,16 +67,70 @@ jobs:
       run: |
         echo "🔧 Generating .env file..."
         echo "📂 Current directory: $(pwd)"
-        echo "📋 Checking for init directory:"
-        ls -la init/ || echo "❌ init directory not found"
-        echo ""
-        docker compose --profile setup up moodle_setup
 
-        # Verify .env was created
-        if [ ! -f ".env" ]; then
-          echo "❌ ERROR: .env file was not created"
-          exit 1
+        # Skip if .env already exists
+        if [ -f ".env" ]; then
+          echo "⚠ .env already exists — skipping generation"
+          exit 0
         fi
+
+        # Install openssl for random password generation
+        apt-get install -y openssl > /dev/null 2>&1
+
+        # Generate random passwords (same logic as generate_env.sh)
+        ADMIN_PASS=$(openssl rand -hex 16)
+        SUPPORT_PASS=$(openssl rand -hex 16)
+        MOODLE_PASS=$(openssl rand -hex 16)
+        GRAFANA_PASS=$(openssl rand -hex 16)
+        INSTANCE_NAME="${INSTANCE_NAME:-solr}"
+
+        # Create .env file directly in the current directory
+        # This avoids Docker-in-Docker volume mounting issues
+        cat > .env <<EOF
+        # =========================================
+        # Solr for Moodle - Environment
+        # =========================================
+        # Instance name
+        INSTANCE_NAME=${INSTANCE_NAME}
+
+        # Solr
+        SOLR_VERSION=9.10.0
+        SOLR_PORT=8983
+        SOLR_BIND=127.0.0.1
+        SOLR_CORE_NAME=moodle_core
+        SOLR_CORES=
+        SOLR_HEAP=2g
+        SOLR_LOG_LEVEL=INFO
+
+        # Network
+        SOLR_NETWORK_NAME=solr_network
+
+        # Users (used for security.json generation)
+        SOLR_ADMIN_USER=admin
+        SOLR_ADMIN_PASSWORD=${ADMIN_PASS}
+        SOLR_SUPPORT_USER=support
+        SOLR_SUPPORT_PASSWORD=${SUPPORT_PASS}
+        SOLR_MOODLE_USER=moodle
+        SOLR_MOODLE_PASSWORD=${MOODLE_PASS}
+
+        # Monitoring (v1.5)
+        MONITORING_BIND_IP=127.0.0.1
+        SOLR_METRICS_PORT=9854
+        PROMETHEUS_PORT=9090
+        PROMETHEUS_BIND=127.0.0.1
+        GRAFANA_PORT=3000
+        GRAFANA_BIND=127.0.0.1
+        GRAFANA_ADMIN_USER=admin
+        GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
+
+        # =========================================
+        # Info / Documentation (not used in code)
+        # =========================================
+        # CUSTOMER_NAME=<customer name for admin reference>
+        # NOTES=<additional notes>
+        EOF
+
+        chmod 644 .env
 
         echo "✅ .env file created successfully"
         ls -lah .env
