@@ -1,4 +1,4 @@
-name: Test Solr Setup
+name: Solr Test Suite
 
 on:
   push:
@@ -7,15 +7,53 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  test:
+  solr-test:
+    name: Solr Tests (Debian ${{ matrix.debian-version }})
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        debian-version: [12, 13]
+      fail-fast: false
+
+    container:
+      image: debian:${{ matrix.debian-version }}
+      options: --privileged
+
+    services:
+      docker:
+        image: docker:dind
+        options: --privileged
+
     steps:
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y curl ca-certificates gnupg lsb-release git
+
+        # Install Docker
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+        apt-get update
+        apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+        # Start Docker daemon
+        dockerd > /dev/null 2>&1 &
+        sleep 5
+
+        echo "✅ Debian ${{ matrix.debian-version }} environment ready"
+        echo "Docker version: $(docker --version)"
+        echo "Docker Compose version: $(docker compose version)"
+
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
 
     - name: Generate .env file
       run: |
