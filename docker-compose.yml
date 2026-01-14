@@ -20,6 +20,7 @@ services:
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
+      SOLR_CORE_NAME: ${SOLR_CORE_NAME:-}
     restart: "no"
 
   # =================================
