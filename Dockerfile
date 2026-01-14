@@ -195,7 +195,6 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "health-check-simple", "path": "/admin/healthcheck", "role": null },
       { "name": "health-check-info", "path": "/admin/info/system", "role": null },
       { "name": "all", "role": "admin" },
-      { "name": "metrics-admin", "path": "/admin/metrics", "role": ["admin", "support"] },
       { "name": "config-read", "role": ["admin", "support"] },
       { "name": "health", "role": ["admin", "support"] },
       { "name": "read", "role": ["admin", "support", "moodle"] },
