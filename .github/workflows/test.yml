@@ -8,55 +8,13 @@ on:
 
 jobs:
   solr-test:
-    name: Solr Tests (Debian ${{ matrix.debian-version }})
+    name: Solr Tests
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        debian-version: [12, 13]
-      fail-fast: false
-
-    container:
-      image: debian:${{ matrix.debian-version }}
-      options: --privileged
 
     steps:
     - name: Install dependencies
       run: |
-        apt-get update
-        apt-get install -y curl ca-certificates gnupg lsb-release git
-
-        # Install Docker
-        install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-        chmod a+r /etc/apt/keyrings/docker.asc
-
-        echo \
-          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-          tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-        apt-get update
-        apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-        # Start Docker daemon
-        dockerd > /dev/null 2>&1 &
-
-        # Wait for Docker to be ready
-        echo "⏳ Waiting for Docker daemon to start..."
-        for i in $(seq 1 30); do
-          if docker info > /dev/null 2>&1; then
-            echo "✅ Docker daemon is ready"
-            break
-          fi
-          echo "Still waiting... ($i/30)"
-          sleep 1
-        done
-
-        # Verify Docker is working
-        docker info > /dev/null 2>&1 || (echo "❌ Docker daemon failed to start" && exit 1)
-
-        echo "✅ Debian ${{ matrix.debian-version }} environment ready"
+        echo "✅ Ubuntu environment ready"
         echo "Docker version: $(docker --version)"
         echo "Docker Compose version: $(docker compose version)"
 
@@ -66,78 +24,9 @@ jobs:
     - name: Generate .env file
       run: |
         echo "🔧 Generating .env file..."
-        echo "📂 Current directory: $(pwd)"
-
-        # Skip if .env already exists
-        if [ -f ".env" ]; then
-          echo "⚠ .env already exists — skipping generation"
-          exit 0
-        fi
-
-        # Install openssl for random password generation
-        apt-get install -y openssl > /dev/null 2>&1
-
-        # Generate random passwords (same logic as generate_env.sh)
-        ADMIN_PASS=$(openssl rand -hex 16)
-        SUPPORT_PASS=$(openssl rand -hex 16)
-        MOODLE_PASS=$(openssl rand -hex 16)
-        GRAFANA_PASS=$(openssl rand -hex 16)
-        INSTANCE_NAME="${INSTANCE_NAME:-solr}"
-
-        # Create .env file directly in the current directory
-        # This avoids Docker-in-Docker volume mounting issues
-        cat > .env <<EOF
-        # =========================================
-        # Solr for Moodle - Environment
-        # =========================================
-        # Instance name
-        INSTANCE_NAME=${INSTANCE_NAME}
-
-        # Solr
-        SOLR_VERSION=9.10.0
-        SOLR_PORT=8983
-        SOLR_BIND=0.0.0.0
-        SOLR_CORE_NAME=moodle_core
-        SOLR_CORES=
-        SOLR_HEAP=2g
-        SOLR_LOG_LEVEL=INFO
-
-        # Network
-        SOLR_NETWORK_NAME=solr_network
-
-        # Users (used for security.json generation)
-        SOLR_ADMIN_USER=admin
-        SOLR_ADMIN_PASSWORD=${ADMIN_PASS}
-        SOLR_SUPPORT_USER=support
-        SOLR_SUPPORT_PASSWORD=${SUPPORT_PASS}
-        SOLR_MOODLE_USER=moodle
-        SOLR_MOODLE_PASSWORD=${MOODLE_PASS}
-
-        # Monitoring (v1.5)
-        MONITORING_BIND_IP=127.0.0.1
-        SOLR_METRICS_PORT=9854
-        PROMETHEUS_PORT=9090
-        PROMETHEUS_BIND=127.0.0.1
-        GRAFANA_PORT=3000
-        GRAFANA_BIND=127.0.0.1
-        GRAFANA_ADMIN_USER=admin
-        GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
-
-        # =========================================
-        # Info / Documentation (not used in code)
-        # =========================================
-        # CUSTOMER_NAME=<customer name for admin reference>
-        # NOTES=<additional notes>
-        EOF
-
-        chmod 644 .env
-
+        docker compose --profile setup up moodle_setup
         echo "✅ .env file created successfully"
         ls -lah .env
-
-        # Show non-sensitive parts for debugging
-        echo "📋 .env preview (first 10 lines, passwords hidden):"
-        head -n 10 .env | grep -v PASSWORD || true
 
     - name: Build init container
       run: |
