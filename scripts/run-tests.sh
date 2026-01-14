@@ -239,6 +239,11 @@ integration_tests() {
 
     # Restore old password for remaining tests
     mv .env.bak .env 2>/dev/null
+
+    # Restart containers with restored password
+    docker compose down >/dev/null 2>&1
+    docker compose up -d >/dev/null 2>&1
+    sleep 30
 }
 
 # =========================================
