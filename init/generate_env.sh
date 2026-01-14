@@ -2,14 +2,14 @@
 # =====================================================
 # /init/generate_env.sh
 # Purpose:
-#   Generate /eledia-workplace/.env on the host system
+#   Generate .env file in the root directory
 #   Works safely under SELinux (Fedora / RHEL)
 # =====================================================
 
 set -eu
 
-# Absolute path inside container (host-mounted)
-TARGET_DIR="/eledia-workplace"
+# Absolute path inside container (host-mounted root directory)
+TARGET_DIR="/workspace"
 ENV_FILE="${TARGET_DIR}/.env"
 
 # Helper: generate random 32-char secret
@@ -20,7 +20,7 @@ mkdir -p "${TARGET_DIR}"
 
 # Skip if already exists
 if [ -f "${ENV_FILE}" ]; then
-  echo "⚠ ${ENV_FILE} already exists — Das fass ich nicht an !."
+  echo "⚠ ${ENV_FILE} already exists — skipping generation."
   echo "   Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
   echo "   Permissions:      $(stat -c '%A' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
   exit 0
@@ -68,7 +68,7 @@ MONITORING_BIND_IP=127.0.0.1
 SOLR_METRICS_PORT=9854
 PROMETHEUS_PORT=9090
 PROMETHEUS_BIND=127.0.0.1
-GRAFANA_PORT=3005
+GRAFANA_PORT=3000
 GRAFANA_BIND=127.0.0.1
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
@@ -80,9 +80,8 @@ GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 # NOTES=<additional notes>
 EOF
 
-# Set ownership to Solr (UID 8983) but keep readable for host user
-chown 8983:1000 "${ENV_FILE}" 2>/dev/null || true
-chmod 640 "${ENV_FILE}"
+# Set permissions for host user readability
+chmod 640 "${ENV_FILE}" 2>/dev/null || chmod 644 "${ENV_FILE}"
 
 echo "Created ${ENV_FILE}"
 echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"

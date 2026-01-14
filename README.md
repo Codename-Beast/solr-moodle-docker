@@ -1,12 +1,27 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **for the Company:** Eledia.de | **Version:** v2.0
+**Developer:** BSC Bernd Schreistetter | **for the Company:** Eledia.de | **Version:** v2.1
 
-**Solr 9.10.0** • **Moodle 4.1-5.x** 
+**Solr 9.10.0** • **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.0 ref20251227.
+> v2.1 - Production Ready • Automated Testing • Enhanced Security
+
+---
+
+## 🆕 What's New in v2.1
+
+✅ **Simplified Configuration**: `.env` now in root directory (no more `eledia-workplace/`)
+✅ **Fixed Container Names**: Proper naming with `INSTANCE_NAME` (e.g., `solr-solr`)
+✅ **CI/CD Pipeline**: GitHub Actions for automated testing
+✅ **Better Security**: Enhanced `.gitignore`, no secrets in container environment
+✅ **Improved Permissions**: Fixed chmod 655 → 755 bug
+✅ **Log Rotation**: Structured logging with size limits (10MB max)
+✅ **Standard Naming**: `Dockerfile.init` → `Dockerfile`
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+
 ---
 
 ## Quick Installation
@@ -22,7 +37,7 @@ docker compose up -d
 ```
 
 ✓ Solr: `http://localhost:8983/solr`
-✓ Zugangsdaten: `eledia-workplace/.env` oder zukünfig `.env` 
+✓ Zugangsdaten: `.env` im Root-Verzeichnis 
 
 ---
 ## Reverse Proxy 
@@ -96,9 +111,9 @@ docker compose up -d solr prometheus
 docker compose ps                              # Status
 docker compose logs -f solr                    # Logs
 docker compose restart                         # Neustart
-docker compose down                            # Stoppen (Daten bleiben erhalten Cors etc.)
+docker compose down                            # Stoppen (Daten bleiben erhalten)
 docker compose down -v                         # Stoppen + Daten löschen
-cat eledia-workplace/.env | grep PASSWORD     # Credentials anzeigen (Muss gefixt werden, da ich aktuell einen Symlink mache und die in das Haupverzeichniss schiebe/Linke , da Docker Compose diese Automatisch dan liest, ansonsten liest docker diese nicht!) 
+grep PASSWORD .env                             # Credentials anzeigen 
 ```
 
 ---
@@ -107,10 +122,11 @@ cat eledia-workplace/.env | grep PASSWORD     # Credentials anzeigen (Muss gefix
 
 ```bash
 # 1. .env bearbeiten
-nano eledia-workplace/.env
+nano .env
 
-# 2. Restart
-docker compose restart
+# 2. Restart (mit init-Container für security.json Update)
+docker compose down
+docker compose up -d
 
 # 3. Done! (automatische Erkennung + Update)
 ```
@@ -146,7 +162,7 @@ SOLR_BIND=127.0.0.1               # Localhost-only
 | moodle  | Read + Update                  | Moodle-Integration (Indexierung) |
 | support | Read-only, Metrics             | Monitoring, Read-Only Zugriff |
 
-**Alle Passwörter:** `eledia-workplace/.env` noch!
+**Alle Passwörter:** `.env` im Root-Verzeichnis
 
 ---
 
@@ -186,34 +202,26 @@ curl -u moodle:PASSWORD http://localhost:8983/solr/moodle_core/admin/ping
 
 ---
 
-## Troubleshooting sollte man zeit und Lust haben
-## Known issues: Stand 27.12.25
+## Troubleshooting
 
-BUG: Container-Name wird ignoriert (immer `solr_solr` statt z. B. `kundendomain`) jedoch wenn dies behoben wird kann autoscale nicht mehr verwedet werden!
+### Known Issues
+
+#### SELinux: Volume-Rechte nach `docker volume rm` / Neu-Erstellung
 
 **Symptom:**
-- Obwohl `INSTANCE_NAME=kundendomain` in `eledia-workplace/.env` steht, heißt der Container nach `docker compose up -d` trotzdem **`solr_solr`**.
+- Nachdem Volumes gelöscht und neu erstellt wurden (z. B. `docker compose down -v`), startet Solr nicht sauber oder zeigt **Permission denied** Fehler.
 
 **Ursache:**
-- Da es als Service defineirt ist nutzt Docker Compose  **ProjectName_ServiceName**.
+- Unter Fedora/RHEL (SELinux *enforcing*) bekommen neu erstellte Volumes nicht immer automatisch die passenden **SELinux-Labels** für Containerzugriff.
 
-BUG: security.template ist in der core zu sehen.
+**Fix:**
+```bash
+# SELinux-Labels neu setzen
+docker volume rm solr_data_solr prometheus_data_solr grafana_data_solr
+docker compose --profile setup up moodle_setup
+docker compose up -d
+```
 
-**Kritisch? naja:**
-- Es werden jetzt keine Livedaten geleakt oder so, das ist halt die Standard Solr security.json meine Einschätzung Nein
-
-**Ursache**
-- liegt glaube ich mit in de /config. zusammen da ich das verschiebe irgendwo (Ich Arbeite dran!)
-
-BUG: SELinux: Volume-Rechte nach `docker volume rm` / Neu-Erstellung kaputt (Solr: „Permission denied“)
-
-**Symptom**
-- Nachdem Volumes gelöscht und neu erstellt wurden (z. B. `docker compose down -v` oder `docker volume rm ...`), startet Solr nicht sauber oder man sieht **Permission denied** auf gemounteten Pfaden.
-
-**Ursache**
-- Unter Fedora (SELinux *enforcing*) bekommen neu erstellte Volumes nicht immer automatisch die passenden **SELinux-Labels** für Containerzugriff. SELinux blockiert dann den Zugriff.
-
-**Fix (SELinux-Relabel der Volume-Mounts + Container-Restart)**  
 ---
 
 ### Setup neu starten:
@@ -288,9 +296,9 @@ docker compose exec solr solr create -c <core_name>
 ### Service Flow:
 ```
 1. moodle_setup (profile: setup)
-   └─> Generiert eledia-workplace/.env mit zufälligen Passwörtern noch!
+   └─> Generiert .env mit zufälligen Passwörtern im Root-Verzeichnis
 
-2. solr-init (Dockerfile.init)
+2. solr-init (Dockerfile)
    └─> Lädt .env, erstellt security.json, Cores, prometheus.yml
    └─> Setzt Permissions (8983:8983)
 
@@ -316,8 +324,8 @@ docker compose exec solr solr create -c <core_name>
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.0
-**Status:** Tested & Stable auf Fedora 43
+**Version:** v2.1
+**Status:** Production Ready • CI/CD Tested • Fedora 43
 
 **Links:**
 - [Apache Solr Documentation](https://solr.apache.org/guide/)
