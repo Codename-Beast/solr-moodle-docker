@@ -35,6 +35,15 @@ INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 
+# Detect CI/CD environment (Docker-in-Docker)
+# In CI, we need to use the container name instead of localhost
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    SOLR_HOST="$SOLR_CONTAINER"
+    print_info "CI/CD detected - using container name for connectivity"
+else
+    SOLR_HOST="127.0.0.1"
+fi
+
 # Helper functions
 print_header() {
     echo -e "\n${BOLD}${BLUE}========================================${NC}"
@@ -197,7 +206,7 @@ integration_tests() {
     # Test 4: Authentication
     print_test "Basic authentication"
     local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
-    local response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://127.0.0.1:8983/solr/admin/cores")
+    local response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
     if [ "$response" = "200" ]; then
         print_pass "Authentication successful (HTTP 200)"
     else
@@ -206,7 +215,7 @@ integration_tests() {
 
     # Test 5: Unauthorized access blocked
     print_test "Unauthorized access blocked"
-    local unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8983/solr/admin/cores")
+    local unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/cores")
     if [ "$unauth_response" = "401" ]; then
         print_pass "Unauthorized access correctly blocked (HTTP 401)"
     else
@@ -215,7 +224,7 @@ integration_tests() {
 
     # Test 6: Core status API
     print_test "Core status API"
-    local core_response=$(curl -s -u "admin:${admin_pass}" "http://127.0.0.1:8983/solr/admin/cores?action=STATUS&wt=json")
+    local core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS&wt=json")
     if echo "$core_response" | grep -q '"moodle_core"'; then
         print_pass "Core status API returns moodle_core"
     else
@@ -337,7 +346,7 @@ performance_tests() {
     # Test 1: Response time
     print_test "API response time (<2s)"
     local start_time=$(date +%s%3N)
-    curl -s -u "admin:${admin_pass}" "http://127.0.0.1:8983/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" >/dev/null 2>&1
     local end_time=$(date +%s%3N)
     local response_time=$((end_time - start_time))
 
@@ -358,7 +367,7 @@ performance_tests() {
 
     # Test 3: Healthcheck responsiveness
     print_test "Healthcheck endpoint response"
-    local health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8983/solr/admin/ping" 2>/dev/null)
+    local health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/ping" 2>/dev/null)
     if [ "$health_response" = "401" ] || [ "$health_response" = "200" ]; then
         print_pass "Healthcheck endpoint responsive (HTTP $health_response)"
     else
@@ -424,7 +433,7 @@ cleanup_tests() {
     docker compose restart solr >/dev/null 2>&1
     sleep 20
 
-    local restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://127.0.0.1:8983/solr/admin/cores")
+    local restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
     if [ "$restart_response" = "200" ]; then
         print_pass "Container restart successful, data persisted"
     else

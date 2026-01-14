@@ -31,9 +31,17 @@ NC='\033[0m' # No Color
 # Configuration
 KEEP_DOCUMENTS=false
 WAIT_TIME=0
-SOLR_HOST="127.0.0.1"
 SOLR_PORT="8983"
 SOLR_CORE="moodle_core"
+
+# Detect CI/CD environment and set appropriate host
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    # In CI/CD, use container name
+    INSTANCE_NAME=${INSTANCE_NAME:-solr}
+    SOLR_HOST="${INSTANCE_NAME}-solr"
+else
+    SOLR_HOST="127.0.0.1"
+fi
 
 # Counters
 TESTS_RUN=0
