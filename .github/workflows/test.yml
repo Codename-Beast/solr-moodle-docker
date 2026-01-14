@@ -20,11 +20,6 @@ jobs:
       image: debian:${{ matrix.debian-version }}
       options: --privileged
 
-    services:
-      docker:
-        image: docker:dind
-        options: --privileged
-
     steps:
     - name: Install dependencies
       run: |
