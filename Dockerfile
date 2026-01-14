@@ -190,10 +190,6 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       "${MOODLE_USER}": ["moodle"]
     },
     "permissions": [
-      { "name": "health-check-ping", "path": "/admin/ping", "role": null },
-      { "name": "health-check-detailed", "path": "/admin/health", "role": null },
-      { "name": "health-check-simple", "path": "/admin/healthcheck", "role": null },
-      { "name": "health-check-info", "path": "/admin/info/system", "role": null },
       { "name": "all", "role": "admin" },
       { "name": "config-read", "role": ["admin", "support"] },
       { "name": "health", "role": ["admin", "support"] },
