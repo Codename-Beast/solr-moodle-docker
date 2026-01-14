@@ -1,6 +1,6 @@
 # GitLab CI/CD Setup Guide
 
-**Version:** v2.1
+**Version:** v.
 **Autor:** BSC Bernd Schreistetter
 **Company:** Eledia.de
 
@@ -8,12 +8,12 @@ Vollständige Anleitung zur Einrichtung der GitLab CI/CD Pipeline für Solr-Mood
 
 ---
 
-## 📋 Inhaltsverzeichnis
+##  Inhaltsverzeichnis
 
-1. [Überblick](#überblick)
-2. [Voraussetzungen](#voraussetzungen)
-3. [GitLab-Einrichtung](#gitlab-einrichtung)
-4. [Pipeline-Stages](#pipeline-stages)
+. [Überblick](#überblick)
+. [Voraussetzungen](#voraussetzungen)
+. [GitLab-Einrichtung](#gitlab-einrichtung)
+. [Pipeline-Stages](#pipeline-stages)
 5. [Runner-Konfiguration](#runner-konfiguration)
 6. [Variables & Secrets](#variables--secrets)
 7. [Pipeline ausführen](#pipeline-ausführen)
@@ -22,16 +22,16 @@ Vollständige Anleitung zur Einrichtung der GitLab CI/CD Pipeline für Solr-Mood
 
 ---
 
-## 🎯 Überblick
+##  Überblick
 
 Die CI/CD Pipeline testet automatisch:
-- ✅ Docker Compose Syntax-Validierung
-- ✅ Container Build-Tests
-- ✅ Unit Tests (Dateistruktur, Permissions)
-- ✅ Integration Tests (Container-Startup, Health-Checks)
-- ✅ Moodle Document Tests (Indexierung, Queries)
-- ✅ Security Tests (Secrets, Permissions, Authentication)
-- ✅ Secret Scanning (verhindert versehentliche Commits)
+-  Docker Compose Syntax-Validierung
+-  Container Build-Tests
+-  Unit Tests (Dateistruktur, Permissions)
+-  Integration Tests (Container-Startup, Health-Checks)
+-  Moodle Document Tests (Indexierung, Queries)
+-  Security Tests (Secrets, Permissions, Authentication)
+-  Secret Scanning (verhindert versehentliche Commits)
 
 ### Pipeline-Struktur
 
@@ -57,37 +57,37 @@ Die CI/CD Pipeline testet automatisch:
 └─────────────┘
 ```
 
-**Pipeline-Dauer:** Ca. 8-12 Minuten (je nach Runner-Performance)
+**Pipeline-Dauer:** Ca. 8- Minuten (je nach Runner-Performance)
 
 ---
 
-## 🔧 Voraussetzungen
+##  Voraussetzungen
 
 ### Auf GitLab.com (SaaS)
-- ✅ GitLab.com Account
-- ✅ Shared Runner (automatisch verfügbar)
-- ✅ Projekt mit Git Repository
+-  GitLab.com Account
+-  Shared Runner (automatisch verfügbar)
+-  Projekt mit Git Repository
 
 ### Self-Hosted GitLab
-- ✅ GitLab CE/EE Version 15.0+
-- ✅ GitLab Runner installiert
-- ✅ Docker auf Runner-Server installiert
-- ✅ Mindestens 4 GB RAM auf Runner
+-  GitLab CE/EE Version 5.0+
+-  GitLab Runner installiert
+-  Docker auf Runner-Server installiert
+-  Mindestens  GB RAM auf Runner
 
 ---
 
-## 🚀 GitLab-Einrichtung
+##  GitLab-Einrichtung
 
-### Schritt 1: Repository zu GitLab pushen
+### Schritt : Repository zu GitLab pushen
 
 Wenn dein Projekt noch nicht auf GitLab ist:
 
 ```bash
-# 1. GitLab-Projekt erstellen (über WebUI)
-# 2. Remote hinzufügen
+# . GitLab-Projekt erstellen (über WebUI)
+# . Remote hinzufügen
 git remote add gitlab https://gitlab.com/DEIN-USERNAME/solr-moodle-docker.git
 
-# 3. Pushen
+# . Pushen
 git push -u gitlab main
 ```
 
@@ -99,99 +99,99 @@ git remote set-url origin https://gitlab.com/DEIN-USERNAME/solr-moodle-docker.gi
 git push -u origin main
 ```
 
-### Schritt 2: GitLab CI/CD aktivieren
+### Schritt : GitLab CI/CD aktivieren
 
 Die Pipeline wird **automatisch aktiviert**, sobald `.gitlab-ci.yml` im Repository ist.
 
 Überprüfen:
-1. Gehe zu deinem Projekt auf GitLab
-2. **Build → Pipelines** im Menü
-3. Du solltest eine Pipeline sehen (nach dem ersten Push)
+. Gehe zu deinem Projekt auf GitLab
+. **Build → Pipelines** im Menü
+. Du solltest eine Pipeline sehen (nach dem ersten Push)
 
-![GitLab Pipelines](https://docs.gitlab.com/ee/ci/img/pipelines_index_v13_6.png)
+![GitLab Pipelines](https://docs.gitlab.com/ee/ci/img/pipelines_index_v_6.png)
 
-### Schritt 3: Runner-Typ wählen
+### Schritt : Runner-Typ wählen
 
 GitLab bietet zwei Runner-Typen:
 
-#### Option A: Shared Runners (GitLab.com) ✅ Empfohlen für Start
+#### Option A: Shared Runners (GitLab.com)  Empfohlen für Start
 
 **Vorteile:**
-- ✅ Kostenlos (2000 CI/CD Minuten/Monat)
-- ✅ Keine Konfiguration nötig
-- ✅ Automatisch verfügbar
+-  Kostenlos (000 CI/CD Minuten/Monat)
+-  Keine Konfiguration nötig
+-  Automatisch verfügbar
 
 **Aktivierung:**
-1. **Settings → CI/CD → Runners**
-2. Stelle sicher, dass "Enable shared runners for this project" aktiviert ist
+. **Settings → CI/CD → Runners**
+. Stelle sicher, dass "Enable shared runners for this project" aktiviert ist
 
-![Enable Shared Runners](https://docs.gitlab.com/ee/ci/img/shared_runners_v14_5.png)
+![Enable Shared Runners](https://docs.gitlab.com/ee/ci/img/shared_runners_v_5.png)
 
 #### Option B: Self-Hosted Runner (für Firmen) 🏢
 
 **Vorteile:**
-- ✅ Keine Pipeline-Minuten-Limits
-- ✅ Schnellere Builds (eigene Hardware)
-- ✅ Volle Kontrolle
+-  Keine Pipeline-Minuten-Limits
+-  Schnellere Builds (eigene Hardware)
+-  Volle Kontrolle
 
 **Installation:** Siehe [Runner-Konfiguration](#runner-konfiguration) weiter unten.
 
 ---
 
-## 📊 Pipeline-Stages im Detail
+##  Pipeline-Stages im Detail
 
-### Stage 1: VALIDATE (30 Sekunden)
+### Stage : VALIDATE (0 Sekunden)
 
 **Was wird getestet:**
-- ✅ `docker-compose.yml` Syntax
-- ✅ Existenz aller Dateien (Dockerfile, Configs)
-- ✅ Verzeichnisstruktur
+-  `docker-compose.yml` Syntax
+-  Existenz aller Dateien (Dockerfile, Configs)
+-  Verzeichnisstruktur
 
 **Wann läuft es:**
 - Bei Merge Requests
 - Bei Push auf `main`, `develop`, `claude/*` Branches
 
-### Stage 2: BUILD (1-2 Minuten)
+### Stage : BUILD (- Minuten)
 
 **Was wird gebaut:**
-- ✅ Init-Container (`Dockerfile`)
-- ✅ Docker Image Caching
+-  Init-Container (`Dockerfile`)
+-  Docker Image Caching
 
 **Artefakte:**
 - Docker Images werden für spätere Stages gecacht
 
-### Stage 3: TEST (6-8 Minuten)
+### Stage : TEST (6-8 Minuten)
 
 **Jobs laufen parallel:**
 
-1. **test:unit** (1 Minute)
+. **test:unit** ( Minute)
    - Dateistruktur
    - Permissions
    - Git-Sicherheit
 
-2. **test:integration** (3-4 Minuten)
+. **test:integration** (- Minuten)
    - Container-Startup
    - Health-Checks
    - Authentication
    - Password-Change-Detection
 
-3. **test:moodle-documents** (2-3 Minuten)
+. **test:moodle-documents** (- Minuten)
    - 7 Moodle-Dokumente indexieren
    - Query-Tests (einfach, phrase, wildcard)
    - Highlighting
    - Faceting
    - Sorting
 
-### Stage 4: SECURITY (2 Minuten)
+### Stage : SECURITY ( Minuten)
 
 **Jobs:**
 
-1. **security:tests**
+. **security:tests**
    - Container-Privileges
    - Netzwerk-Binding
    - File-Permissions
 
-2. **security:secrets-scan**
+. **security:secrets-scan**
    - Sucht nach `.env` in Git
    - Prüft `.gitignore`
    - Sucht nach hardcoded Passwords
@@ -211,42 +211,42 @@ GitLab bietet zwei Runner-Typen:
 
 ### Für Self-Hosted GitLab Runner
 
-#### Schritt 1: Runner installieren
+#### Schritt : Runner installieren
 
 **Auf Ubuntu/Debian:**
 
 ```bash
-# 1. Repository hinzufügen
+# . Repository hinzufügen
 curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
 
-# 2. Runner installieren
+# . Runner installieren
 sudo apt-get install gitlab-runner
 
-# 3. Verifizieren
+# . Verifizieren
 gitlab-runner --version
 ```
 
 **Auf Fedora/RHEL:**
 
 ```bash
-# 1. Repository hinzufügen
+# . Repository hinzufügen
 curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.rpm.sh" | sudo bash
 
-# 2. Runner installieren
+# . Runner installieren
 sudo dnf install gitlab-runner
 
-# 3. Verifizieren
+# . Verifizieren
 gitlab-runner --version
 ```
 
-#### Schritt 2: Runner registrieren
+#### Schritt : Runner registrieren
 
-1. **Gehe zu GitLab:**
+. **Gehe zu GitLab:**
    - **Settings → CI/CD → Runners**
    - Klicke auf **"New project runner"**
    - Kopiere das **Registration Token**
 
-2. **Registriere den Runner:**
+. **Registriere den Runner:**
 
 ```bash
 sudo gitlab-runner register
@@ -271,15 +271,15 @@ Enter executor:
 → docker
 
 Enter default Docker image:
-→ docker:24.0.7
+→ docker:.0.7
 ```
 
-#### Schritt 3: Runner konfigurieren
+#### Schritt : Runner konfigurieren
 
 Editiere `/etc/gitlab-runner/config.toml`:
 
 ```toml
-concurrent = 2  # Anzahl paralleler Jobs
+concurrent =   # Anzahl paralleler Jobs
 
 [[runners]]
   name = "docker-runner-solr"
@@ -288,7 +288,7 @@ concurrent = 2  # Anzahl paralleler Jobs
   executor = "docker"
 
   [runners.docker]
-    image = "docker:24.0.7"
+    image = "docker:.0.7"
     privileged = true  # Wichtig für Docker-in-Docker!
     volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]
     pull_policy = ["if-not-present"]
@@ -299,7 +299,7 @@ concurrent = 2  # Anzahl paralleler Jobs
     Shared = true
 ```
 
-#### Schritt 4: Runner starten
+#### Schritt : Runner starten
 
 ```bash
 # Restart Runner
@@ -325,73 +325,73 @@ Gehe zu **Settings → CI/CD → Runners** in GitLab:
 ### Keine Secrets benötigt! 🎉
 
 Diese Pipeline benötigt **keine manuell konfigurierten Variables**, da:
-- ✅ `.env` wird automatisch generiert (im Setup-Job)
-- ✅ Passwörter werden zur Laufzeit generiert
-- ✅ Alle Tests laufen in isolierten Containern
+-  `.env` wird automatisch generiert (im Setup-Job)
+-  Passwörter werden zur Laufzeit generiert
+-  Alle Tests laufen in isolierten Containern
 
 ### Optional: Custom Variables
 
 Falls du spezifische Einstellungen brauchst:
 
-1. **Settings → CI/CD → Variables**
-2. Klicke **"Add Variable"**
+. **Settings → CI/CD → Variables**
+. Klicke **"Add Variable"**
 
 **Beispiel-Variables:**
 
 | Key | Value | Protected | Masked |
 |-----|-------|-----------|--------|
-| `SOLR_VERSION` | `9.10.0` | ❌ | ❌ |
-| `SOLR_HEAP` | `4g` | ❌ | ❌ |
-| `INSTANCE_NAME` | `test` | ❌ | ❌ |
+| `SOLR_VERSION` | `9.0.0` |  |  |
+| `SOLR_HEAP` | `g` |  |  |
+| `INSTANCE_NAME` | `test` |  |  |
 
 **Verwendung in `.gitlab-ci.yml`:**
 
 ```yaml
 variables:
-  SOLR_VERSION: ${SOLR_VERSION:-9.10.0}
-  SOLR_HEAP: ${SOLR_HEAP:-2g}
+  SOLR_VERSION: ${SOLR_VERSION:-9.0.0}
+  SOLR_HEAP: ${SOLR_HEAP:-g}
 ```
 
 ---
 
-## ▶️ Pipeline ausführen
+## ▶ Pipeline ausführen
 
 ### Automatische Ausführung
 
 Pipeline startet automatisch bei:
-- ✅ Push auf `main`, `develop`, `claude/*` Branches
-- ✅ Merge Requests
+-  Push auf `main`, `develop`, `claude/*` Branches
+-  Merge Requests
 
 ### Manuelle Ausführung
 
-1. **Gehe zu Build → Pipelines**
-2. Klicke **"Run Pipeline"**
-3. Wähle Branch
-4. Klicke **"Run Pipeline"**
+. **Gehe zu Build → Pipelines**
+. Klicke **"Run Pipeline"**
+. Wähle Branch
+. Klicke **"Run Pipeline"**
 
-![Run Pipeline](https://docs.gitlab.com/ee/ci/img/run_pipeline_v14_2.png)
+![Run Pipeline](https://docs.gitlab.com/ee/ci/img/run_pipeline_v_.png)
 
 ### Pipeline Status ansehen
 
 **Live-Ansicht:**
-1. **Build → Pipelines**
-2. Klicke auf Pipeline-ID (z.B. `#123`)
-3. Siehst du alle Jobs mit Status:
+. **Build → Pipelines**
+. Klicke auf Pipeline-ID (z.B. `#`)
+. Siehst du alle Jobs mit Status:
    - 🟢 **Passed** - Erfolgreich
    - 🔴 **Failed** - Fehler
    - 🟡 **Running** - Läuft gerade
    - ⚪ **Pending** - Wartet
 
 **Job-Logs ansehen:**
-1. Klicke auf Job-Namen (z.B. `test:integration`)
-2. Siehst du Live-Logs
-3. Kannst Logs herunterladen (Button rechts oben)
+. Klicke auf Job-Namen (z.B. `test:integration`)
+. Siehst du Live-Logs
+. Kannst Logs herunterladen (Button rechts oben)
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Problem 1: "No runners available"
+### Problem : "No runners available"
 
 **Symptom:**
 ```
@@ -410,7 +410,7 @@ Siehe [Runner-Konfiguration](#runner-konfiguration)
 
 ---
 
-### Problem 2: "Cannot connect to Docker daemon"
+### Problem : "Cannot connect to Docker daemon"
 
 **Symptom:**
 ```
@@ -434,7 +434,7 @@ sudo gitlab-runner restart
 
 ---
 
-### Problem 3: Tests schlagen fehl (Permission Denied)
+### Problem : Tests schlagen fehl (Permission Denied)
 
 **Symptom:**
 ```
@@ -452,26 +452,26 @@ sudo systemctl restart gitlab-runner
 
 ---
 
-### Problem 4: Pipeline läuft zu lange (Timeout)
+### Problem : Pipeline läuft zu lange (Timeout)
 
 **Symptom:**
 ```
-Job's log exceeded limit of 4194304 bytes.
+Job's log exceeded limit of 90 bytes.
 ```
 
-**Lösung 1: Timeout erhöhen**
+**Lösung : Timeout erhöhen**
 
 In `.gitlab-ci.yml`:
 ```yaml
 test:integration:
-  timeout: 15 minutes  # Statt default 1 hour
+  timeout: 5 minutes  # Statt default  hour
 ```
 
-**Lösung 2: Logs reduzieren**
+**Lösung : Logs reduzieren**
 
 ```yaml
 script:
-  - docker compose up -d > /dev/null 2>&1
+  - docker compose up -d > /dev/null >&
 ```
 
 ---
@@ -493,9 +493,9 @@ before_script:
 
 ---
 
-## 📋 Best Practices
+##  Best Practices
 
-### 1. Pipeline-Geschwindigkeit optimieren
+### . Pipeline-Geschwindigkeit optimieren
 
 **Caching nutzen:**
 
@@ -512,7 +512,7 @@ test:integration:
 - Unit, Integration und Moodle Tests laufen parallel
 - Spart 60% Zeit
 
-### 2. Nur relevante Branches testen
+### . Nur relevante Branches testen
 
 ```yaml
 rules:
@@ -521,16 +521,16 @@ rules:
   - if: '$CI_COMMIT_TAG'  # Nur bei Tags
 ```
 
-### 3. Protected Branches
+### . Protected Branches
 
 **Settings → Repository → Protected Branches:**
 - `main` → Nur Maintainer dürfen pushen
 - Require pipeline to succeed before merging
 
-### 4. Merge Request Approvals
+### . Merge Request Approvals
 
 **Settings → Merge Requests → Merge request approvals:**
-- Mindestens 1 Approval erforderlich
+- Mindestens  Approval erforderlich
 - Pipeline muss erfolgreich sein
 
 ### 5. Pipeline Badges
@@ -571,7 +571,7 @@ Zeige Pipeline-Status im README:
 
 ---
 
-## ✅ Checkliste: Pipeline erfolgreich eingerichtet
+##  Checkliste: Pipeline erfolgreich eingerichtet
 
 - [ ] `.gitlab-ci.yml` im Repository committed
 - [ ] Projekt auf GitLab gepusht
@@ -581,4 +581,4 @@ Zeige Pipeline-Status im README:
 - [ ] Protected Branches konfiguriert
 - [ ] Merge Request Approvals aktiviert
 
-**Wenn alle Punkte ✅ sind: Herzlichen Glückwunsch! CI/CD ist einsatzbereit! 🎉**
+**Wenn alle Punkte  sind: Herzlichen Glückwunsch! CI/CD ist einsatzbereit! 🎉**

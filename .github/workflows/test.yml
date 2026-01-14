@@ -14,7 +14,7 @@ jobs:
     steps:
     - name: Install dependencies
       run: |
-        echo "✅ Ubuntu environment ready"
+        echo "Ubuntu environment ready"
         echo "Docker version: $(docker --version)"
         echo "Docker Compose version: $(docker compose version)"
 
@@ -23,72 +23,72 @@ jobs:
 
     - name: Generate .env file
       run: |
-        echo "🔧 Generating .env file..."
+        echo "Generating .env file..."
         docker compose --profile setup up moodle_setup
-        echo "✅ .env file created successfully"
+        echo ".env file created successfully"
         ls -lah .env
 
     - name: Build init container
       run: |
-        echo "🔨 Building init container..."
+        echo "Building init container..."
         docker compose build solr-init
 
     - name: Start Solr
       run: |
-        echo "🚀 Starting Solr containers..."
+        echo "Starting Solr containers..."
         docker compose up -d
 
     - name: Wait for Solr to be healthy
       run: |
-        echo "⏳ Waiting for Solr to be healthy (max 2 minutes)..."
+        echo "Waiting for Solr to be healthy (max 2 minutes)..."
         timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Still waiting..."; done'
-        echo "✅ Solr is healthy"
+        echo "Solr is healthy"
 
     - name: Show container status
       run: |
-        echo "📊 Container status:"
+        echo "Container status:"
         docker compose ps
         echo ""
-        echo "📋 Solr logs (last 50 lines):"
+        echo "Solr logs (last 50 lines):"
         docker compose logs --tail=50 solr
 
     - name: Run unit tests
       run: |
-        echo "🧪 Running unit tests..."
+        echo "Running unit tests..."
         chmod +x scripts/run-tests.sh
         ./scripts/run-tests.sh --unit-only
 
     - name: Run integration tests
       run: |
-        echo "🔗 Running integration tests..."
+        echo "Running integration tests..."
         ./scripts/run-tests.sh --integration-only --no-cleanup
 
     - name: Run security tests
       run: |
-        echo "🔒 Running security tests..."
+        echo "Running security tests..."
         ./scripts/run-tests.sh --security-only --no-cleanup
 
     - name: Run Moodle document tests
       run: |
-        echo "📚 Running Moodle document tests..."
+        echo "Running Moodle document tests..."
         chmod +x scripts/test-moodle-documents.sh
         ./scripts/test-moodle-documents.sh
 
     - name: Show logs on failure
       if: failure()
       run: |
-        echo "❌ Tests failed. Showing logs..."
+        echo "Tests failed. Showing logs..."
         echo ""
-        echo "📋 All container logs:"
+        echo "All container logs:"
         docker compose logs
         echo ""
-        echo "📊 Container status:"
+        echo "Container status:"
         docker compose ps
 
     - name: Cleanup
       if: always()
       run: |
-        echo "🧹 Cleaning up..."
+        echo "Cleaning up..."
         docker compose down -v
         rm -f .env
 

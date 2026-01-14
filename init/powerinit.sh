@@ -45,7 +45,7 @@ if [ -n "${ENV_FILE_PATH:-}" ] && [ -f "$ENV_FILE_PATH" ]; then
   . "$ENV_FILE_PATH"
   set +a
 else
-  echo "⚠ No external .env found at $ENV_FILE_PATH — using defaults"
+  echo "No external .env found at $ENV_FILE_PATH - using defaults"
 fi
 
 # --- Helper: detect pre-hashed password (32+ hex chars or contains space salt) ---
@@ -171,7 +171,7 @@ else
     echo "→ Passwords changed, regenerating security.json"
     REGENERATE_SECURITY=1
   else
-    echo "✓ Passwords unchanged, preserving security.json"
+    echo "Passwords unchanged, preserving security.json"
   fi
 fi
 
@@ -196,7 +196,7 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       exit 1
     fi
   else
-    echo "⚠ No security.json.template found — generating minimal inline file"
+    echo "No security.json.template found - generating minimal inline file"
     cat > "${DATA_DIR}/security.json" <<EOF
 {
   "authentication": {
@@ -232,7 +232,7 @@ EOF
   chmod 600 "$PASS_HASH_FILE"
   chown 8983:8983 "$PASS_HASH_FILE" 2>/dev/null || true
 
-  echo "✓ security.json created/updated"
+  echo "security.json created/updated"
 fi
 
 # -------------------------------------------------------------------
@@ -251,9 +251,9 @@ if [ ! -f "${CORE_DIR}/core.properties" ]; then
   cat > "${CORE_DIR}/core.properties" <<EOF
 name=${CORE_NAME}
 EOF
-  echo "✓ Core created"
+  echo "Core created"
 else
-  echo "✓ Core already present — skip recreate"
+  echo "Core already present - skip recreate"
 fi
 
 # -------------------------------------------------------------------
@@ -297,12 +297,12 @@ if [ -f "${DATA_DIR}/.password_checksum" ]; then
     chmod 600 "${DATA_DIR}/.password_checksum"
     echo "  → .password_checksum: 600"
 fi
-echo "✓ Permissions set"
+echo "Permissions set"
 
 # Ensure all filesystem changes are written to disk before exiting
-echo "→ Syncing filesystem..."
+echo "Syncing filesystem..."
 sync
 sleep 1
-echo "✓ Filesystem synced"
+echo "Filesystem synced"
 
-echo "✓ Initialization completed successfully."
+echo "Initialization completed successfully."

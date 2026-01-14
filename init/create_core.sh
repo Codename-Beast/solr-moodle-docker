@@ -27,13 +27,13 @@ backup_existing_core() {
 
 # If core exists but is empty/broken, you can force recreate by deleting it manually.
 if [ -d "${CORE_DIR}" ] && [ -f "${CORE_DIR}/core.properties" ]; then
-  echo "✓ Core already exists (${CORE_DIR}) — skipping create."
+  echo "Core already exists (${CORE_DIR}) - skipping create."
   exit 0
 fi
 
 # Validate required config files exist (from your repo /config via powerinit)
 if [ ! -f "/var/solr/data/configs/managed-schema" ] || [ ! -f "/var/solr/data/configs/solrconfig.xml" ]; then
-  echo "✗ ERROR: Missing configs in volume:"
+  echo "ERROR: Missing configs in volume:"
   echo "  - /var/solr/data/configs/managed-schema"
   echo "  - /var/solr/data/configs/solrconfig.xml"
   echo "Gibts den ./config im Repo ? wenn nicht pech ;)"
@@ -42,7 +42,7 @@ fi
 
 # If a half-created directory exists, back it up for safety
 if [ -d "${CORE_DIR}" ]; then
-  echo "⚠ Core dir exists but missing core.properties — backing up."
+  echo "Core dir exists but missing core.properties - backing up."
   backup_existing_core
 fi
 
@@ -70,5 +70,5 @@ EOF
 chown -R 8983:8983 "${CORE_DIR}"
 chmod 644 "${CORE_DIR}/core.properties" "${CONF_DIR}/solrconfig.xml" "${CONF_DIR}/managed-schema" 2>/dev/null || true
 
-echo "✓ Core prepared in volume: ${CORE_DIR}"
-echo "✓ Solr will auto-discover cores via core.properties on startup."
+echo "Core prepared in volume: ${CORE_DIR}"
+echo "Solr will auto-discover cores via core.properties on startup."

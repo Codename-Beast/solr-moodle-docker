@@ -512,12 +512,12 @@ if [ $TESTS_FAILED -eq 0 ]; then
   SUCCESS_RATE=100
   echo -e "${BOLD}Success Rate:${NC}   ${SUCCESS_RATE}%"
   echo ""
-  echo -e "${GREEN}${BOLD}✓ MOODLE DOCUMENT TESTS PASSED${NC}"
+  echo -e "${GREEN}${BOLD}MOODLE DOCUMENT TESTS PASSED${NC}"
   exit 0
 else
   SUCCESS_RATE=$((TESTS_PASSED * 100 / TESTS_RUN))
   echo -e "${BOLD}Success Rate:${NC}   ${SUCCESS_RATE}%"
   echo ""
-  echo -e "${RED}${BOLD}✗ SOME TESTS FAILED${NC}"
+  echo -e "${RED}${BOLD}SOME TESTS FAILED${NC}"
   exit 1
 fi

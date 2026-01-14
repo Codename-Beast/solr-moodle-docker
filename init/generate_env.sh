@@ -20,7 +20,7 @@ mkdir -p "${TARGET_DIR}"
 
 # Skip if already exists
 if [ -f "${ENV_FILE}" ]; then
-  echo "⚠ ${ENV_FILE} already exists — skipping generation."
+  echo "${ENV_FILE} already exists - skipping generation."
   echo "   Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
   echo "   Permissions:      $(stat -c '%A' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
   exit 0
