@@ -82,6 +82,124 @@ jobs:
         chmod +x scripts/test-moodle-documents.sh
         ./scripts/test-moodle-documents.sh
 
+    - name: Test automatic password generation
+      run: |
+        echo "Testing automatic password generation..."
+        # Stop current setup
+        docker compose down -v
+
+        # Create .env with CHANGE_ME password
+        cat > .env <<EOF
+        INSTANCE_NAME=solr
+        SOLR_VERSION=9.10.0
+        SOLR_PORT=8983
+        SOLR_BIND=127.0.0.1
+        SOLR_CORE_NAME=${{ matrix.core_name }}
+        SOLR_CORES=
+        SOLR_HEAP=2g
+        SOLR_LOG_LEVEL=INFO
+        SOLR_NETWORK_NAME=solr_network
+        SOLR_ADMIN_USER=admin
+        SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN
+        SOLR_SUPPORT_USER=support
+        SOLR_SUPPORT_PASSWORD=
+        SOLR_MOODLE_USER=moodle
+        SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD
+        MONITORING_BIND_IP=127.0.0.1
+        SOLR_METRICS_PORT=9854
+        PROMETHEUS_PORT=9090
+        PROMETHEUS_BIND=127.0.0.1
+        GRAFANA_PORT=3000
+        GRAFANA_BIND=127.0.0.1
+        GRAFANA_ADMIN_USER=admin
+        GRAFANA_ADMIN_PASSWORD=admin
+        EOF
+
+        # Start and check logs
+        docker compose build solr-init
+        docker compose up -d
+        sleep 10
+
+        # Check if passwords were generated
+        docker compose logs solr-init | grep -i "generated secure password" || {
+          echo "ERROR: Passwords were not auto-generated"
+          exit 1
+        }
+
+        echo "Password auto-generation test PASSED"
+        docker compose down -v
+
+    - name: Test dynamic core management
+      run: |
+        echo "Testing dynamic core management..."
+        # Create initial setup with 2 cores
+        cat > .env <<EOF
+        INSTANCE_NAME=solr
+        SOLR_VERSION=9.10.0
+        SOLR_PORT=8983
+        SOLR_BIND=127.0.0.1
+        SOLR_CORE_NAME=
+        SOLR_CORES=test_core1,test_core2
+        SOLR_HEAP=2g
+        SOLR_LOG_LEVEL=INFO
+        SOLR_NETWORK_NAME=solr_network
+        SOLR_ADMIN_USER=admin
+        SOLR_ADMIN_PASSWORD=test123
+        SOLR_SUPPORT_USER=support
+        SOLR_SUPPORT_PASSWORD=test123
+        SOLR_MOODLE_USER=moodle
+        SOLR_MOODLE_PASSWORD=test123
+        MONITORING_BIND_IP=127.0.0.1
+        SOLR_METRICS_PORT=9854
+        PROMETHEUS_PORT=9090
+        PROMETHEUS_BIND=127.0.0.1
+        GRAFANA_PORT=3000
+        GRAFANA_BIND=127.0.0.1
+        GRAFANA_ADMIN_USER=admin
+        GRAFANA_ADMIN_PASSWORD=admin
+        EOF
+
+        docker compose build solr-init
+        docker compose up -d
+        timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+
+        # Check cores were created
+        docker compose logs solr-init | grep "Creating core 'test_core1'" || {
+          echo "ERROR: Core test_core1 not created"
+          exit 1
+        }
+        docker compose logs solr-init | grep "Creating core 'test_core2'" || {
+          echo "ERROR: Core test_core2 not created"
+          exit 1
+        }
+
+        # Add a third core
+        sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
+        docker compose down
+        docker compose up -d
+        sleep 10
+
+        # Check new core was created
+        docker compose logs solr-init | grep "Creating core 'test_core3'" || {
+          echo "ERROR: Core test_core3 not created"
+          exit 1
+        }
+
+        # Remove core2
+        sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
+        docker compose down
+        docker compose up -d
+        sleep 10
+
+        # Check core was deleted
+        docker compose logs solr-init | grep "Deleting core 'test_core2'" || {
+          echo "ERROR: Core test_core2 not deleted"
+          exit 1
+        }
+
+        echo "Dynamic core management test PASSED"
+        docker compose down -v
+
     - name: Show logs on failure
       if: failure()
       run: |

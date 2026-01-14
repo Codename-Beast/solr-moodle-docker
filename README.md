@@ -75,24 +75,7 @@ SOLR_CORE_NAME=moodle_core
 SOLR_CORES=core1,core2,core3
 ```
 
-### Dynamische Core-Verwaltung
-
-Cores werden beim Restart automatisch verwaltet:
-
-- **Neuer Core hinzugefügt**: Wird automatisch erstellt
-- **Core gelöscht**: Wird entfernt (Backup in `backup/deleted_cores/`)
-- **Core umbenannt**: Name in `.env` ändern und Container restarten
-
-**Beispiel:**
-```bash
-# .env bearbeiten
-nano .env
-# SOLR_CORES=core1,core2 -> SOLR_CORES=core1,core2,core3
-
-# Restart
-docker compose down && docker compose up -d
-# core3 wird automatisch erstellt
-```
+Cores werden automatisch erstellt/gelöscht beim Restart.
 
 ---
 
@@ -130,30 +113,18 @@ grep PASSWORD .env                             # Credentials anzeigen
 
 ---
 
-## Passwörter
-
-### Automatische Generierung
-
-Sichere Passwörter werden automatisch generiert wenn:
-- Passwort leer ist
-- Passwort "CHANGE_ME" enthält
-
-Das passiert automatisch beim ersten Start oder wenn `.env` manuelle Platzhalter enthält.
-
-### Passwörter ändern
+## Passwörter ändern
 
 ```bash
 # 1. .env bearbeiten
 nano .env
 
-# 2. Restart (mit init-Container für security.json Update)
+# 2. Restart
 docker compose down
 docker compose up -d
-
-# 3. Done (automatische Erkennung + Update)
 ```
 
-Passwort-Änderungen werden automatisch erkannt und security.json wird neu generiert.
+Passwörter werden automatisch generiert wenn leer oder "CHANGE_ME".
 
 ---
 
