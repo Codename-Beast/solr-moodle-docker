@@ -41,7 +41,20 @@ jobs:
 
         # Start Docker daemon
         dockerd > /dev/null 2>&1 &
-        sleep 5
+
+        # Wait for Docker to be ready
+        echo "⏳ Waiting for Docker daemon to start..."
+        for i in $(seq 1 30); do
+          if docker info > /dev/null 2>&1; then
+            echo "✅ Docker daemon is ready"
+            break
+          fi
+          echo "Still waiting... ($i/30)"
+          sleep 1
+        done
+
+        # Verify Docker is working
+        docker info > /dev/null 2>&1 || (echo "❌ Docker daemon failed to start" && exit 1)
 
         echo "✅ Debian ${{ matrix.debian-version }} environment ready"
         echo "Docker version: $(docker --version)"
@@ -53,6 +66,10 @@ jobs:
     - name: Generate .env file
       run: |
         echo "🔧 Generating .env file..."
+        echo "📂 Current directory: $(pwd)"
+        echo "📋 Checking for init directory:"
+        ls -la init/ || echo "❌ init directory not found"
+        echo ""
         docker compose --profile setup up moodle_setup
 
         # Verify .env was created
