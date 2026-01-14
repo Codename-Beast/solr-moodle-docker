@@ -13,10 +13,10 @@ services:
     image: alpine:3.20
     profiles: ["setup"]
     container_name: ${INSTANCE_NAME:-solr}-setup
-    working_dir: /workspace
+    working_dir: /app
     volumes:
       - ./init:/init:ro
-      - ./:/workspace
+      - ./:/app
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
