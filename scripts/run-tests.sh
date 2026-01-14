@@ -27,6 +27,14 @@ TESTS_SKIPPED=0
 # Test results array
 declare -a FAILED_TESTS
 
+# Get dynamic container names from .env or fallback to default
+if [ -f ".env" ]; then
+    source .env
+fi
+INSTANCE_NAME=${INSTANCE_NAME:-solr}
+SOLR_CONTAINER="${INSTANCE_NAME}-solr"
+INIT_CONTAINER="${INSTANCE_NAME}-init"
+
 # Helper functions
 print_header() {
     echo -e "\n${BOLD}${BLUE}========================================${NC}"
@@ -167,7 +175,7 @@ integration_tests() {
 
     # Test 2: Solr Core Creation
     print_test "Solr core creation"
-    if docker exec solr-solr test -d /var/solr/data/moodle_core 2>/dev/null; then
+    if docker exec "$SOLR_CONTAINER" test -d /var/solr/data/moodle_core 2>/dev/null; then
         print_pass "Moodle core directory created"
     else
         print_fail "Moodle core directory not found"
@@ -175,8 +183,8 @@ integration_tests() {
 
     # Test 3: security.json creation
     print_test "security.json creation and permissions"
-    if docker exec solr-solr test -f /var/solr/data/security.json 2>/dev/null; then
-        local perms=$(docker exec solr-solr stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+    if docker exec "$SOLR_CONTAINER" test -f /var/solr/data/security.json 2>/dev/null; then
+        local perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
         if [ "$perms" = "600" ]; then
             print_pass "security.json exists with correct permissions (600)"
         else
@@ -250,7 +258,7 @@ security_tests() {
 
     # Test 2: Container privileges
     print_test "Container privileges (non-root for Solr)"
-    local user=$(docker inspect solr-solr --format='{{.Config.User}}' 2>/dev/null)
+    local user=$(docker inspect $SOLR_CONTAINER --format='{{.Config.User}}' 2>/dev/null)
     if [ "$user" = "8983:8983" ]; then
         print_pass "Solr runs as non-root user (8983:8983)"
     else
@@ -259,7 +267,7 @@ security_tests() {
 
     # Test 3: Privileged mode
     print_test "Privileged mode disabled"
-    local privileged=$(docker inspect solr-solr --format='{{.HostConfig.Privileged}}' 2>/dev/null)
+    local privileged=$(docker inspect $SOLR_CONTAINER --format='{{.HostConfig.Privileged}}' 2>/dev/null)
     if [ "$privileged" = "false" ]; then
         print_pass "Privileged mode disabled"
     else
@@ -268,7 +276,7 @@ security_tests() {
 
     # Test 4: Secrets in environment
     print_test "No secrets in container environment"
-    if docker exec solr-solr env 2>/dev/null | grep -qi "password"; then
+    if docker exec $SOLR_CONTAINER env 2>/dev/null | grep -qi "password"; then
         print_fail "Passwords found in container environment"
     else
         print_pass "No passwords in container environment"
@@ -276,8 +284,8 @@ security_tests() {
 
     # Test 5: File permissions
     print_test "Sensitive file permissions"
-    local sec_perms=$(docker exec solr-solr stat -c '%a' /var/solr/data/security.json 2>/dev/null)
-    local pwd_perms=$(docker exec solr-solr stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
+    local sec_perms=$(docker exec $SOLR_CONTAINER stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+    local pwd_perms=$(docker exec $SOLR_CONTAINER stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
 
     if [ "$sec_perms" = "600" ] && [ "$pwd_perms" = "600" ]; then
         print_pass "Sensitive files have correct permissions (600)"
@@ -335,7 +343,7 @@ performance_tests() {
 
     # Test 2: Container resource usage
     print_test "Container memory usage"
-    local mem_usage=$(docker stats solr-solr --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
+    local mem_usage=$(docker stats $SOLR_CONTAINER --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
     if [ -n "$mem_usage" ]; then
         print_pass "Memory usage: $mem_usage"
     else
@@ -420,7 +428,7 @@ cleanup_tests() {
     # Test 2: Graceful shutdown
     print_test "Graceful shutdown"
     docker compose down >/dev/null 2>&1
-    if ! docker ps | grep -q solr-solr; then
+    if ! docker ps | grep -q $SOLR_CONTAINER; then
         print_pass "Containers shut down gracefully"
     else
         print_fail "Containers still running after shutdown"
