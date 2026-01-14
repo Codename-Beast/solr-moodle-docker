@@ -15,6 +15,11 @@ solr-test:
   tags:
     - docker
 
+  parallel:
+    matrix:
+      - SOLR_CORE_NAME: moodle_core
+      - SOLR_CORE_NAME: custom_test_core
+
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq curl jq docker-compose-plugin docker.io
@@ -24,10 +29,12 @@ solr-test:
     - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
 
   script:
-    - echo "Generating .env file..."
-    - docker compose --profile setup up moodle_setup
+    - echo "Generating .env file with core name:" $SOLR_CORE_NAME
+    - SOLR_CORE_NAME=$SOLR_CORE_NAME docker compose --profile setup up moodle_setup
     - echo ".env file created successfully"
     - ls -lah .env
+    - echo "Core name in .env:"
+    - grep SOLR_CORE_NAME .env
 
     - echo "Building init container..."
     - docker compose build solr-init

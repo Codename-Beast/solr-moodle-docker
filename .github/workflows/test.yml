@@ -8,8 +8,14 @@ on:
 
 jobs:
   solr-test:
-    name: Solr Tests
+    name: Solr Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        core_name:
+          - moodle_core  # Default core name
+          - custom_test_core  # Test custom core name feature
 
     steps:
     - name: Install dependencies
@@ -23,10 +29,12 @@ jobs:
 
     - name: Generate .env file
       run: |
-        echo "Generating .env file..."
-        docker compose --profile setup up moodle_setup
+        echo "Generating .env file with core name: ${{ matrix.core_name }}..."
+        SOLR_CORE_NAME=${{ matrix.core_name }} docker compose --profile setup up moodle_setup
         echo ".env file created successfully"
         ls -lah .env
+        echo "Core name in .env:"
+        grep SOLR_CORE_NAME .env
 
     - name: Build init container
       run: |

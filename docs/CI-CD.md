@@ -22,6 +22,7 @@ git push gitlab develop
 - Integration Tests (Container-Startup, Health-Checks)
 - Security Tests (Authentifizierung, Permissions)
 - Moodle Document Tests (Indexierung, Queries)
+- Custom Core-Namen Feature (Matrix-Tests mit verschiedenen Core-Namen)
 
 ### Setup-Anleitungen
 
@@ -75,6 +76,14 @@ Die Pipeline ist definiert in `.gitlab-ci.yml` und benötigt:
 Verwendet `ubuntu-latest` Runner mit vorinstalliertem Docker.
 Keine zusätzliche Konfiguration erforderlich.
 
+### Matrix-Tests
+
+Beide CI-Systeme (GitLab und GitHub Actions) führen Tests parallel mit verschiedenen Core-Namen aus:
+- `moodle_core` (Standard)
+- `custom_test_core` (Test für custom Core-Namen Feature)
+
+Dies stellt sicher, dass das optionale SOLR_CORE_NAME Parameter beim Setup korrekt funktioniert.
+
 ---
 
 ## Lokale Tests
@@ -82,6 +91,10 @@ Keine zusätzliche Konfiguration erforderlich.
 Du kannst die Tests auch lokal ausführen:
 
 ```bash
+# Setup mit Standard Core-Namen
+docker compose --profile setup up moodle_setup
+docker compose up -d
+
 # Unit Tests
 ./scripts/run-tests.sh --unit-only
 
@@ -96,6 +109,25 @@ Du kannst die Tests auch lokal ausführen:
 
 # Alle Tests
 ./scripts/run-tests.sh
+
+# Cleanup
+docker compose down -v
+rm -f .env
+```
+
+### Lokale Tests mit custom Core-Namen
+
+```bash
+# Setup mit custom Core-Namen
+SOLR_CORE_NAME=test_core docker compose --profile setup up moodle_setup
+docker compose up -d
+
+# Tests ausführen
+./scripts/run-tests.sh
+
+# Cleanup
+docker compose down -v
+rm -f .env
 ```
 
 ---
