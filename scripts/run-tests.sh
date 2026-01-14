@@ -34,15 +34,7 @@ fi
 INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
-
-# Detect CI/CD environment (Docker-in-Docker)
-# In CI, we need to use the container name instead of localhost
-if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
-    SOLR_HOST="$SOLR_CONTAINER"
-    print_info "CI/CD detected - using container name for connectivity"
-else
-    SOLR_HOST="127.0.0.1"
-fi
+SOLR_HOST="127.0.0.1"
 
 # Helper functions
 print_header() {
