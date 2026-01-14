@@ -71,10 +71,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Load credentials from .env
-if [ -f "eledia-workplace/.env" ]; then
-  source eledia-workplace/.env
+if [ -f ".env" ]; then
+  source .env
 else
-  echo -e "${RED}ERROR: eledia-workplace/.env not found${NC}"
+  echo -e "${RED}ERROR: .env not found. Run setup first: docker compose --profile setup up moodle_setup${NC}"
   exit 1
 fi
 

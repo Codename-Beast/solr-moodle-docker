@@ -132,7 +132,7 @@ unit_tests() {
 
     # Test 6: Git status (security check)
     print_test "Git security check (.env not tracked)"
-    if git ls-files | grep -q "eledia-workplace/.env"; then
+    if git ls-files | grep -q "\.env$"; then
         print_fail ".env file is tracked in git (SECURITY RISK)"
     else
         print_pass ".env file not tracked in git"
@@ -150,7 +150,7 @@ integration_tests() {
     docker compose down -v >/dev/null 2>&1 || true
 
     # Generate .env if not exists
-    if [ ! -f "eledia-workplace/.env" ]; then
+    if [ ! -f ".env" ]; then
         print_info "Generating .env for tests..."
         docker compose --profile setup up moodle_setup >/dev/null 2>&1 || true
     fi
@@ -167,7 +167,7 @@ integration_tests() {
 
     # Test 2: Solr Core Creation
     print_test "Solr core creation"
-    if docker exec solr_solr test -d /var/solr/data/moodle_core 2>/dev/null; then
+    if docker exec solr-solr test -d /var/solr/data/moodle_core 2>/dev/null; then
         print_pass "Moodle core directory created"
     else
         print_fail "Moodle core directory not found"
@@ -175,8 +175,8 @@ integration_tests() {
 
     # Test 3: security.json creation
     print_test "security.json creation and permissions"
-    if docker exec solr_solr test -f /var/solr/data/security.json 2>/dev/null; then
-        local perms=$(docker exec solr_solr stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+    if docker exec solr-solr test -f /var/solr/data/security.json 2>/dev/null; then
+        local perms=$(docker exec solr-solr stat -c '%a' /var/solr/data/security.json 2>/dev/null)
         if [ "$perms" = "600" ]; then
             print_pass "security.json exists with correct permissions (600)"
         else
@@ -188,7 +188,7 @@ integration_tests() {
 
     # Test 4: Authentication
     print_test "Basic authentication"
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" eledia-workplace/.env | cut -d= -f2)
+    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     local response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://127.0.0.1:8983/solr/admin/cores")
     if [ "$response" = "200" ]; then
         print_pass "Authentication successful (HTTP 200)"
@@ -217,8 +217,7 @@ integration_tests() {
     # Test 7: Password change detection
     print_test "Password change detection"
     # Change password
-    docker run --rm -v "$(pwd)/eledia-workplace:/work" alpine:3.20 sh -c \
-        "sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=TESTPASS999/' /work/.env" 2>/dev/null
+    sed -i.bak 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=TESTPASS999/' .env 2>/dev/null
 
     docker compose down >/dev/null 2>&1
     docker compose up -d >/dev/null 2>&1
@@ -231,8 +230,7 @@ integration_tests() {
     fi
 
     # Restore old password for remaining tests
-    docker run --rm -v "$(pwd)/eledia-workplace:/work" alpine:3.20 sh -c \
-        "sed -i \"s/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=${admin_pass}/\" /work/.env" 2>/dev/null
+    mv .env.bak .env 2>/dev/null
 }
 
 # =========================================
@@ -252,7 +250,7 @@ security_tests() {
 
     # Test 2: Container privileges
     print_test "Container privileges (non-root for Solr)"
-    local user=$(docker inspect solr_solr --format='{{.Config.User}}' 2>/dev/null)
+    local user=$(docker inspect solr-solr --format='{{.Config.User}}' 2>/dev/null)
     if [ "$user" = "8983:8983" ]; then
         print_pass "Solr runs as non-root user (8983:8983)"
     else
@@ -261,7 +259,7 @@ security_tests() {
 
     # Test 3: Privileged mode
     print_test "Privileged mode disabled"
-    local privileged=$(docker inspect solr_solr --format='{{.HostConfig.Privileged}}' 2>/dev/null)
+    local privileged=$(docker inspect solr-solr --format='{{.HostConfig.Privileged}}' 2>/dev/null)
     if [ "$privileged" = "false" ]; then
         print_pass "Privileged mode disabled"
     else
@@ -270,7 +268,7 @@ security_tests() {
 
     # Test 4: Secrets in environment
     print_test "No secrets in container environment"
-    if docker exec solr_solr env 2>/dev/null | grep -qi "password"; then
+    if docker exec solr-solr env 2>/dev/null | grep -qi "password"; then
         print_fail "Passwords found in container environment"
     else
         print_pass "No passwords in container environment"
@@ -278,8 +276,8 @@ security_tests() {
 
     # Test 5: File permissions
     print_test "Sensitive file permissions"
-    local sec_perms=$(docker exec solr_solr stat -c '%a' /var/solr/data/security.json 2>/dev/null)
-    local pwd_perms=$(docker exec solr_solr stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
+    local sec_perms=$(docker exec solr-solr stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+    local pwd_perms=$(docker exec solr-solr stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
 
     if [ "$sec_perms" = "600" ] && [ "$pwd_perms" = "600" ]; then
         print_pass "Sensitive files have correct permissions (600)"
@@ -297,7 +295,7 @@ security_tests() {
 
     # Test 7: Default passwords in production
     print_test "No default passwords used"
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" eledia-workplace/.env | cut -d= -f2)
+    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     if [ "$admin_pass" = "eledia_default" ]; then
         print_fail "Default password still in use (CHANGE IT!)"
     else
@@ -320,7 +318,7 @@ security_tests() {
 performance_tests() {
     print_header "PERFORMANCE TESTS - Basic Performance"
 
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" eledia-workplace/.env | cut -d= -f2)
+    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
 
     # Test 1: Response time
     print_test "API response time (<2s)"
@@ -337,7 +335,7 @@ performance_tests() {
 
     # Test 2: Container resource usage
     print_test "Container memory usage"
-    local mem_usage=$(docker stats solr_solr --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
+    local mem_usage=$(docker stats solr-solr --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
     if [ -n "$mem_usage" ]; then
         print_pass "Memory usage: $mem_usage"
     else
@@ -405,7 +403,7 @@ moodle_document_tests() {
 cleanup_tests() {
     print_header "CLEANUP TESTS - Restart and Data Persistence"
 
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" eledia-workplace/.env | cut -d= -f2)
+    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
 
     # Test 1: Restart without data loss
     print_test "Restart without data loss"
@@ -422,7 +420,7 @@ cleanup_tests() {
     # Test 2: Graceful shutdown
     print_test "Graceful shutdown"
     docker compose down >/dev/null 2>&1
-    if ! docker ps | grep -q solr_solr; then
+    if ! docker ps | grep -q solr-solr; then
         print_pass "Containers shut down gracefully"
     else
         print_fail "Containers still running after shutdown"
