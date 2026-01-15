@@ -340,7 +340,8 @@ delete_core() {
   # Create backup
   local backup_dir="${DATA_DIR}/backup/deleted_cores"
   mkdir -p "$backup_dir"
-  local timestamp="$(date +%Y%m%d_%H%M%S)"
+  local timestamp
+  timestamp="$(date +%Y%m%d_%H%M%S)"
   mv "$core_dir" "${backup_dir}/${core_name}_${timestamp}"
 
   echo "✓ Core deleted (backed up to backup/deleted_cores)"
