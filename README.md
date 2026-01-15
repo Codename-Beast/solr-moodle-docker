@@ -1,12 +1,12 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **for the Company:** Eledia.de | **Version:** v2.1
+**Developer:** BSC Bernd Schreistetter | **Version:** v2.1
 
 **Solr 9.10.0** | **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.1 - Production Ready | Automated Testing | Enhanced Security
+> v2.1 | Automated Testing
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
@@ -36,7 +36,7 @@ Zugangsdaten: `.env` im Root-Verzeichnis
 ## Reverse Proxy
 
 ```bash
-Nicht meine Baustelle :)
+Comming Soon
 ```
 
 ---
@@ -181,7 +181,7 @@ location /solr/ {
 
 ### Moodle Document Tests:
 ```bash
-# Testet Indexierung + Queries (7 Dokumente bleiben im Index)
+# Testet Indexierung + Queries (7 Dokumente)
 ./scripts/test-moodle-documents.sh --keep-documents
 ```
 
@@ -199,21 +199,7 @@ curl -u moodle:PASSWORD http://localhost:8983/solr/moodle_core/admin/ping
 
 ### Known Issues
 
-#### SELinux: Volume-Rechte nach `docker volume rm` / Neu-Erstellung
-
-**Symptom:**
-- Nachdem Volumes gelöscht und neu erstellt wurden (z. B. `docker compose down -v`), startet Solr nicht sauber oder zeigt **Permission denied** Fehler.
-
-**Ursache:**
-- Unter Fedora/RHEL (SELinux *enforcing*) bekommen neu erstellte Volumes nicht immer automatisch die passenden **SELinux-Labels** für Containerzugriff.
-
-**Fix:**
-```bash
-# SELinux-Labels neu setzen
-docker volume rm solr_data_solr prometheus_data_solr grafana_data_solr
-docker compose --profile setup up moodle_setup
-docker compose up -d
-```
+Keine Bekannt
 
 ---
 
@@ -324,7 +310,7 @@ Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
 **Version:** v2.1
-**Status:** Production Ready | CI/CD Tested | Fedora 43
+**Status:** Docker Tested | CI/CD Tested (Github)
 
 **Links:**
 - [Apache Solr Documentation](https://solr.apache.org/guide/)
