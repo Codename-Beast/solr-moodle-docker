@@ -15,8 +15,8 @@ services:
     container_name: ${INSTANCE_NAME:-solr}-setup
     working_dir: /app
     volumes:
-      - ./init:/init:ro
-      - ./:/app
+      - ./init:/init:ro,z
+      - ./:/app:z
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
@@ -36,7 +36,7 @@ services:
     volumes:
       - solr_data:/var/solr/data
       - prometheus_config:/prometheus-config
-      - ./.env:/.env:ro
+      - ./.env:/.env:ro,z
     env_file:
       - .env
     environment:
@@ -135,8 +135,8 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
     networks:
       - solr_network
     restart: unless-stopped
