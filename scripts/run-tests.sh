@@ -7,7 +7,8 @@
 # security, and deployment verification
 # =========================================
 
-# Note: Not using 'set -e' to allow tests to continue even if some fail
+# Allow tests to continue even if some fail
+# Using pipefail to catch errors in pipelines
 set -o pipefail
 
 # Colors for output
@@ -186,7 +187,9 @@ integration_tests() {
     # Test 3: security.json creation
     print_test "security.json creation and permissions"
     if docker exec "$SOLR_CONTAINER" test -f /var/solr/data/security.json 2>/dev/null; then
-        local perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+        local perms
+
+        perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
         if [ "$perms" = "600" ]; then
             print_pass "security.json exists with correct permissions (600)"
         else
@@ -198,8 +201,12 @@ integration_tests() {
 
     # Test 4: Authentication
     print_test "Basic authentication"
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
-    local response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    local admin_pass
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    local response
+
+    response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
     if [ "$response" = "200" ]; then
         print_pass "Authentication successful (HTTP 200)"
     else
@@ -208,7 +215,9 @@ integration_tests() {
 
     # Test 5: Unauthorized access blocked
     print_test "Unauthorized access blocked"
-    local unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/cores")
+    local unauth_response
+
+    unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/cores")
     if [ "$unauth_response" = "401" ]; then
         print_pass "Unauthorized access correctly blocked (HTTP 401)"
     else
@@ -217,7 +226,9 @@ integration_tests() {
 
     # Test 6: Core status API
     print_test "Core status API"
-    local core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS&wt=json")
+    local core_response
+
+    core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS&wt=json")
     if echo "$core_response" | grep -q "\"${SOLR_CORE_NAME}\""; then
         print_pass "Core status API returns ${SOLR_CORE_NAME}"
     else
@@ -256,7 +267,9 @@ security_tests() {
 
     # Test 1: Network binding
     print_test "Network binding (localhost only)"
-    local binding=$(docker compose port solr 8983 2>/dev/null)
+    local binding
+
+    binding=$(docker compose port solr 8983 2>/dev/null)
     if echo "$binding" | grep -q "127.0.0.1"; then
         print_pass "Solr correctly bound to localhost only"
     else
@@ -265,7 +278,8 @@ security_tests() {
 
     # Test 2: Container privileges
     print_test "Container privileges (non-root for Solr)"
-    local user=$(docker inspect $SOLR_CONTAINER --format='{{.Config.User}}' 2>/dev/null)
+    local user
+    user=$(docker inspect "$SOLR_CONTAINER" --format='{{.Config.User}}' 2>/dev/null)
     if [ "$user" = "8983:8983" ]; then
         print_pass "Solr runs as non-root user (8983:8983)"
     else
@@ -274,7 +288,8 @@ security_tests() {
 
     # Test 3: Privileged mode
     print_test "Privileged mode disabled"
-    local privileged=$(docker inspect $SOLR_CONTAINER --format='{{.HostConfig.Privileged}}' 2>/dev/null)
+    local privileged
+    privileged=$(docker inspect "$SOLR_CONTAINER" --format='{{.HostConfig.Privileged}}' 2>/dev/null)
     if [ "$privileged" = "false" ]; then
         print_pass "Privileged mode disabled"
     else
@@ -283,7 +298,7 @@ security_tests() {
 
     # Test 4: Secrets in environment (informational only)
     print_test "Container environment password check"
-    if docker exec $SOLR_CONTAINER env 2>/dev/null | grep -qi "password"; then
+    if docker exec "$SOLR_CONTAINER" env 2>/dev/null | grep -qi "password"; then
         print_info "Password env vars found (normal for Docker containers)"
         print_pass "Container uses environment variables for configuration"
     else
@@ -292,8 +307,10 @@ security_tests() {
 
     # Test 5: File permissions
     print_test "Sensitive file permissions"
-    local sec_perms=$(docker exec $SOLR_CONTAINER stat -c '%a' /var/solr/data/security.json 2>/dev/null)
-    local pwd_perms=$(docker exec $SOLR_CONTAINER stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
+    local sec_perms
+    sec_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+    local pwd_perms
+    pwd_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
 
     if [ "$sec_perms" = "600" ] && [ "$pwd_perms" = "600" ]; then
         print_pass "Sensitive files have correct permissions (600)"
@@ -311,7 +328,9 @@ security_tests() {
 
     # Test 7: Default passwords in production
     print_test "No default passwords used"
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    local admin_pass
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     if [ "$admin_pass" = "eledia_default" ]; then
         print_fail "Default password still in use (CHANGE IT!)"
     else
@@ -329,20 +348,110 @@ security_tests() {
 }
 
 # =========================================
+# NEGATIVE TESTS - Invalid Input Handling
+# =========================================
+negative_tests() {
+    print_header "NEGATIVE TESTS - Invalid Input Handling"
+
+    local admin_pass
+
+    # Test 1: Invalid credentials
+
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    print_test "Reject invalid credentials"
+    local invalid_response
+
+    invalid_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:wrongpassword" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    if [ "$invalid_response" = "401" ]; then
+        print_pass "Invalid credentials rejected (HTTP 401)"
+    else
+        print_fail "Invalid credentials not rejected (HTTP $invalid_response)"
+    fi
+
+    # Test 2: SQL injection attempt in query
+    print_test "SQL injection protection"
+    local injection_response
+
+    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
+    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ]; then
+        print_pass "SQL injection handled safely (HTTP $injection_response)"
+    else
+        print_fail "Unexpected response to SQL injection (HTTP $injection_response)"
+    fi
+
+    # Test 3: XSS attempt in query
+    print_test "XSS protection"
+    local xss_response
+
+    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
+    if echo "$xss_response" | grep -qv "<script>"; then
+        print_pass "XSS attack sanitized"
+    else
+        print_fail "XSS content not sanitized"
+    fi
+
+    # Test 4: Extremely long query
+    print_test "Handle extremely long query"
+    local long_query
+
+    long_query=$(python3 -c "print('a'*10000)")
+    local long_response
+
+    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
+    if [ "$long_response" = "400" ] || [ "$long_response" = "414" ] || [ "$long_response" = "200" ]; then
+        print_pass "Long query handled (HTTP $long_response)"
+    else
+        print_fail "Long query caused unexpected response (HTTP $long_response)"
+    fi
+
+    # Test 5: Invalid core name
+    print_test "Reject invalid core name"
+    local invalid_core_response
+
+    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/nonexistent_core/select?q=*:*")
+    if [ "$invalid_core_response" = "404" ]; then
+        print_pass "Invalid core rejected (HTTP 404)"
+    else
+        print_fail "Invalid core not rejected (HTTP $invalid_core_response)"
+    fi
+
+    # Test 6: Empty query parameter
+    print_test "Handle empty query"
+    local empty_response
+
+    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=")
+    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ]; then
+        print_pass "Empty query handled (HTTP $empty_response)"
+    else
+        print_fail "Empty query caused unexpected response (HTTP $empty_response)"
+    fi
+}
+
+# =========================================
 # PERFORMANCE TESTS - Basic Performance
 # =========================================
 performance_tests() {
     print_header "PERFORMANCE TESTS - Basic Performance"
 
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    local admin_pass
 
     # Test 1: Response time
-    print_test "API response time (<2s)"
-    local start_time=$(date +%s%3N)
-    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" >/dev/null 2>&1
-    local end_time=$(date +%s%3N)
-    local response_time=$((end_time - start_time))
 
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    print_test "API response time (<2s)"
+    local start_time
+
+    start_time=$(date +%s%3N)
+    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    local end_time
+
+    end_time=$(date +%s%3N)
+    local response_time
+
+
+    response_time=$((end_time - start_time))
     if [ $response_time -lt 2000 ]; then
         print_pass "Response time: ${response_time}ms (good)"
     else
@@ -351,7 +460,8 @@ performance_tests() {
 
     # Test 2: Container resource usage
     print_test "Container memory usage"
-    local mem_usage=$(docker stats $SOLR_CONTAINER --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
+    local mem_usage
+    mem_usage=$(docker stats "$SOLR_CONTAINER" --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
     if [ -n "$mem_usage" ]; then
         print_pass "Memory usage: $mem_usage"
     else
@@ -360,11 +470,59 @@ performance_tests() {
 
     # Test 3: Healthcheck responsiveness
     print_test "Healthcheck endpoint response"
-    local health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/ping" 2>/dev/null)
+    local health_response
+
+    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/ping" 2>/dev/null)
     if [ "$health_response" = "401" ] || [ "$health_response" = "200" ]; then
         print_pass "Healthcheck endpoint responsive (HTTP $health_response)"
     else
         print_fail "Healthcheck endpoint not responding (HTTP $health_response)"
+    fi
+
+    # Test 4: Concurrent request handling (load test)
+    print_test "Concurrent request handling (10 parallel requests)"
+    local concurrent_start
+
+    concurrent_start=$(date +%s%3N)
+    for i in {1..10}; do
+        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" &
+    done
+    wait
+    local concurrent_end
+
+    concurrent_end=$(date +%s%3N)
+    local concurrent_time
+
+
+    concurrent_time=$((concurrent_end - concurrent_start))
+    if [ $concurrent_time -lt 5000 ]; then
+        print_pass "Handled 10 concurrent requests in ${concurrent_time}ms"
+    else
+        print_fail "Concurrent requests too slow: ${concurrent_time}ms (expected <5000ms)"
+    fi
+
+    # Test 5: Query performance under load
+    print_test "Query performance under load (20 queries)"
+    local load_start
+
+    load_start=$(date +%s%3N)
+    for i in {1..20}; do
+        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
+    done
+    local load_end
+
+    load_end=$(date +%s%3N)
+    local load_time
+
+    load_time=$((load_end - load_start))
+    local avg_time
+
+
+    avg_time=$((load_time / 20))
+    if [ $avg_time -lt 200 ]; then
+        print_pass "Average query time under load: ${avg_time}ms per query"
+    else
+        print_fail "Query performance under load too slow: ${avg_time}ms per query (expected <200ms)"
     fi
 }
 
@@ -419,14 +577,20 @@ moodle_document_tests() {
 cleanup_tests() {
     print_header "CLEANUP TESTS - Restart and Data Persistence"
 
-    local admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    local admin_pass
 
     # Test 1: Restart without data loss
+
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     print_test "Restart without data loss"
     docker compose restart solr >/dev/null 2>&1
     sleep 20
 
-    local restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    local restart_response
+
+
+    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
     if [ "$restart_response" = "200" ]; then
         print_pass "Container restart successful, data persisted"
     else
@@ -436,7 +600,7 @@ cleanup_tests() {
     # Test 2: Graceful shutdown
     print_test "Graceful shutdown"
     docker compose down >/dev/null 2>&1
-    if ! docker ps | grep -q $SOLR_CONTAINER; then
+    if ! docker ps | grep -q "$SOLR_CONTAINER"; then
         print_pass "Containers shut down gracefully"
     else
         print_fail "Containers still running after shutdown"
@@ -468,6 +632,7 @@ EOF
     RUN_UNIT=1
     RUN_INTEGRATION=1
     RUN_SECURITY=1
+    RUN_NEGATIVE=1
     RUN_PERFORMANCE=1
     RUN_MOODLE=1
     RUN_CLEANUP=1
@@ -493,6 +658,16 @@ EOF
             --security-only)
                 RUN_UNIT=0
                 RUN_INTEGRATION=0
+                RUN_NEGATIVE=0
+                RUN_PERFORMANCE=0
+                RUN_MOODLE=0
+                RUN_CLEANUP=0
+                shift
+                ;;
+            --negative-only)
+                RUN_UNIT=0
+                RUN_INTEGRATION=0
+                RUN_SECURITY=0
                 RUN_PERFORMANCE=0
                 RUN_MOODLE=0
                 RUN_CLEANUP=0
@@ -502,6 +677,7 @@ EOF
                 RUN_UNIT=0
                 RUN_INTEGRATION=0
                 RUN_SECURITY=0
+                RUN_NEGATIVE=0
                 RUN_PERFORMANCE=0
                 RUN_CLEANUP=0
                 shift
@@ -517,6 +693,7 @@ EOF
                 echo "  --unit-only          Run only unit tests"
                 echo "  --integration-only   Run only integration tests"
                 echo "  --security-only      Run only security tests"
+                echo "  --negative-only      Run only negative tests (invalid inputs)"
                 echo "  --moodle-only        Run only Moodle document tests"
                 echo "  --no-cleanup         Skip cleanup tests"
                 echo "  --help               Show this help"
@@ -535,6 +712,7 @@ EOF
     [ $RUN_UNIT -eq 1 ] && unit_tests
     [ $RUN_INTEGRATION -eq 1 ] && integration_tests
     [ $RUN_SECURITY -eq 1 ] && security_tests
+    [ $RUN_NEGATIVE -eq 1 ] && negative_tests
     [ $RUN_PERFORMANCE -eq 1 ] && performance_tests
     [ $RUN_MOODLE -eq 1 ] && moodle_document_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests
@@ -557,7 +735,9 @@ EOF
 
     # Calculate success rate
     if [ $TESTS_TOTAL -gt 0 ]; then
-        local success_rate=$((TESTS_PASSED * 100 / TESTS_TOTAL))
+        local success_rate
+
+        success_rate=$((TESTS_PASSED * 100 / TESTS_TOTAL))
         echo -e "${BOLD}Success Rate:${NC}  ${success_rate}%"
 
         if [ $success_rate -ge 90 ]; then

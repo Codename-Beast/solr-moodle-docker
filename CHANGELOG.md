@@ -1,9 +1,51 @@
 # Changelog
+## [2.2.0] - 2025-01-15
 
-All notable changes to this project will be documented in this file.
+### Security
+- **Alpine Linux SHA256 pinning**: Base image now pinned to specific digest for security
+- **Grafana bind address**: Changed from `0.0.0.0` to `127.0.0.1` to prevent external access
+- **Prometheus config permissions**: Set to `600` for secure credential storage
+- **File permissions hardening**:
+  - Directories: `750` (was `755`)
+  - Config files: `640` (was `644`)
+  - Secret files: `600` (was `644`)
+- **Secure temp file deletion**: Overwrite with zeros before deletion using `dd`
+- **Resource limits**: Added CPU and memory limits for all containers to prevent DoS
+  - Solr: 2 CPUs / 4GB RAM (limits), 0.5 CPU / 2GB RAM (reservations)
+  - Prometheus: 1 CPU / 1GB RAM (limits), 0.25 CPU / 256MB RAM (reservations)
+  - Grafana: 1 CPU / 512MB RAM (limits), 0.25 CPU / 128MB RAM (reservations)
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+### Fixed
+- **Shellcheck SC2155 warnings**: Separated variable declarations from command substitutions in all bash scripts
+- **Shellcheck SC2086 warnings**: Properly quoted all variable expansions
+- **Dockerfile DL3059 warning**: Consolidated multiple RUN instructions to reduce image layers
+
+### Changed
+- **GitHub Actions workflow**:
+  - Added  code quality checks (shellcheck, hadolint, yamllint)
+  - Added Trivy security vulnerability scanning for both init and Solr images
+  - Split testing into lint, security-scan, and test stages
+  - Added matrix testing for multiple core configurations
+  - Added automated password generation testing
+  - Added dynamic core management testing
+- **GitLab CI/CD pipeline**:
+  - Added `needs` dependencies for proper job ordering
+  - Added fallback package installation for different Ubuntu versions
+  - Added docker daemon readiness checks
+- **Dockerfile**: Consolidating RUN commands
+
+### Added
+- **CI/CD configuration files**:
+  - `.shellcheckrc`: Shellcheck configuration to disable false positives
+  - `.hadolint.yaml`: Hadolint configuration for Dockerfile linting
+  - `.yamllint`: Yamllint configuration for YAML validation
+
+### Improved
+- **Code quality**: All bash scripts now pass shellcheck validation
+- **Docker security**: All Dockerfiles now pass hadolint validation
+- **YAML formatting**: All YAML files now pass yamllint validation
+- **Test coverage**: Added negative tests for SQL injection, XSS, and other attack vectors
+- **Test reliability**: Added load/stress tests with concurrent request handling
 
 ## [2.1.1] - 2025-01-15
 

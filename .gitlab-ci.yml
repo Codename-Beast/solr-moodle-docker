@@ -8,15 +8,49 @@ variables:
   CACHE_COMPRESSION_LEVEL: "fast"
   GIT_STRATEGY: clone
   GIT_DEPTH: 1
+  DOCKER_VERSION: "5:24.0.7-1~ubuntu.22.04~jammy"
 
 stages:
+  - security
   - test
+
+security-scan:
+  stage: security
+  image: docker:24-git
+  services:
+    - name: docker:24-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  tags:
+    - docker
+  timeout: 15 minutes
+  needs: []
+  before_script:
+    - apk add --no-cache curl
+    - sleep 5  # Wait for Docker daemon to start
+    - docker info || exit 1
+  script:
+    - echo "Building init container for security scan..."
+    - docker build -f Dockerfile -t solr-init:test .
+    - echo "Running Trivy vulnerability scanner on init image..."
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
+    - echo "Running Trivy vulnerability scanner on Solr base image..."
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.0 || true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "develop22"'
 
 .test-template:
   stage: test
   tags:
     - docker
   interruptible: true
+  needs:
+    - security-scan
   retry:
     max: 1
     when:
@@ -37,8 +71,10 @@ solr-test:
       - SOLR_CORE_NAME: custom_test_core
 
   before_script:
+    - echo "Installing dependencies for Ubuntu $(lsb_release -rs || cat /etc/os-release | grep VERSION_ID)"
     - apt-get update -qq
-    - apt-get install -y -qq curl jq docker-compose-plugin docker.io
+    - apt-get install -y -qq curl jq docker-compose-plugin=${DOCKER_VERSION} docker.io=${DOCKER_VERSION} ||
+      apt-get install -y -qq curl jq docker-compose docker.io
     - echo "Ubuntu environment ready"
     - echo "Docker version:" $(docker --version)
     - echo "Docker Compose version:" $(docker compose version)
@@ -111,7 +147,15 @@ solr-test:
       EOF
     - docker compose build solr-init
     - docker compose up -d
-    - sleep 15
+    - |
+      echo "Waiting for containers to be healthy..."
+      for i in {1..30}; do
+        if docker compose ps | grep -q healthy; then
+          echo "Containers are healthy after attempt ${i}"
+          break
+        fi
+        sleep 2
+      done
     - echo "Checking init container logs..."
     - docker compose logs solr-init
     - docker compose logs solr-init | grep -q "Generated secure password" || exit 1
@@ -154,12 +198,12 @@ solr-test:
     - sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
     - docker compose down
     - docker compose up -d
-    - sleep 10
+    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
     - docker compose logs solr-init | grep "Creating core 'test_core3'" || exit 1
     - sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
     - docker compose down
     - docker compose up -d
-    - sleep 10
+    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
     - docker compose logs solr-init | grep "Deleting core 'test_core2'" || exit 1
     - echo "Dynamic core management test PASSED"
     - docker compose down -v
@@ -167,13 +211,13 @@ solr-test:
   after_script:
     - |
       if [ "$CI_JOB_STATUS" != "success" ]; then
-        echo "Tests failed. Showing logs..."
-        echo ""
-        echo "All container logs:"
-        docker compose logs || true
-        echo ""
-        echo "Container status:"
-        docker compose ps || true
+        echo "Tests failed. Collecting logs..."
+        mkdir -p logs
+        docker compose logs > logs/docker-compose-all.log 2>&1 || true
+        docker compose logs solr > logs/solr.log 2>&1 || true
+        docker compose logs solr-init > logs/solr-init.log 2>&1 || true
+        docker compose ps > logs/container-status.log 2>&1 || true
+        docker inspect $(docker compose ps -q) > logs/container-inspect.log 2>&1 || true
       fi
     - echo "Cleaning up..."
     - docker compose down -v || true
@@ -183,11 +227,13 @@ solr-test:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "develop22"'
 
   artifacts:
     when: on_failure
     paths:
       - .env
-    expire_in: 1 day
+      - logs/
+    expire_in: 7 days
 
-  timeout: 20 minutes
+  timeout: 15 minutes

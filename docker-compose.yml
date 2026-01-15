@@ -67,6 +67,14 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
     networks:
       - solr_network
     restart: unless-stopped
@@ -76,7 +84,11 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -u \"$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}\" http://localhost:8983/solr/admin/info/system || exit 1"]
+      test:
+        - "CMD-SHELL"
+        - >-
+          curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
+          http://localhost:8983/solr/admin/info/system || exit 1
       interval: 15s
       timeout: 10s
       retries: 10
@@ -104,6 +116,15 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--web.listen-address=:9090"
+      - "--storage.tsdb.retention.time=30d"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     networks:
       - solr_network
     restart: unless-stopped
@@ -124,7 +145,7 @@ services:
       prometheus:
         condition: service_started
     ports:
-      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
+      - "${GRAFANA_BIND:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
     env_file:
       - .env
     environment:
@@ -137,6 +158,14 @@ services:
       - grafana_data:/var/lib/grafana:z
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     networks:
       - solr_network
     restart: unless-stopped

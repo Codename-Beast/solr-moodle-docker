@@ -1,0 +1,11 @@
+---
+# Hadolint configuration for Dockerfile linting
+ignored:
+  # DL3018: Pin versions in apk add
+  # Alpine packages change frequently, version pinning can break builds
+  - DL3018
+
+failure-threshold: warning
+
+trustedRegistries:
+  - docker.io
