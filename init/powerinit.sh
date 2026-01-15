@@ -92,11 +92,11 @@ hash_solr_basic_auth() {
   _salt_b64="$($_base64_cmd < "$_salt_file" | tr -d '\n\r')"
 
   # Secure cleanup (overwrite before delete)
-  dd if=/dev/zero of="$_salt_file" bs=1 count=$(wc -c < "$_salt_file") 2>/dev/null || true
-  dd if=/dev/zero of="$_pass_file" bs=1 count=$(wc -c < "$_pass_file") 2>/dev/null || true
-  dd if=/dev/zero of="$_combined_file" bs=1 count=$(wc -c < "$_combined_file") 2>/dev/null || true
-  dd if=/dev/zero of="$_hash1_file" bs=1 count=$(wc -c < "$_hash1_file") 2>/dev/null || true
-  dd if=/dev/zero of="$_hash2_file" bs=1 count=$(wc -c < "$_hash2_file") 2>/dev/null || true
+  dd if=/dev/zero of="$_salt_file" bs=1 count="$(wc -c < "$_salt_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_pass_file" bs=1 count="$(wc -c < "$_pass_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_combined_file" bs=1 count="$(wc -c < "$_combined_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_hash1_file" bs=1 count="$(wc -c < "$_hash1_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_hash2_file" bs=1 count="$(wc -c < "$_hash2_file")" 2>/dev/null || true
   rm -f "$_salt_file" "$_pass_file" "$_combined_file" "$_hash1_file" "$_hash2_file"
 
   # Output: "HASH SALT"
@@ -122,6 +122,7 @@ load_or_generate() {
   esac
 
   # Safely get variable value
+  # shellcheck disable=SC1083,SC2086
   val="$(eval echo \"\${$var:-}\")"
 
   # Generate secure password if empty or contains CHANGE_ME
