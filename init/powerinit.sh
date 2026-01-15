@@ -91,7 +91,12 @@ hash_solr_basic_auth() {
   _hash_b64="$($_base64_cmd < "$_hash2_file" | tr -d '\n\r')"
   _salt_b64="$($_base64_cmd < "$_salt_file" | tr -d '\n\r')"
 
-  # Cleanup
+  # Secure cleanup (overwrite before delete)
+  dd if=/dev/zero of="$_salt_file" bs=1 count="$(wc -c < "$_salt_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_pass_file" bs=1 count="$(wc -c < "$_pass_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_combined_file" bs=1 count="$(wc -c < "$_combined_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_hash1_file" bs=1 count="$(wc -c < "$_hash1_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$_hash2_file" bs=1 count="$(wc -c < "$_hash2_file")" 2>/dev/null || true
   rm -f "$_salt_file" "$_pass_file" "$_combined_file" "$_hash1_file" "$_hash2_file"
 
   # Output: "HASH SALT"
@@ -117,6 +122,7 @@ load_or_generate() {
   esac
 
   # Safely get variable value
+  # shellcheck disable=SC1083,SC2086
   val="$(eval echo \"\${$var:-}\")"
 
   # Generate secure password if empty or contains CHANGE_ME
@@ -334,7 +340,8 @@ delete_core() {
   # Create backup
   local backup_dir="${DATA_DIR}/backup/deleted_cores"
   mkdir -p "$backup_dir"
-  local timestamp="$(date +%Y%m%d_%H%M%S)"
+  local timestamp
+  timestamp="$(date +%Y%m%d_%H%M%S)"
   mv "$core_dir" "${backup_dir}/${core_name}_${timestamp}"
 
   echo "✓ Core deleted (backed up to backup/deleted_cores)"
@@ -382,14 +389,21 @@ chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
 # -------------------------------------------------------------------
 # [4] Generate Prometheus config into mounted volume
 # -------------------------------------------------------------------
+# NOTE: Prometheus requires plaintext credentials in config file.
+# This is a Prometheus limitation. File is protected with 600 permissions.
+# Alternative: Use Prometheus with external secret management or OAuth proxy.
 mkdir -p "${PROM_CFG_DIR}" 2>/dev/null || true
+chmod 755 "${PROM_CFG_DIR}" 2>/dev/null || true
 if touch "${PROM_CFG_FILE}" 2>/dev/null; then
   cat > "${PROM_CFG_FILE}" <<EOF
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
   - job_name: solr
+    scrape_interval: 30s
+    scrape_timeout: 10s
     metrics_path: /solr/admin/metrics
     params:
       wt: ["prometheus"]
@@ -399,7 +413,9 @@ scrape_configs:
     static_configs:
       - targets: ["solr:8983"]
 EOF
-  chown -R 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
+  chmod 600 "${PROM_CFG_FILE}" 2>/dev/null || true
+  chown 65534:65534 "${PROM_CFG_FILE}" 2>/dev/null || true
+  chown 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
   echo "✓ Prometheus config created"
 fi
 
@@ -408,11 +424,11 @@ fi
 # -------------------------------------------------------------------
 echo "→ Fixing permissions..."
 chown -R 8983:8983 "${DATA_DIR}" || true
-chmod -R 755 "${DATA_DIR}" || true
-chown -R 65534:65534 "${PROM_CFG_DIR}" || true
+chmod -R 750 "${DATA_DIR}" || true
+find "${DATA_DIR}" -type f -exec chmod 640 {} \; 2>/dev/null || true
 
 # Secure sensitive files AFTER recursive chmod (600 = owner read/write only)
-# These must be set explicitly to override the recursive 755 above
+# These must be set explicitly to override the recursive permissions above
 if [ -f "${DATA_DIR}/security.json" ]; then
     chmod 600 "${DATA_DIR}/security.json"
     echo "  → security.json: 600"
@@ -420,6 +436,10 @@ fi
 if [ -f "${DATA_DIR}/.password_checksum" ]; then
     chmod 600 "${DATA_DIR}/.password_checksum"
     echo "  → .password_checksum: 600"
+fi
+if [ -f "${CORE_STATE_FILE}" ]; then
+    chmod 600 "${CORE_STATE_FILE}"
+    echo "  → .core_state: 600"
 fi
 
 # Ensure all filesystem changes are written to disk before exiting

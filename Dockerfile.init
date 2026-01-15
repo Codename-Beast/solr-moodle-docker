@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.20@sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e017a4b4a
 # =========================================
 # Solr Init Container - Dockerfile
 # Developer: BSC Bernd Schreistetter
@@ -119,12 +119,7 @@ hash_password() {
     local salt_b64="$(base64 < "$salt_file" | tr -d '\n')"
   fi
 
-  dd if=/dev/zero of="$salt_file" bs=1 count=$(wc -c < "$salt_file") 2>/dev/null || true
-  dd if=/dev/zero of="$pass_file" bs=1 count=$(wc -c < "$pass_file") 2>/dev/null || true
-  dd if=/dev/zero of="$combined_file" bs=1 count=$(wc -c < "$combined_file") 2>/dev/null || true
-  dd if=/dev/zero of="$hash1_file" bs=1 count=$(wc -c < "$hash1_file") 2>/dev/null || true
-  dd if=/dev/zero of="$hash2_file" bs=1 count=$(wc -c < "$hash2_file") 2>/dev/null || true
-  rm -f "$salt_file" "$pass_file" "$combined_file" "$hash1_file" "$hash2_file"
+  shred -fzu "$salt_file" "$pass_file" "$combined_file" "$hash1_file" "$hash2_file" 2>/dev/null || rm -f "$salt_file" "$pass_file" "$combined_file" "$hash1_file" "$hash2_file"
 
   echo "${hash_b64} ${salt_b64}"
 }
@@ -225,14 +220,20 @@ else
 fi
 
 # Generate Prometheus config
+# NOTE: Prometheus requires plaintext credentials in config file.
+# This is a Prometheus limitation. File is protected with 600 permissions.
+# Alternative: Use Prometheus with external secret management or OAuth proxy.
 mkdir -p "${PROM_CFG_DIR}"
-chmod 644 "${PROM_CFG_DIR}"
+chmod 755 "${PROM_CFG_DIR}"
 cat > "${PROM_CFG_FILE}" <<EOP
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
   - job_name: solr
+    scrape_interval: 30s
+    scrape_timeout: 10s
     metrics_path: /solr/admin/metrics
     params:
       wt: ["prometheus"]
@@ -242,12 +243,15 @@ scrape_configs:
     static_configs:
       - targets: ["solr:8983"]
 EOP
+chmod 600 "${PROM_CFG_FILE}"
 
 echo "→ Set right permissions..."
 chown -R 8983:8983 "${DATA_DIR}"
-chmod -R 655 "${DATA_DIR}"
+chmod -R 750 "${DATA_DIR}"
+find "${DATA_DIR}" -type f -exec chmod 640 {} \;
 chown -R 65534:65534 "${PROM_CFG_DIR}"
 chmod 600 "${DATA_DIR}/security.json"
+chmod 600 "${PASS_HASH_FILE}"
 
 # =========================================
 # .env Symlink Handling (Compose auto-detect)
@@ -298,10 +302,6 @@ if [ "${VERIFY_TARGET}" != "${ENV_TARGET}" ]; then
 fi
 
 echo "OK: ${ENV_LINK} -> ${ENV_TARGET}"
-
-#Sync filesystem before exiting (prevents race condition)
-sync
-sleep 2
 
 echo "Permissions set"
 echo "Initialization completed successfully."

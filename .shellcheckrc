@@ -1,0 +1,13 @@
+# ShellCheck configuration
+# Disable specific checks that are not applicable
+
+# SC1091: Not following: file not included in repository
+disable=SC1091
+
+# SC2034: Variable appears unused
+# (Many variables are used by docker-compose or sourced scripts)
+disable=SC2034
+
+# SC2154: Variable referenced but not assigned
+# (Variables come from .env file)
+disable=SC2154
