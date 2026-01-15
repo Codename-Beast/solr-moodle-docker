@@ -11,17 +11,15 @@ RUN apk add --no-cache \
     bash \
     curl \
     ca-certificates \
-    findutils
-
-# Create working directories
-RUN mkdir -p /config /workspace /var/solr/data /prometheus-config /init
+    findutils && \
+    mkdir -p /config /workspace /var/solr/data /prometheus-config /init
 
 # Copy configuration files
 COPY config/ /config/
 COPY init/security.json.template /init/security.json.template
 COPY init/powerinit.sh /init/powerinit.sh
 
-# Make init script executable
+# Make init script executable and set permissions
 RUN chmod +x /init/powerinit.sh
 
 # Set working directory
