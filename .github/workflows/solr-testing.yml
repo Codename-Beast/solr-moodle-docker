@@ -2,36 +2,107 @@ name: Solr Test Suite
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, develop22 ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, develop22 ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run shellcheck on bash scripts
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y shellcheck
+        find . -name "*.sh" -type f -exec shellcheck -x {} +
+
+    - name: Run hadolint on Dockerfiles
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        failure-threshold: warning
+
+    - name: Validate YAML files
+      run: |
+        sudo apt-get install -y yamllint
+        yamllint -d "{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}" .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml || true
+
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build init container
+      run: docker build -f Dockerfile -t solr-init:test .
+
+    - name: Run Trivy vulnerability scanner on init image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'solr-init:test'
+        format: 'sarif'
+        output: 'trivy-results-init.sarif'
+        severity: 'CRITICAL,HIGH'
+
+    - name: Upload Trivy results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results-init.sarif'
+
+    - name: Run Trivy on Solr base image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'solr:9.10.0'
+        format: 'table'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0'
+
   solr-test:
     name: Solr Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: security-scan
 
     strategy:
-      fail-fast: false
+      fail-fast: false  # Continue testing other cores even if one fails
       matrix:
         core_name:
           - moodle_core
           - custom_test_core
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
     - name: Install dependencies
       run: |
         echo "Ubuntu environment ready"
         echo "Docker version: $(docker --version)"
         echo "Docker Compose version: $(docker compose version)"
-
-    - name: Checkout code
-      uses: actions/checkout@v4
 
     - name: Generate .env file
       run: |
@@ -122,7 +193,15 @@ jobs:
 
         docker compose build solr-init
         docker compose up -d
-        sleep 15
+
+        echo "Waiting for containers to be healthy..."
+        for i in {1..30}; do
+          if docker compose ps | grep -q healthy; then
+            echo "Containers are healthy after ${i} attempts"
+            break
+          fi
+          sleep 2
+        done
 
         echo "Checking init container logs..."
         docker compose logs solr-init
@@ -189,7 +268,7 @@ jobs:
         sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
         docker compose down
         docker compose up -d
-        sleep 15
+        timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
 
         echo "Checking for new core..."
         docker compose logs solr-init
@@ -203,7 +282,7 @@ jobs:
         sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
         docker compose down
         docker compose up -d
-        sleep 15
+        timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
 
         echo "Checking for deleted core..."
         docker compose logs solr-init
@@ -216,16 +295,24 @@ jobs:
         echo "Dynamic core management test PASSED"
         docker compose down -v
 
-    - name: Show logs on failure
+    - name: Collect logs on failure
       if: failure()
       run: |
-        echo "Tests failed. Showing logs..."
-        echo ""
-        echo "All container logs:"
-        docker compose logs
-        echo ""
-        echo "Container status:"
-        docker compose ps
+        echo "Tests failed. Collecting logs..."
+        mkdir -p logs
+        docker compose logs > logs/docker-compose-all.log 2>&1 || true
+        docker compose logs solr > logs/solr.log 2>&1 || true
+        docker compose logs solr-init > logs/solr-init.log 2>&1 || true
+        docker compose ps > logs/container-status.log 2>&1 || true
+        docker inspect $(docker compose ps -q) > logs/container-inspect.log 2>&1 || true
+
+    - name: Upload logs as artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ matrix.core_name }}-${{ github.run_id }}
+        path: logs/
+        retention-days: 7
 
     - name: Cleanup
       if: always()

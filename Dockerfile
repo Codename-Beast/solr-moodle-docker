@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.20@sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e017a4b4a
 # =========================================
 # Solr Init Container
 # Developer: BSC Bernd Schreistetter
@@ -10,7 +10,8 @@ RUN apk add --no-cache \
     coreutils \
     bash \
     curl \
-    ca-certificates
+    ca-certificates \
+    findutils
 
 # Create working directories
 RUN mkdir -p /config /workspace /var/solr/data /prometheus-config /init
