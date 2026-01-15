@@ -6,16 +6,22 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   solr-test:
     name: Solr Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     strategy:
+      fail-fast: false
       matrix:
         core_name:
-          - moodle_core  # Default core name
-          - custom_test_core  # Test custom core name feature
+          - moodle_core
+          - custom_test_core
 
     steps:
     - name: Install dependencies
