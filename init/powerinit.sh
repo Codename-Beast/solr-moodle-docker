@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # /init/powerinit.sh
 # Purpose:
 #   - Initialize Solr data directory (security.json, Moodle core, Prometheus config)
@@ -45,7 +45,7 @@ if [ -n "${ENV_FILE_PATH:-}" ] && [ -f "$ENV_FILE_PATH" ]; then
   . "$ENV_FILE_PATH"
   set +a
 else
-  echo "⚠ No external .env found at $ENV_FILE_PATH — using defaults"
+  echo "⚠ No external .env found — using defaults"
 fi
 
 # --- Helper: detect pre-hashed password (32+ hex chars or contains space salt) ---
@@ -98,6 +98,11 @@ hash_solr_basic_auth() {
   printf '%s %s' "${_hash_b64}" "${_salt_b64}"
 }
 
+# --- Helper: generate secure password ---
+generate_secure_password() {
+  openssl rand -hex 16
+}
+
 # --- Load or generate defaults ---
 load_or_generate() {
   var="$1"
@@ -113,16 +118,19 @@ load_or_generate() {
 
   # Safely get variable value
   val="$(eval echo \"\${$var:-}\")"
-  if [ -z "$val" ]; then
-    val="$def"
-    echo "→ generated default for $var"
+
+  # Generate secure password if empty or contains CHANGE_ME
+  if [ -z "$val" ] || echo "$val" | grep -qi "CHANGE_ME"; then
+    val="$(generate_secure_password)"
+    echo "→ Generated secure password for $var"
   fi
+
   eval "$var=\$val"
 }
 
-load_or_generate SOLR_ADMIN_PASSWORD "eledia_default"
-load_or_generate SOLR_SUPPORT_PASSWORD "eledia_default"
-load_or_generate SOLR_MOODLE_PASSWORD "eledia_default"
+load_or_generate SOLR_ADMIN_PASSWORD ""
+load_or_generate SOLR_SUPPORT_PASSWORD ""
+load_or_generate SOLR_MOODLE_PASSWORD ""
 
 # --- Prepare credentials ---
 ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
@@ -183,20 +191,20 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
   SUPPORT_CRED="$(hash_solr_basic_auth "${SUPPORT_PASS_PLAIN}")"
   MOODLE_CRED="$(hash_solr_basic_auth "${MOODLE_PASS_PLAIN}")"
 
-  # Template ersetzen, falls vorhanden
-  if [ -f "${CONF_SRC}/security.json.template" ]; then
+  # Template ersetzen, falls vorhanden (aus /init, nicht /config)
+  if [ -f "/init/security.json.template" ]; then
     if ! sed -e "s#__ADMIN_USER__#${ADMIN_USER}#g" \
         -e "s#__SUPPORT_USER__#${SUPPORT_USER}#g" \
         -e "s#__MOODLE_USER__#${MOODLE_USER}#g" \
         -e "s#__ADMIN_HASH__#${ADMIN_CRED}#g" \
         -e "s#__SUPPORT_HASH__#${SUPPORT_CRED}#g" \
         -e "s#__MOODLE_HASH__#${MOODLE_CRED}#g" \
-        "${CONF_SRC}/security.json.template" > "${DATA_DIR}/security.json"; then
+        "/init/security.json.template" > "${DATA_DIR}/security.json"; then
       echo "ERROR: Failed to generate security.json from template" >&2
       exit 1
     fi
   else
-    echo "⚠ No security.json.template found — generating minimal inline file"
+    echo "No security.json.template found - generating minimal inline file"
     cat > "${DATA_DIR}/security.json" <<EOF
 {
   "authentication": {
@@ -236,34 +244,147 @@ EOF
 fi
 
 # -------------------------------------------------------------------
-# [3] Prepare Moodle core directory if missing
+# [3] Dynamic Core Management
 # -------------------------------------------------------------------
-if [ ! -f "${CORE_DIR}/core.properties" ]; then
-  echo "→ Creating Moodle core directory (${CORE_NAME})"
-  mkdir -p "${CORE_CONF}" || {
-    echo "ERROR: Failed to create core config directory" >&2
-    exit 1
-  }
-  if ! cp -a "${CONF_SRC}/." "${CORE_CONF}/"; then
-    echo "ERROR: Failed to copy config files to core directory" >&2
-    exit 1
-  fi
-  cat > "${CORE_DIR}/core.properties" <<EOF
-name=${CORE_NAME}
-EOF
-  echo "✓ Core created"
-else
-  echo "✓ Core already present — skip recreate"
+CORE_STATE_FILE="${DATA_DIR}/.core_state"
+CURRENT_CORES="${SOLR_CORE_NAME}"
+
+# Handle multi-core setup
+if [ -n "${SOLR_CORES:-}" ]; then
+  CURRENT_CORES="${SOLR_CORES}"
 fi
+
+# Read previous core state
+if [ -f "$CORE_STATE_FILE" ]; then
+  PREVIOUS_CORES="$(cat "$CORE_STATE_FILE" 2>/dev/null || echo '')"
+else
+  PREVIOUS_CORES=""
+fi
+
+# Function: create core
+create_core() {
+  local core_name="$1"
+  local core_dir="${DATA_DIR}/${core_name}"
+  local core_conf="${core_dir}/conf"
+
+  if [ -f "${core_dir}/core.properties" ]; then
+    echo "→ Core '${core_name}' already exists"
+    return 0
+  fi
+
+  echo "→ Creating core '${core_name}'"
+  mkdir -p "${core_conf}" || {
+    echo "ERROR: Failed to create core directory for ${core_name}" >&2
+    return 1
+  }
+
+  if ! cp -a "${CONF_SRC}/." "${core_conf}/"; then
+    echo "ERROR: Failed to copy config files for ${core_name}" >&2
+    return 1
+  fi
+
+  cat > "${core_dir}/core.properties" <<EOF
+name=${core_name}
+EOF
+
+  chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
+  echo "✓ Core created: ${core_name}"
+}
+
+# Function: rename core
+rename_core() {
+  local old_name="$1"
+  local new_name="$2"
+  local old_dir="${DATA_DIR}/${old_name}"
+  local new_dir="${DATA_DIR}/${new_name}"
+
+  if [ ! -d "$old_dir" ]; then
+    echo "→ Old core '${old_name}' not found, creating new core '${new_name}'"
+    create_core "$new_name"
+    return 0
+  fi
+
+  if [ -d "$new_dir" ]; then
+    echo "→ Target core '${new_name}' already exists, skipping rename"
+    return 0
+  fi
+
+  echo "→ Renaming core '${old_name}' to '${new_name}'"
+  mv "$old_dir" "$new_dir"
+
+  # Update core.properties
+  sed -i "s/^name=.*/name=${new_name}/" "${new_dir}/core.properties"
+
+  chown -R 8983:8983 "${new_dir}" 2>/dev/null || true
+  echo "✓ Core renamed: ${old_name} → ${new_name}"
+}
+
+# Function: delete core
+delete_core() {
+  local core_name="$1"
+  local core_dir="${DATA_DIR}/${core_name}"
+
+  if [ ! -d "$core_dir" ]; then
+    echo "→ Core '${core_name}' does not exist"
+    return 0
+  fi
+
+  echo "→ Deleting core '${core_name}'"
+
+  # Create backup
+  local backup_dir="${DATA_DIR}/backup/deleted_cores"
+  mkdir -p "$backup_dir"
+  local timestamp="$(date +%Y%m%d_%H%M%S)"
+  mv "$core_dir" "${backup_dir}/${core_name}_${timestamp}"
+
+  echo "✓ Core deleted (backed up to backup/deleted_cores)"
+}
+
+# Parse cores (comma-separated)
+IFS=',' read -ra CURRENT_CORE_ARRAY <<< "$CURRENT_CORES"
+IFS=',' read -ra PREVIOUS_CORE_ARRAY <<< "$PREVIOUS_CORES"
+
+# Detect changes
+echo "→ Current cores: ${CURRENT_CORES}"
+echo "→ Previous cores: ${PREVIOUS_CORES}"
+
+# Create new cores
+for core in "${CURRENT_CORE_ARRAY[@]}"; do
+  core="$(echo "$core" | tr -d ' ')"  # Trim whitespace
+  if [ -z "$core" ]; then continue; fi
+
+  # Check if core is new
+  if ! echo ",$PREVIOUS_CORES," | grep -q ",${core},"; then
+    create_core "$core"
+  else
+    echo "→ Core '${core}' unchanged"
+  fi
+done
+
+# Delete removed cores
+if [ -n "$PREVIOUS_CORES" ]; then
+  for core in "${PREVIOUS_CORE_ARRAY[@]}"; do
+    core="$(echo "$core" | tr -d ' ')"  # Trim whitespace
+    if [ -z "$core" ]; then continue; fi
+
+    # Check if core was removed
+    if ! echo ",$CURRENT_CORES," | grep -q ",${core},"; then
+      delete_core "$core"
+    fi
+  done
+fi
+
+# Save current state
+echo "$CURRENT_CORES" > "$CORE_STATE_FILE"
+chmod 600 "$CORE_STATE_FILE"
+chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
 
 # -------------------------------------------------------------------
 # [4] Generate Prometheus config into mounted volume
 # -------------------------------------------------------------------
-mkdir -p "${PROM_CFG_DIR}" || {
-  echo "ERROR: Failed to create Prometheus config directory" >&2
-  exit 1
-}
-cat > "${PROM_CFG_FILE}" <<EOF
+mkdir -p "${PROM_CFG_DIR}" 2>/dev/null || true
+if touch "${PROM_CFG_FILE}" 2>/dev/null; then
+  cat > "${PROM_CFG_FILE}" <<EOF
 global:
   scrape_interval: 15s
 
@@ -278,6 +399,9 @@ scrape_configs:
     static_configs:
       - targets: ["solr:8983"]
 EOF
+  chown -R 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
+  echo "✓ Prometheus config created"
+fi
 
 # -------------------------------------------------------------------
 # [5] Fix file permissions
@@ -286,15 +410,20 @@ echo "→ Fixing permissions..."
 chown -R 8983:8983 "${DATA_DIR}" || true
 chmod -R 755 "${DATA_DIR}" || true
 chown -R 65534:65534 "${PROM_CFG_DIR}" || true
-# Secure sensitive files (600 = owner read/write only)
-chmod 600 "${DATA_DIR}/security.json" || true
-chmod 600 "${DATA_DIR}/.password_checksum" || true
-echo "✓ Permissions set"
+
+# Secure sensitive files AFTER recursive chmod (600 = owner read/write only)
+# These must be set explicitly to override the recursive 755 above
+if [ -f "${DATA_DIR}/security.json" ]; then
+    chmod 600 "${DATA_DIR}/security.json"
+    echo "  → security.json: 600"
+fi
+if [ -f "${DATA_DIR}/.password_checksum" ]; then
+    chmod 600 "${DATA_DIR}/.password_checksum"
+    echo "  → .password_checksum: 600"
+fi
 
 # Ensure all filesystem changes are written to disk before exiting
-echo "→ Syncing filesystem..."
 sync
 sleep 1
-echo "✓ Filesystem synced"
 
-echo "✓ Initialization completed successfully."
+echo "✓ Initialization completed successfully"
