@@ -34,8 +34,8 @@ services:
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:
-      - solr_data:/var/solr/data
-      - prometheus_config:/prometheus-config
+      - solr_data:/var/solr/data:z
+      - prometheus_config:/prometheus-config:z
       - ./.env:/.env:ro,z
     env_file:
       - .env
@@ -57,7 +57,7 @@ services:
       - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:8983"
     user: "8983:8983"
     volumes:
-      - solr_data:/var/solr/data
+      - solr_data:/var/solr/data:z
     env_file:
       - .env
     environment:
@@ -96,8 +96,8 @@ services:
     ports:
       - "${PROMETHEUS_BIND:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - prometheus_data:/prometheus
-      - prometheus_config:/etc/prometheus:ro
+      - prometheus_data:/prometheus:z
+      - prometheus_config:/etc/prometheus:ro,z
     env_file:
       - .env
     command:
@@ -134,7 +134,7 @@ services:
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
       GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
     volumes:
-      - grafana_data:/var/lib/grafana
+      - grafana_data:/var/lib/grafana:z
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
     networks:
