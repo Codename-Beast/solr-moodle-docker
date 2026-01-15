@@ -48,3 +48,48 @@ yesterday, gestern
 week, woche
 month, monat
 year, jahr
+day, tag
+hour, stunde
+minute, minute
+deadline, frist, termin, abgabetermin
+
+# Moodle activity types
+forum, discussion, diskussion
+chat, messaging, nachricht
+wiki, wiki
+workshop, workshop
+glossary, glossar, wörterbuch
+book, buch
+label, beschriftung
+folder, ordner
+url, link, verknüpfung
+page, seite
+scorm, scorm
+h5p, h5p
+
+# Assessment terms
+grade, note, bewertung, benotung
+feedback, rückmeldung, kommentar
+rubric, bewertungsschema, kriterien
+pass, bestanden, erfolg
+fail, durchgefallen, nicht bestanden
+attempt, versuch
+submission, abgabe, einreichung
+deadline, frist, termin
+
+# User roles
+admin, administrator, verwalter
+teacher, lehrer, dozent, trainer
+student, student, schüler, lerner, teilnehmer
+manager, manager, verwalter
+guest, gast
+
+# Actions
+enrol, enroll, einschreiben, anmelden
+unenrol, unenroll, abmelden, ausschreiben
+complete, abschließen, fertigstellen, beenden
+start, starten, beginnen, anfangen
+continue, fortsetzen, weitermachen
+submit, einreichen, abgeben
+review, überprüfen, prüfen, ansehen
+preview, vorschau, voransicht
