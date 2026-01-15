@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.1] - 2025-01-15
 
 ### Fixed
-- Dockerfile completely rewritten to use powerinit.sh script (reduced from 273 to 30 lines)
-- Changed powerinit.sh shebang from sh to bash for here-string compatibility
+- Dockerfile rewritten to use powerinit.sh script (reduced from 273 to 30 lines)
 - Removed embedded script approach in Dockerfile
 - Dynamic core management now properly working in CI/CD
 
@@ -20,14 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `.env.example` template file for easy configuration
-- **GitLab CI/CD pipeline** with comprehensive testing (`.gitlab-ci.yml`)
+- **GitLab CI/CD pipeline** with testing (`.gitlab-ci.yml`)
   - 5 stages: Validate, Build, Test, Security, Cleanup
   - Parallel test execution (Unit, Integration, Moodle)
   - Security scanning for secrets and permissions
-  - Docker-in-Docker support
 - GitHub Actions CI/CD workflow for automated testing (alternative)
 - Structured logging with log rotation (10MB max, 3 files)
-- CHANGELOG.md to track version changes
 - **CI/CD Documentation**:
   - [GitLab Quick Start Guide](docs/GITLAB-QUICKSTART.md) (5-minute setup)
   - [Complete GitLab CI/CD Setup](docs/GITLAB-CI-CD-SETUP.md) (full guide)
