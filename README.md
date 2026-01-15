@@ -1,12 +1,16 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **for the Company:** Eledia.de | **Version:** v2.0
+**Developer:** BSC Bernd Schreistetter | **Version:** v2.1
 
-**Solr 9.10.0** • **Moodle 4.1-5.x** 
+**Solr 9.10.0** | **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.0 ref20251227.
+> v2.1 | Automated Testing
+
+---
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+
 ---
 
 ## Quick Installation
@@ -15,20 +19,26 @@ Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring
 # 1. Setup (.env mit sicheren Passwörtern)
 docker compose --profile setup up moodle_setup
 
+# Optional: Mit custom Core-Namen
+SOLR_CORE_NAME=my_custom_core docker compose --profile setup up moodle_setup
+
 # 2. Start
 docker compose up -d
 
-# 3. Fertig!
+# 3. Fertig
 ```
 
-✓ Solr: `http://localhost:8983/solr`
-✓ Zugangsdaten: `eledia-workplace/.env` oder zukünfig `.env` 
+Solr: `http://localhost:8983/solr`
+Zugangsdaten: `.env` im Root-Verzeichnis
 
 ---
-## Reverse Proxy 
+
+## Reverse Proxy
+
 ```bash
-Nicht meine Baustelle :) 
+Comming Soon
 ```
+
 ---
 
 ## Moodle Konfiguration
@@ -40,9 +50,9 @@ Nicht meine Baustelle :)
 | Engine   | Solr                                      |
 | Host     | localhost oder Proxy                      |
 | Port     | 8983                                      |
-| Path     | /solr                                     |   
-|Index name| moodle_core                               | 
-| Secure mode| Über Reverse Proxy ja! else only local  |           
+| Path     | /solr                                     |
+|Index name| moodle_core                               |
+| Secure mode| Über Reverse Proxy ja! else only local  |
 | Auth Username | moodle oder admin(Safe)              |
 | Auth Password | (aus `.env`)                         |
 
@@ -56,7 +66,7 @@ php admin/cli/search.php --reindex
 
 ## Multi-Core Setup
 
-**`eledia-workplace/.env oder /.env` bearbeiten:**
+**`.env` bearbeiten:**
 ```bash
 # Single-Core (Standard)
 SOLR_CORE_NAME=moodle_core
@@ -65,7 +75,7 @@ SOLR_CORE_NAME=moodle_core
 SOLR_CORES=core1,core2,core3
 ```
 
-Alle Cores werden automatisch erstellt.
+Cores werden automatisch erstellt/gelöscht beim Restart.
 
 ---
 
@@ -96,9 +106,9 @@ docker compose up -d solr prometheus
 docker compose ps                              # Status
 docker compose logs -f solr                    # Logs
 docker compose restart                         # Neustart
-docker compose down                            # Stoppen (Daten bleiben erhalten Cors etc.)
+docker compose down                            # Stoppen (Daten bleiben erhalten)
 docker compose down -v                         # Stoppen + Daten löschen
-cat eledia-workplace/.env | grep PASSWORD     # Credentials anzeigen (Muss gefixt werden, da ich aktuell einen Symlink mache und die in das Haupverzeichniss schiebe/Linke , da Docker Compose diese Automatisch dan liest, ansonsten liest docker diese nicht!) 
+grep PASSWORD .env                             # Credentials anzeigen
 ```
 
 ---
@@ -107,15 +117,14 @@ cat eledia-workplace/.env | grep PASSWORD     # Credentials anzeigen (Muss gefix
 
 ```bash
 # 1. .env bearbeiten
-nano eledia-workplace/.env
+nano .env
 
 # 2. Restart
-docker compose restart
-
-# 3. Done! (automatische Erkennung + Update)
+docker compose down
+docker compose up -d
 ```
 
-Passwort-Änderungen werden automatisch erkannt und security.json wird neu generiert.
+Passwörter werden automatisch generiert wenn leer oder "CHANGE_ME".
 
 ---
 
@@ -123,7 +132,7 @@ Passwort-Änderungen werden automatisch erkannt und security.json wird neu gener
 
 **`.env` (automatisch generiert):**
 ```bash
-INSTANCE_NAME=solr                # Container-Prefix (Verbuggt ????)
+INSTANCE_NAME=solr                # Container-Prefix
 SOLR_VERSION=9.10.0               # Solr Version
 SOLR_HEAP=2g                      # RAM: 8GB→2g, 16GB→8g, 32GB→20g
 SOLR_CORE_NAME=moodle_core        # Single-Core
@@ -131,7 +140,7 @@ SOLR_CORES=core1,core2            # Multi-Core (alternativ)
 SOLR_BIND=127.0.0.1               # Localhost-only
 ```
 
-**Heap Size Empfehlungen Laut Doku ob das Stimmt, Testen :) :**
+**Heap Size Empfehlungen:**
 - 8 GB RAM → `SOLR_HEAP=2g`
 - 16 GB RAM → `SOLR_HEAP=8g`
 - 32 GB RAM → `SOLR_HEAP=20g`
@@ -146,7 +155,7 @@ SOLR_BIND=127.0.0.1               # Localhost-only
 | moodle  | Read + Update                  | Moodle-Integration (Indexierung) |
 | support | Read-only, Metrics             | Monitoring, Read-Only Zugriff |
 
-**Alle Passwörter:** `eledia-workplace/.env` noch!
+**Alle Passwörter:** `.env` im Root-Verzeichnis
 
 ---
 
@@ -172,7 +181,7 @@ location /solr/ {
 
 ### Moodle Document Tests:
 ```bash
-# Testet Indexierung + Queries (7 Dokumente bleiben im Index)
+# Testet Indexierung + Queries (7 Dokumente)
 ./scripts/test-moodle-documents.sh --keep-documents
 ```
 
@@ -186,34 +195,12 @@ curl -u moodle:PASSWORD http://localhost:8983/solr/moodle_core/admin/ping
 
 ---
 
-## Troubleshooting sollte man zeit und Lust haben
-## Known issues: Stand 27.12.25
+## Troubleshooting
 
-BUG: Container-Name wird ignoriert (immer `solr_solr` statt z. B. `kundendomain`) jedoch wenn dies behoben wird kann autoscale nicht mehr verwedet werden!
+### Known Issues
 
-**Symptom:**
-- Obwohl `INSTANCE_NAME=kundendomain` in `eledia-workplace/.env` steht, heißt der Container nach `docker compose up -d` trotzdem **`solr_solr`**.
+Keine Bekannt
 
-**Ursache:**
-- Da es als Service defineirt ist nutzt Docker Compose  **ProjectName_ServiceName**.
-
-BUG: security.template ist in der core zu sehen.
-
-**Kritisch? naja:**
-- Es werden jetzt keine Livedaten geleakt oder so, das ist halt die Standard Solr security.json meine Einschätzung Nein
-
-**Ursache**
-- liegt glaube ich mit in de /config. zusammen da ich das verschiebe irgendwo (Ich Arbeite dran!)
-
-BUG: SELinux: Volume-Rechte nach `docker volume rm` / Neu-Erstellung kaputt (Solr: „Permission denied“)
-
-**Symptom**
-- Nachdem Volumes gelöscht und neu erstellt wurden (z. B. `docker compose down -v` oder `docker volume rm ...`), startet Solr nicht sauber oder man sieht **Permission denied** auf gemounteten Pfaden.
-
-**Ursache**
-- Unter Fedora (SELinux *enforcing*) bekommen neu erstellte Volumes nicht immer automatisch die passenden **SELinux-Labels** für Containerzugriff. SELinux blockiert dann den Zugriff.
-
-**Fix (SELinux-Relabel der Volume-Mounts + Container-Restart)**  
 ---
 
 ### Setup neu starten:
@@ -245,7 +232,7 @@ docker compose exec solr solr create -c <core_name>
 
 ---
 
-## Ansible Integration (Nicht getestet!)
+## Ansible Integration (Nicht getestet)
 
 ```yaml
 - name: Deploy Solr for Moodle
@@ -279,8 +266,6 @@ docker compose exec solr solr create -c <core_name>
         state: present
 ```
 
-
-
 ---
 
 ## Architecture
@@ -288,9 +273,9 @@ docker compose exec solr solr create -c <core_name>
 ### Service Flow:
 ```
 1. moodle_setup (profile: setup)
-   └─> Generiert eledia-workplace/.env mit zufälligen Passwörtern noch!
+   └─> Generiert .env mit zufälligen Passwörtern im Root-Verzeichnis
 
-2. solr-init (Dockerfile.init)
+2. solr-init (Dockerfile)
    └─> Lädt .env, erstellt security.json, Cores, prometheus.yml
    └─> Setzt Permissions (8983:8983)
 
@@ -304,11 +289,19 @@ docker compose exec solr solr create -c <core_name>
 ### Volumes:
 - `solr_data_<instance>` - Solr Index + Config + security.json
 - `prometheus_data_<instance>` - Prometheus TSDB
-- `prometheus_config_<instance>` - Prometheus Config (optional kann auch Standalone ohne Grafana also nur für Metriken diese sind getestet und funktionieren.)
-- `grafana_data_<instance>` - Grafana Dashboards (optional hat auch Fehler wie Dashbaord wird nicht Automatisch erstellt, aber Grafana läuft :) )
+- `prometheus_config_<instance>` - Prometheus Config
+- `grafana_data_<instance>` - Grafana Dashboards
 
 ### Networks:
 - `<instance>_network` - Bridge Network
+
+---
+
+## CI/CD & Testing
+
+Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
+
+**Dokumentation:** [docs/CI-CD.md](docs/CI-CD.md)
 
 ---
 
@@ -316,8 +309,8 @@ docker compose exec solr solr create -c <core_name>
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.0
-**Status:** Tested & Stable auf Fedora 43
+**Version:** v2.1
+**Status:** Docker Tested | CI/CD Tested (Github)
 
 **Links:**
 - [Apache Solr Documentation](https://solr.apache.org/guide/)
