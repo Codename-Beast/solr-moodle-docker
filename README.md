@@ -1,12 +1,12 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **Version:** v2.1
+**Developer:** BSC Bernd Schreistetter | **Version:** v2.2
 
 **Solr 9.10.0** | **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.1 | Automated Testing
+> v2.2 | Automated Testing
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
@@ -309,7 +309,7 @@ Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.1
+**Version:** v2.2
 **Status:** Docker Tested | CI/CD Tested (Github)
 
 **Links:**
