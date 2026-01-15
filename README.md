@@ -53,7 +53,7 @@ Comming Soon
 | Path     | /solr                                     |
 |Index name| moodle_core                               |
 | Secure mode| Über Reverse Proxy ja! else only local  |
-| Auth Username | moodle oder admin(Safe)              |
+| Auth Username | moodle oder admin                    |
 | Auth Password | (aus `.env`)                         |
 
 **(der/die/das)Schema für die Moodle initialisieren per CLI anschubsen**
