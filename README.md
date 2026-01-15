@@ -1,12 +1,12 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **Version:** v2.1
+**Developer:** BSC Bernd Schreistetter | **Version:** v2.2
 
 **Solr 9.10.0** | **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.1 | Automated Testing
+> v2.2 | Security Hardening & CI/CD
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
