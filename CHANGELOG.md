@@ -1,10 +1,4 @@
 # Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [2.2.0] - 2025-01-15
 
 ### Security
@@ -24,34 +18,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Shellcheck SC2155 warnings**: Separated variable declarations from command substitutions in all bash scripts
 - **Shellcheck SC2086 warnings**: Properly quoted all variable expansions
-- **YAML indentation**: Fixed GitHub Actions workflow to use consistent 6-space indentation for step items
 - **Dockerfile DL3059 warning**: Consolidated multiple RUN instructions to reduce image layers
-- **CPU limits for CI/CD**: Reduced from 4 to 2 CPUs for GitHub Actions runner compatibility
-- **GitLab Enterprise compatibility**: Added proper Docker-in-Docker configuration and fallback package installation
 
 ### Changed
 - **GitHub Actions workflow**:
-  - Added comprehensive code quality checks (shellcheck, hadolint, yamllint)
+  - Added  code quality checks (shellcheck, hadolint, yamllint)
   - Added Trivy security vulnerability scanning for both init and Solr images
   - Split testing into lint, security-scan, and test stages
   - Added matrix testing for multiple core configurations
   - Added automated password generation testing
   - Added dynamic core management testing
 - **GitLab CI/CD pipeline**:
-  - Enhanced security-scan stage with Docker-in-Docker support
   - Added `needs` dependencies for proper job ordering
   - Added fallback package installation for different Ubuntu versions
-  - Set Trivy scans to non-blocking mode
   - Added docker daemon readiness checks
-- **Dockerfile**: Reduced from 31 to 30 lines by consolidating RUN commands
-- **Branch triggers**: Added `develop22` to CI/CD branch triggers
+- **Dockerfile**: Consolidating RUN commands
 
 ### Added
 - **CI/CD configuration files**:
   - `.shellcheckrc`: Shellcheck configuration to disable false positives
   - `.hadolint.yaml`: Hadolint configuration for Dockerfile linting
   - `.yamllint`: Yamllint configuration for YAML validation
-- **Monitoring**: Prometheus configuration now includes documentation about plaintext credential limitations
 
 ### Improved
 - **Code quality**: All bash scripts now pass shellcheck validation
