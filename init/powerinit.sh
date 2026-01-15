@@ -45,7 +45,7 @@ if [ -n "${ENV_FILE_PATH:-}" ] && [ -f "$ENV_FILE_PATH" ]; then
   . "$ENV_FILE_PATH"
   set +a
 else
-  echo "No external .env found at $ENV_FILE_PATH - using defaults"
+  echo "⚠ No external .env found — using defaults"
 fi
 
 # --- Helper: detect pre-hashed password (32+ hex chars or contains space salt) ---
@@ -179,7 +179,7 @@ else
     echo "→ Passwords changed, regenerating security.json"
     REGENERATE_SECURITY=1
   else
-    echo "Passwords unchanged, preserving security.json"
+    echo "✓ Passwords unchanged, preserving security.json"
   fi
 fi
 
@@ -240,7 +240,7 @@ EOF
   chmod 600 "$PASS_HASH_FILE"
   chown 8983:8983 "$PASS_HASH_FILE" 2>/dev/null || true
 
-  echo "security.json created/updated"
+  echo "✓ security.json created/updated"
 fi
 
 # -------------------------------------------------------------------
@@ -288,7 +288,7 @@ name=${core_name}
 EOF
 
   chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
-  echo "→ Core '${core_name}' created"
+  echo "✓ Core created: ${core_name}"
 }
 
 # Function: rename core
@@ -316,7 +316,7 @@ rename_core() {
   sed -i "s/^name=.*/name=${new_name}/" "${new_dir}/core.properties"
 
   chown -R 8983:8983 "${new_dir}" 2>/dev/null || true
-  echo "→ Core renamed: ${old_name} → ${new_name}"
+  echo "✓ Core renamed: ${old_name} → ${new_name}"
 }
 
 # Function: delete core
@@ -337,7 +337,7 @@ delete_core() {
   local timestamp="$(date +%Y%m%d_%H%M%S)"
   mv "$core_dir" "${backup_dir}/${core_name}_${timestamp}"
 
-  echo "→ Core '${core_name}' deleted (backed up to ${backup_dir}/${core_name}_${timestamp})"
+  echo "✓ Core deleted (backed up to backup/deleted_cores)"
 }
 
 # Parse cores (comma-separated)
@@ -420,12 +420,9 @@ if [ -f "${DATA_DIR}/.password_checksum" ]; then
     chmod 600 "${DATA_DIR}/.password_checksum"
     echo "  → .password_checksum: 600"
 fi
-echo "Permissions set"
 
 # Ensure all filesystem changes are written to disk before exiting
-echo "Syncing filesystem..."
 sync
 sleep 1
-echo "Filesystem synced"
 
-echo "Initialization completed successfully."
+echo "✓ Initialization completed successfully"
