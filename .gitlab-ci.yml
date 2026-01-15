@@ -182,8 +182,8 @@ solr-test:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH =~ /^develop/'
-    - if: '$CI_COMMIT_BRANCH =~ /^claude\//'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
 
   artifacts:
     when: on_failure
