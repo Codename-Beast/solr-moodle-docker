@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # /init/powerinit.sh
 # Purpose:
 #   - Initialize Solr data directory (security.json, Moodle core, Prometheus config)
