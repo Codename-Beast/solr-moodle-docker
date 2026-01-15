@@ -2,7 +2,7 @@
 # Solr for Moodle
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.0
+# Version: v2.1
 # =========================================
 
 services:
@@ -12,14 +12,15 @@ services:
   moodle_setup:
     image: alpine:3.20
     profiles: ["setup"]
-    container_name: ${INSTANCE_NAME:-solr}_setup
-    working_dir: /workspace
+    container_name: ${INSTANCE_NAME:-solr}-setup
+    working_dir: /app
     volumes:
-      - ./init:/init:ro
-      - ./eledia-workplace:/eledia-workplace
+      - ./init:/init:ro,z
+      - ./:/app:z
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
+      SOLR_CORE_NAME: ${SOLR_CORE_NAME:-}
     restart: "no"
 
   # =================================
@@ -28,27 +29,18 @@ services:
   solr-init:
     build:
       context: .
-      dockerfile: Dockerfile.init
-    image: solr-init:v2.0
-    container_name: ${INSTANCE_NAME:-solr}_init
+      dockerfile: Dockerfile
+    image: solr-init:v2.1
+    container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:
-      - solr_data:/var/solr/data
-      - prometheus_config:/prometheus-config
-      - ./eledia-workplace:/eledia-workplace:ro
+      - solr_data:/var/solr/data:z
+      - prometheus_config:/prometheus-config:z
+      - ./.env:/.env:ro,z
+    env_file:
+      - .env
     environment:
-      ENV_FILE_PATH: /eledia-workplace/.env
-      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
-      SOLR_CORE_NAME: ${SOLR_CORE_NAME:-moodle_core}
-      SOLR_VERSION: ${SOLR_VERSION:-9.10.0}
-      SOLR_HEAP: ${SOLR_HEAP:-2g}
-      SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
-      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:-admin}
-      SOLR_ADMIN_PASSWORD: ${SOLR_ADMIN_PASSWORD:-eledia_default}
-      SOLR_SUPPORT_USER: ${SOLR_SUPPORT_USER:-support}
-      SOLR_SUPPORT_PASSWORD: ${SOLR_SUPPORT_PASSWORD:-eledia_default}
-      SOLR_MOODLE_USER: ${SOLR_MOODLE_USER:-moodle}
-      SOLR_MOODLE_PASSWORD: ${SOLR_MOODLE_PASSWORD:-eledia_default}
+      ENV_FILE_PATH: /.env
     networks:
       - solr_network
     restart: "no"
@@ -57,7 +49,7 @@ services:
   # =================================
   solr:
     image: solr:${SOLR_VERSION:-9.10.0}
-    container_name: ${INSTANCE_NAME:-solr}_solr
+    container_name: ${INSTANCE_NAME:-solr}-solr
     depends_on:
       solr-init:
         condition: service_completed_successfully
@@ -65,7 +57,9 @@ services:
       - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:8983"
     user: "8983:8983"
     volumes:
-      - solr_data:/var/solr/data
+      - solr_data:/var/solr/data:z
+    env_file:
+      - .env
     environment:
       SOLR_HEAP: ${SOLR_HEAP:-2g}
       SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
@@ -76,12 +70,17 @@ services:
     networks:
       - solr_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8983/solr/admin/ping | grep -qE '(200|401)'"]
+      test: ["CMD-SHELL", "curl -sf -u \"$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}\" http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 90s
 
   # =================================
   # [PROMETHEUS] monitoring
@@ -89,7 +88,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.55.1
     profiles: ["monitoring"]
-    container_name: ${INSTANCE_NAME:-solr}_prometheus
+    container_name: ${INSTANCE_NAME:-solr}-prometheus
     user: "65534:65534"
     depends_on:
       solr:
@@ -97,8 +96,10 @@ services:
     ports:
       - "${PROMETHEUS_BIND:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - prometheus_data:/prometheus
-      - prometheus_config:/etc/prometheus:ro
+      - prometheus_data:/prometheus:z
+      - prometheus_config:/etc/prometheus:ro,z
+    env_file:
+      - .env
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -106,6 +107,11 @@ services:
     networks:
       - solr_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # =================================
   # [GRAFANA] visualization
@@ -113,12 +119,14 @@ services:
   grafana:
     image: grafana/grafana:11.3.2
     profiles: ["monitoring"]
-    container_name: ${INSTANCE_NAME:-solr}_grafana
+    container_name: ${INSTANCE_NAME:-solr}-grafana
     depends_on:
       prometheus:
         condition: service_started
     ports:
       - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
+    env_file:
+      - .env
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -126,12 +134,17 @@ services:
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
       GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
     volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana:z
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
     networks:
       - solr_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 # =================================
 # Volumes
@@ -151,5 +164,5 @@ volumes:
 # =================================
 networks:
   solr_network:
-    name: ${INSTANCE_NAME:-solr}_network
+    name: ${INSTANCE_NAME:-solr}-network
     driver: bridge
