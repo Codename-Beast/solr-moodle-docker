@@ -6,14 +6,30 @@ variables:
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fast"
   CACHE_COMPRESSION_LEVEL: "fast"
+  GIT_STRATEGY: clone
+  GIT_DEPTH: 1
 
 stages:
   - test
 
-solr-test:
+.test-template:
   stage: test
   tags:
     - docker
+  interruptible: true
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  cache:
+    key: docker-compose-cache
+    paths:
+      - .cache/docker
+    policy: pull-push
+
+solr-test:
+  extends: .test-template
 
   parallel:
     matrix:
