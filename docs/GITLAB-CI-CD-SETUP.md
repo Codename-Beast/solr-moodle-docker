@@ -149,7 +149,7 @@ GitLab bietet zwei Runner-Typen:
 
 **Wann läuft es:**
 - Bei Merge Requests
-- Bei Push auf `main`, `master` oder `develop` Branches
+- Bei Push auf `main` oder `develop` Branches
 
 ### Stage : BUILD (- Minuten)
 
@@ -359,7 +359,7 @@ variables:
 ### Automatische Ausführung
 
 Pipeline startet automatisch bei:
--  Push auf `main`, `master` oder `develop` Branches
+-  Push auf `main` oder `develop` Branches
 -  Merge Requests
 
 ### Manuelle Ausführung
