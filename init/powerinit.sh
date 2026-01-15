@@ -382,11 +382,9 @@ chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
 # -------------------------------------------------------------------
 # [4] Generate Prometheus config into mounted volume
 # -------------------------------------------------------------------
-mkdir -p "${PROM_CFG_DIR}" || {
-  echo "ERROR: Failed to create Prometheus config directory" >&2
-  exit 1
-}
-cat > "${PROM_CFG_FILE}" <<EOF
+mkdir -p "${PROM_CFG_DIR}" 2>/dev/null || true
+if touch "${PROM_CFG_FILE}" 2>/dev/null; then
+  cat > "${PROM_CFG_FILE}" <<EOF
 global:
   scrape_interval: 15s
 
@@ -401,6 +399,9 @@ scrape_configs:
     static_configs:
       - targets: ["solr:8983"]
 EOF
+  chown -R 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
+  echo "✓ Prometheus config created"
+fi
 
 # -------------------------------------------------------------------
 # [5] Fix file permissions
