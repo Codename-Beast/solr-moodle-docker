@@ -40,11 +40,11 @@ git push gitlab develop
 ## GitHub Actions (Alternative)
 
 Falls du GitHub verwendest, ist bereits eine Workflow-Datei vorhanden:
-[.github/workflows/test.yml](../.github/workflows/test.yml)
+[.github/workflows/solr-testing.yml](../.github/workflows/solr-testing.yml)
 
 ### Tests werden automatisch ausgeführt bei:
 
-- Push auf `main`, `develop` oder `claude/**` Branches
+- Push auf `main` oder `develop` Branches
 - Pull Requests auf `main` oder `develop`
 
 ### Workflow-Schritte
