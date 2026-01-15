@@ -33,7 +33,12 @@ KEEP_DOCUMENTS=false
 WAIT_TIME=0
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="8983"
-SOLR_CORE="moodle_core"
+
+# Load SOLR_CORE_NAME from .env or use default
+if [ -f ".env" ]; then
+    source .env
+fi
+SOLR_CORE="${SOLR_CORE_NAME:-moodle_core}"
 
 # Counters
 TESTS_RUN=0
@@ -71,10 +76,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Load credentials from .env
-if [ -f "eledia-workplace/.env" ]; then
-  source eledia-workplace/.env
+if [ -f ".env" ]; then
+  source .env
 else
-  echo -e "${RED}ERROR: eledia-workplace/.env not found${NC}"
+  echo -e "${RED}ERROR: .env not found. Run setup first: docker compose --profile setup up moodle_setup${NC}"
   exit 1
 fi
 
@@ -512,12 +517,12 @@ if [ $TESTS_FAILED -eq 0 ]; then
   SUCCESS_RATE=100
   echo -e "${BOLD}Success Rate:${NC}   ${SUCCESS_RATE}%"
   echo ""
-  echo -e "${GREEN}${BOLD}✓ MOODLE DOCUMENT TESTS PASSED${NC}"
+  echo -e "${GREEN}${BOLD}MOODLE DOCUMENT TESTS PASSED${NC}"
   exit 0
 else
   SUCCESS_RATE=$((TESTS_PASSED * 100 / TESTS_RUN))
   echo -e "${BOLD}Success Rate:${NC}   ${SUCCESS_RATE}%"
   echo ""
-  echo -e "${RED}${BOLD}✗ SOME TESTS FAILED${NC}"
+  echo -e "${RED}${BOLD}SOME TESTS FAILED${NC}"
   exit 1
 fi

@@ -30,3 +30,79 @@ User
 Plugin
 Module
 Database
+Repository
+Backup
+Restore
+
+# Moodle activity names (should not be stemmed)
+BigBlueButton
+BigBlueButtonBN
+H5P
+SCORM
+IMS
+Turnitin
+Zoom
+Jitsi
+Kaltura
+Panopto
+
+# Programming and web technologies
+JavaScript
+TypeScript
+React
+Vue
+Angular
+Node.js
+npm
+Webpack
+Babel
+REST
+GraphQL
+OAuth
+SAML
+LDAP
+Shibboleth
+CAS
+
+# File formats and standards
+PDF
+DOCX
+XLSX
+PPTX
+ZIP
+CSV
+JPEG
+PNG
+SVG
+MP4
+MP3
+WebM
+
+# Educational standards
+LTI
+xAPI
+Tin Can
+CMI5
+IMS-LTI
+QTI
+
+# Database and caching
+MySQL
+MariaDB
+PostgreSQL
+MongoDB
+Redis
+Memcached
+
+# Server technologies
+Apache
+Nginx
+PHP-FPM
+Docker
+Kubernetes
+
+# German technical terms
+Datenbank
+Benutzer
+Administrator
+Konfiguration
