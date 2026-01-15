@@ -1,12 +1,12 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **Version:** v2.2
+**Developer:** BSC Bernd Schreistetter | **Version:** v2.1
 
 **Solr 9.10.0** | **Moodle 4.1-5.x**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.2 | Automated Testing
+> v2.1 | Automated Testing
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
@@ -53,7 +53,7 @@ Comming Soon
 | Path     | /solr                                     |
 |Index name| moodle_core                               |
 | Secure mode| Über Reverse Proxy ja! else only local  |
-| Auth Username | moodle oder admin(Safe)              |
+| Auth Username | moodle oder admin                    |
 | Auth Password | (aus `.env`)                         |
 
 **(der/die/das)Schema für die Moodle initialisieren per CLI anschubsen**
@@ -309,7 +309,7 @@ Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.2
+**Version:** v2.1
 **Status:** Docker Tested | CI/CD Tested (Github)
 
 **Links:**
