@@ -84,7 +84,11 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -u \"$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}\" http://localhost:8983/solr/admin/info/system || exit 1"]
+      test:
+        - "CMD-SHELL"
+        - >-
+          curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
+          http://localhost:8983/solr/admin/info/system || exit 1
       interval: 15s
       timeout: 10s
       retries: 10
