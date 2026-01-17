@@ -1,6 +1,5 @@
 #!/bin/bash
 # /init/powerinit.sh
-# Purpose:
 #   - Initialize Solr data directory (security.json, Moodle core, Prometheus config)
 #   - Keep passwords stable across restarts
 #   - Load from external .env if provided
@@ -37,7 +36,7 @@ if [ ! -d "$CONF_SRC" ]; then
   exit 2
 fi
 
-# --- Optional: load external .env if provided ---
+#load external .env if provided
 if [ -n "${ENV_FILE_PATH:-}" ] && [ -f "$ENV_FILE_PATH" ]; then
   echo "→ Loading environment from $ENV_FILE_PATH"
   set -a
@@ -48,12 +47,12 @@ else
   echo "⚠ No external .env found — using defaults"
 fi
 
-# --- Helper: detect pre-hashed password (32+ hex chars or contains space salt) ---
+#Helper: detect pre-hashed password (32+ hex chars or contains space salt)
 is_hashed() {
   echo "$1" | grep -Eq '^[0-9a-f]{32,}$|[A-Za-z0-9+/=]+\s+[A-Za-z0-9+/=]+'
 }
 
-# --- Helper: create Solr-compatible BasicAuth hash ---
+# Helper: create Solr-compatible BasicAuth hash
 # IMPORTANT: Solr uses DOUBLE SHA256: SHA256(SHA256(salt + password))
 hash_solr_basic_auth() {
   _pass="$1"
@@ -91,7 +90,7 @@ hash_solr_basic_auth() {
   _hash_b64="$($_base64_cmd < "$_hash2_file" | tr -d '\n\r')"
   _salt_b64="$($_base64_cmd < "$_salt_file" | tr -d '\n\r')"
 
-  # Secure cleanup (overwrite before delete)
+  # Cleanup (overwrite before delete)
   dd if=/dev/zero of="$_salt_file" bs=1 count="$(wc -c < "$_salt_file")" 2>/dev/null || true
   dd if=/dev/zero of="$_pass_file" bs=1 count="$(wc -c < "$_pass_file")" 2>/dev/null || true
   dd if=/dev/zero of="$_combined_file" bs=1 count="$(wc -c < "$_combined_file")" 2>/dev/null || true
@@ -103,12 +102,12 @@ hash_solr_basic_auth() {
   printf '%s %s' "${_hash_b64}" "${_salt_b64}"
 }
 
-# --- Helper: generate secure password ---
+#Helper: generate secure password ---
 generate_secure_password() {
   openssl rand -hex 16
 }
 
-# --- Load or generate defaults ---
+#Load or generate defaults ---
 load_or_generate() {
   var="$1"
   def="$2"
@@ -138,7 +137,7 @@ load_or_generate SOLR_ADMIN_PASSWORD ""
 load_or_generate SOLR_SUPPORT_PASSWORD ""
 load_or_generate SOLR_MOODLE_PASSWORD ""
 
-# --- Prepare credentials ---
+#credentials
 ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
 SUPPORT_USER="${SOLR_SUPPORT_USER:-support}"
 MOODLE_USER="${SOLR_MOODLE_USER:-moodle}"
@@ -160,7 +159,7 @@ SUPPORT_PASS_PLAIN="${SOLR_SUPPORT_PASSWORD}"
 MOODLE_PASS_PLAIN="${SOLR_MOODLE_PASSWORD}"
 
 # -------------------------------------------------------------------
-# [2] Detect password changes and regenerate security.json if needed
+# Detect password changes and regenerate security.json if needed
 # -------------------------------------------------------------------
 PASS_HASH_FILE="${DATA_DIR}/.password_checksum"
 
@@ -250,7 +249,7 @@ EOF
 fi
 
 # -------------------------------------------------------------------
-# [3] Dynamic Core Management
+# Dynamic Core Management
 # -------------------------------------------------------------------
 CORE_STATE_FILE="${DATA_DIR}/.core_state"
 CURRENT_CORES="${SOLR_CORE_NAME}"
@@ -387,7 +386,7 @@ chmod 600 "$CORE_STATE_FILE"
 chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
 
 # -------------------------------------------------------------------
-# [4] Generate Prometheus config into mounted volume
+# Generate Prometheus config into mounted volume
 # -------------------------------------------------------------------
 # NOTE: Prometheus requires plaintext credentials in config file.
 # This is a Prometheus limitation. File is protected with 600 permissions.
@@ -418,10 +417,7 @@ EOF
   chown 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
   echo "✓ Prometheus config created"
 fi
-
-# -------------------------------------------------------------------
-# [5] Fix file permissions
-# -------------------------------------------------------------------
+#Fix file permissions
 echo "→ Fixing permissions..."
 chown -R 8983:8983 "${DATA_DIR}" || true
 chmod -R 750 "${DATA_DIR}" || true
