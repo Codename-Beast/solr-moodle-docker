@@ -1,9 +1,9 @@
 #!/bin/bash
 # =========================================
 # Solr for Moodle - Test Suite
-# Author: BSC for Eledia.de
+# Author: Bernd Schreistetter for Eledia.de
 # =========================================
-# Comprehensive test suite for functionality,
+# Test suite for functionality,
 # security, and deployment verification
 # =========================================
 
@@ -90,7 +90,7 @@ unit_tests() {
         print_fail "docker-compose.yml syntax error"
     fi
 
-    # Test 2: Required files exist
+    #Required files exist
     print_test "Required files existence"
     local required_files=(
         "docker-compose.yml"
@@ -132,7 +132,7 @@ unit_tests() {
         print_fail ".env.example not found"
     fi
 
-    # Test 5: Docker image availability
+    #Docker image availability
     print_test "Docker images availability"
     if docker image inspect alpine:3.20 >/dev/null 2>&1 && \
        docker image inspect solr:9.10.0 >/dev/null 2>&1; then
@@ -156,7 +156,7 @@ unit_tests() {
 integration_tests() {
     print_header "INTEGRATION TESTS - System Level"
 
-    # Test 1: Container startup
+    # Container startup
     print_test "Container startup and health"
     docker compose down -v >/dev/null 2>&1 || true
 
@@ -176,7 +176,7 @@ integration_tests() {
         docker compose ps
     fi
 
-    # Test 2: Solr Core Creation
+    # Solr Core Creation
     print_test "Solr core creation"
     if docker exec "$SOLR_CONTAINER" test -d "/var/solr/data/${SOLR_CORE_NAME}" 2>/dev/null; then
         print_pass "Core directory created (${SOLR_CORE_NAME})"
@@ -184,7 +184,7 @@ integration_tests() {
         print_fail "Core directory not found (${SOLR_CORE_NAME})"
     fi
 
-    # Test 3: security.json creation
+    #security.json creation
     print_test "security.json creation and permissions"
     if docker exec "$SOLR_CONTAINER" test -f /var/solr/data/security.json 2>/dev/null; then
         local perms
@@ -199,7 +199,7 @@ integration_tests() {
         print_fail "security.json not created"
     fi
 
-    # Test 4: Authentication
+    #Authentication
     print_test "Basic authentication"
     local admin_pass
 
@@ -213,7 +213,7 @@ integration_tests() {
         print_fail "Authentication failed (HTTP $response)"
     fi
 
-    # Test 5: Unauthorized access blocked
+    #Unauthorized access blocked
     print_test "Unauthorized access blocked"
     local unauth_response
 
@@ -224,7 +224,7 @@ integration_tests() {
         print_fail "Unauthorized access not blocked (HTTP $unauth_response)"
     fi
 
-    # Test 6: Core status API
+    #Core status API
     print_test "Core status API"
     local core_response
 
@@ -235,7 +235,7 @@ integration_tests() {
         print_fail "Core status API does not return ${SOLR_CORE_NAME}"
     fi
 
-    # Test 7: Password change detection
+    #Password change detection
     print_test "Password change detection"
     # Change password
     sed -i.bak 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=TESTPASS999/' .env 2>/dev/null
@@ -265,7 +265,7 @@ integration_tests() {
 security_tests() {
     print_header "SECURITY TESTS - Security Validation"
 
-    # Test 1: Network binding
+    #Network binding
     print_test "Network binding (localhost only)"
     local binding
 
@@ -276,7 +276,7 @@ security_tests() {
         print_fail "Solr not bound to localhost: $binding"
     fi
 
-    # Test 2: Container privileges
+   #Container privileges
     print_test "Container privileges (non-root for Solr)"
     local user
     user=$(docker inspect "$SOLR_CONTAINER" --format='{{.Config.User}}' 2>/dev/null)
@@ -296,7 +296,7 @@ security_tests() {
         print_fail "Privileged mode enabled (SECURITY RISK)"
     fi
 
-    # Test 4: Secrets in environment (informational only)
+    # Secrets in environment (informational only)
     print_test "Container environment password check"
     if docker exec "$SOLR_CONTAINER" env 2>/dev/null | grep -qi "password"; then
         print_info "Password env vars found (normal for Docker containers)"
@@ -305,7 +305,7 @@ security_tests() {
         print_pass "No passwords in container environment"
     fi
 
-    # Test 5: File permissions
+    # File permissions
     print_test "Sensitive file permissions"
     local sec_perms
     sec_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
@@ -318,7 +318,7 @@ security_tests() {
         print_fail "Wrong permissions - security.json: $sec_perms, .password_checksum: $pwd_perms"
     fi
 
-    # Test 6: .env in gitignore
+    #.env in gitignore
     print_test ".env in .gitignore"
     if grep -q "\.env" .gitignore 2>/dev/null; then
         print_pass ".env correctly listed in .gitignore"
@@ -326,7 +326,7 @@ security_tests() {
         print_fail ".env not in .gitignore (SECURITY RISK)"
     fi
 
-    # Test 7: Default passwords in production
+    # Default passwords in production
     print_test "No default passwords used"
     local admin_pass
 
@@ -337,13 +337,45 @@ security_tests() {
         print_pass "Default password changed"
     fi
 
-    # Test 8: SSL warning check
+    # SSL warning check
     print_test "SSL configuration awareness"
     if docker compose logs solr 2>&1 | grep -q "SSL is off"; then
         print_info "SSL warning present (OK for localhost, use reverse proxy for production)"
         print_pass "SSL warning logged correctly"
     else
         print_skip "SSL warning not found (may be suppressed)"
+    fi
+
+    # .env sync and permissions
+    print_test ".env sync and permissions"
+    if [ -f ".env" ]; then
+        local host_env_perms
+        host_env_perms=$(stat -c '%a' .env 2>/dev/null)
+        if [ "$host_env_perms" = "600" ]; then
+            print_pass "Host .env permissions are hardened (600)"
+        else
+            print_fail "Host .env permissions are not 600 (found $host_env_perms)"
+        fi
+
+        local volume_env_perms
+        volume_env_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/.env 2>/dev/null)
+        if [ "$volume_env_perms" = "600" ]; then
+            print_pass "Volume .env permissions are hardened (600)"
+        else
+            print_fail "Volume .env permissions are not 600 (found $volume_env_perms)"
+        fi
+
+        local host_env_hash
+        local volume_env_hash
+        host_env_hash=$(openssl dgst -sha256 .env | awk '{print $2}')
+        volume_env_hash=$(docker exec "$SOLR_CONTAINER" sh -c "openssl dgst -sha256 /var/solr/data/.env | awk '{print \$2}'" 2>/dev/null)
+        if [ -n "$volume_env_hash" ] && [ "$host_env_hash" = "$volume_env_hash" ]; then
+            print_pass "Volume .env matches host .env"
+        else
+            print_fail "Volume .env does not match host .env"
+        fi
+    else
+        print_skip "Host .env not found; skipping sync/permission checks"
     fi
 }
 

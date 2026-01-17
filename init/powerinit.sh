@@ -36,16 +36,54 @@ if [ ! -d "$CONF_SRC" ]; then
   exit 2
 fi
 
-#load external .env if provided
-if [ -n "${ENV_FILE_PATH:-}" ] && [ -f "$ENV_FILE_PATH" ]; then
-  echo "→ Loading environment from $ENV_FILE_PATH"
-  set -a
-  # shellcheck disable=SC1090
-  . "$ENV_FILE_PATH"
-  set +a
+ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
+ENV_FILE_VOLUME="${DATA_DIR}/.env"
+
+sync_env_files() {
+  local source_file="$1"
+  local target_file="$2"
+
+  if [ ! -f "$source_file" ]; then
+    return 0
+  fi
+
+  if [ ! -f "$target_file" ]; then
+    cp "$source_file" "$target_file"
+  else
+    local source_hash
+    local target_hash
+    source_hash="$(openssl dgst -sha256 "$source_file" | awk '{print $2}')"
+    target_hash="$(openssl dgst -sha256 "$target_file" | awk '{print $2}')"
+    if [ "$source_hash" != "$target_hash" ]; then
+      cp "$source_file" "$target_file"
+    fi
+  fi
+
+  chmod 600 "$target_file" 2>/dev/null || true
+}
+
+load_env() {
+  local env_file="$1"
+  if [ -f "$env_file" ]; then
+    echo "→ Loading environment from $env_file"
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+    return 0
+  fi
+  return 1
+}
+
+# load external .env if provided, fallback to volume copy
+if [ -f "$ENV_FILE_PATH" ]; then
+  sync_env_files "$ENV_FILE_PATH" "$ENV_FILE_VOLUME"
+  load_env "$ENV_FILE_PATH"
 else
-  echo "⚠ No external .env found — using defaults"
-fi
+  echo "⚠ No external .env found — trying volume copy"
+  if ! load_env "$ENV_FILE_VOLUME"; then
+    echo "⚠ No volume .env found — using defaults"
+  fi
 
 #Helper: detect pre-hashed password (32+ hex chars or contains space salt)
 is_hashed() {
@@ -437,9 +475,11 @@ if [ -f "${CORE_STATE_FILE}" ]; then
     chmod 600 "${CORE_STATE_FILE}"
     echo "  → .core_state: 600"
 fi
+if [ -f "${ENV_FILE_PATH}" ]; then
+    chmod 600 "${ENV_FILE_PATH}" 2>/dev/null || true
+    echo "  → host .env: 600"
+fi
 
 # Ensure all filesystem changes are written to disk before exiting
 sync
 sleep 1
-
-echo "✓ Initialization completed successfully"
