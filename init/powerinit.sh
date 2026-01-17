@@ -28,6 +28,8 @@ CORE_DIR="${DATA_DIR}/${CORE_NAME}"
 CORE_CONF="${CORE_DIR}/conf"
 PROM_CFG_DIR="/prometheus-config"
 PROM_CFG_FILE="${PROM_CFG_DIR}/prometheus.yml"
+ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
+ENV_FILE_VOLUME="${DATA_DIR}/.env"
 REALM_NAME="Eledia Moodle Search"
 
 # Validate that config source directory exists
@@ -35,9 +37,6 @@ if [ ! -d "$CONF_SRC" ]; then
   echo "ERROR: Config source directory $CONF_SRC not found" >&2
   exit 2
 fi
-
-ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
-ENV_FILE_VOLUME="${DATA_DIR}/.env"
 
 sync_env_files() {
   local source_file="$1"
@@ -75,7 +74,7 @@ load_env() {
   return 1
 }
 
-# load external .env if provided, fallback to volume copy
+# .env if provided, fallback to volume copy
 if [ -f "$ENV_FILE_PATH" ]; then
   sync_env_files "$ENV_FILE_PATH" "$ENV_FILE_VOLUME"
   load_env "$ENV_FILE_PATH"
@@ -84,6 +83,7 @@ else
   if ! load_env "$ENV_FILE_VOLUME"; then
     echo "⚠ No volume .env found — using defaults"
   fi
+fi
 
 #Helper: detect pre-hashed password (32+ hex chars or contains space salt)
 is_hashed() {
@@ -455,6 +455,7 @@ EOF
   chown 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
   echo "✓ Prometheus config created"
 fi
+
 #Fix file permissions
 echo "→ Fixing permissions..."
 chown -R 8983:8983 "${DATA_DIR}" || true
@@ -483,3 +484,5 @@ fi
 # Ensure all filesystem changes are written to disk before exiting
 sync
 sleep 1
+
+echo "✓ Initialization completed successfully"
