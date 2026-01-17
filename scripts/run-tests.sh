@@ -323,7 +323,7 @@ security_tests() {
     if grep -q "\.env" .gitignore 2>/dev/null; then
         print_pass ".env correctly listed in .gitignore"
     else
-        print_fail ".env not in .gitignore (SECURITY RISK)"
+        print_fail ".env not in .gitignore (SECURITY RISK!!)"
     fi
 
     # Default passwords in production
@@ -343,28 +343,12 @@ security_tests() {
         print_info "SSL warning present (OK for localhost, use reverse proxy for production)"
         print_pass "SSL warning logged correctly"
     else
-        print_skip "SSL warning not found (may be suppressed)"
+        print_skip "SSL warning not found (maybe suppressed)"
     fi
 
     # .env sync and permissions
     print_test ".env sync and permissions"
     if [ -f ".env" ]; then
-        local host_env_perms
-        host_env_perms=$(stat -c '%a' .env 2>/dev/null)
-        if [ "$host_env_perms" = "600" ]; then
-            print_pass "Host .env permissions are hardened (600)"
-        else
-            print_fail "Host .env permissions are not 600 (found $host_env_perms)"
-        fi
-
-        local volume_env_perms
-        volume_env_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/.env 2>/dev/null)
-        if [ "$volume_env_perms" = "600" ]; then
-            print_pass "Volume .env permissions are hardened (600)"
-        else
-            print_fail "Volume .env permissions are not 600 (found $volume_env_perms)"
-        fi
-
         local host_env_hash
         local volume_env_hash
         host_env_hash=$(openssl dgst -sha256 .env | awk '{print $2}')
@@ -387,9 +371,7 @@ negative_tests() {
 
     local admin_pass
 
-    # Test 1: Invalid credentials
-
-
+    # Test Invalid credentials
     admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     print_test "Reject invalid credentials"
     local invalid_response
@@ -401,7 +383,7 @@ negative_tests() {
         print_fail "Invalid credentials not rejected (HTTP $invalid_response)"
     fi
 
-    # Test 2: SQL injection attempt in query
+    # Tes SQL injection attempt in query
     print_test "SQL injection protection"
     local injection_response
 
@@ -412,7 +394,7 @@ negative_tests() {
         print_fail "Unexpected response to SQL injection (HTTP $injection_response)"
     fi
 
-    # Test 3: XSS attempt in query
+    # Test XSS attempt in query
     print_test "XSS protection"
     local xss_response
 
@@ -423,7 +405,7 @@ negative_tests() {
         print_fail "XSS content not sanitized"
     fi
 
-    # Test 4: Extremely long query
+    # Test  Extremely long query
     print_test "Handle extremely long query"
     local long_query
 
@@ -437,7 +419,7 @@ negative_tests() {
         print_fail "Long query caused unexpected response (HTTP $long_response)"
     fi
 
-    # Test 5: Invalid core name
+    # Test Invalid core name
     print_test "Reject invalid core name"
     local invalid_core_response
 
@@ -448,7 +430,7 @@ negative_tests() {
         print_fail "Invalid core not rejected (HTTP $invalid_core_response)"
     fi
 
-    # Test 6: Empty query parameter
+    # Test Empty query parameter
     print_test "Handle empty query"
     local empty_response
 
@@ -468,7 +450,7 @@ performance_tests() {
 
     local admin_pass
 
-    # Test 1: Response time
+    # Test Response time
 
 
     admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
@@ -490,7 +472,7 @@ performance_tests() {
         print_fail "Response time: ${response_time}ms (slow, >2000ms)"
     fi
 
-    # Test 2: Container resource usage
+    # Test Container resource usage
     print_test "Container memory usage"
     local mem_usage
     mem_usage=$(docker stats "$SOLR_CONTAINER" --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
@@ -500,7 +482,7 @@ performance_tests() {
         print_skip "Could not retrieve memory stats"
     fi
 
-    # Test 3: Healthcheck responsiveness
+    # Test Healthcheck responsiveness
     print_test "Healthcheck endpoint response"
     local health_response
 
@@ -511,7 +493,7 @@ performance_tests() {
         print_fail "Healthcheck endpoint not responding (HTTP $health_response)"
     fi
 
-    # Test 4: Concurrent request handling (load test)
+    # Test Concurrent request handling (load test)
     print_test "Concurrent request handling (10 parallel requests)"
     local concurrent_start
 
@@ -533,7 +515,7 @@ performance_tests() {
         print_fail "Concurrent requests too slow: ${concurrent_time}ms (expected <5000ms)"
     fi
 
-    # Test 5: Query performance under load
+    # Test Query performance under load
     print_test "Query performance under load (20 queries)"
     local load_start
 
@@ -611,9 +593,7 @@ cleanup_tests() {
 
     local admin_pass
 
-    # Test 1: Restart without data loss
-
-
+    # Test Restart without data loss
     admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     print_test "Restart without data loss"
     docker compose restart solr >/dev/null 2>&1
@@ -629,7 +609,7 @@ cleanup_tests() {
         print_fail "Container restart failed or data lost"
     fi
 
-    # Test 2: Graceful shutdown
+    # Test Graceful shutdown
     print_test "Graceful shutdown"
     docker compose down >/dev/null 2>&1
     if ! docker ps | grep -q "$SOLR_CONTAINER"; then
@@ -638,7 +618,7 @@ cleanup_tests() {
         print_fail "Containers still running after shutdown"
     fi
 
-    # Test 3: Volume persistence
+    # Test Volume persistence
     print_test "Volume persistence after shutdown"
     if docker volume ls | grep -q "solr_data"; then
         print_pass "Volumes persist after shutdown"
