@@ -1,13 +1,31 @@
 #!/bin/bash
-# /init/powerinit.sh
-# Purpose:
-#   - Initialize Solr data directory (security.json, Moodle core, Prometheus config)
-#   - Keep passwords stable across restarts
-#   - Load from external .env if provided
+# =========================================
+# /init/powerinit.sh - Solr Runtime Initialization
+# =========================================
+# This script handles all RUNTIME operations that depend on:
+# - Environment variables (loaded at container start)
+# - Volume-mounted data (persistent storage)
+# - Dynamic configuration (passwords, cores, etc.)
+#
+# BUILD-TIME operations (handled in Dockerfile):
+# ✓ Package installation (openssl, coreutils, bash, curl, etc.)
+# ✓ Directory creation (/config, /init, /var/solr/data, etc.)
+# ✓ File copying (config/, security.json.template)
+# ✓ Static permissions (executable bits on scripts)
+#
+# RUNTIME operations (handled by this script):
+# → Load and validate environment variables from .env files
+# → Generate secure passwords (if not provided)
+# → Create Solr BasicAuth hashes (double SHA256)
+# → Generate/update security.json with runtime credentials
+# → Manage Solr cores dynamically (create/rename/delete)
+# → Generate Prometheus config with plaintext credentials
+# → Set file permissions on mounted volumes (chown 8983:8983)
+# → Detect password changes and regenerate configs
+# → Filesystem sync before Solr starts
+# =========================================
 
 set -eu
-
-apk add --no-cache openssl coreutils >/dev/null 2>&1
 
 DATA_DIR="/var/solr/data"
 CORE_NAME="${SOLR_CORE_NAME:-moodle_core}"
@@ -29,6 +47,8 @@ CORE_DIR="${DATA_DIR}/${CORE_NAME}"
 CORE_CONF="${CORE_DIR}/conf"
 PROM_CFG_DIR="/prometheus-config"
 PROM_CFG_FILE="${PROM_CFG_DIR}/prometheus.yml"
+ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
+ENV_FILE_VOLUME="${DATA_DIR}/.env"
 REALM_NAME="Eledia Moodle Search"
 
 # Validate that config source directory exists
@@ -37,23 +57,59 @@ if [ ! -d "$CONF_SRC" ]; then
   exit 2
 fi
 
-# --- Optional: load external .env if provided ---
-if [ -n "${ENV_FILE_PATH:-}" ] && [ -f "$ENV_FILE_PATH" ]; then
-  echo "→ Loading environment from $ENV_FILE_PATH"
-  set -a
-  # shellcheck disable=SC1090
-  . "$ENV_FILE_PATH"
-  set +a
+sync_env_files() {
+  local source_file="$1"
+  local target_file="$2"
+
+  if [ ! -f "$source_file" ]; then
+    return 0
+  fi
+
+  if [ ! -f "$target_file" ]; then
+    cp "$source_file" "$target_file"
+  else
+    local source_hash
+    local target_hash
+    source_hash="$(openssl dgst -sha256 "$source_file" | awk '{print $2}')"
+    target_hash="$(openssl dgst -sha256 "$target_file" | awk '{print $2}')"
+    if [ "$source_hash" != "$target_hash" ]; then
+      cp "$source_file" "$target_file"
+    fi
+  fi
+
+  chmod 600 "$target_file" 2>/dev/null || true
+}
+
+load_env() {
+  local env_file="$1"
+  if [ -f "$env_file" ]; then
+    echo "→ Loading environment from $env_file"
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+    return 0
+  fi
+  return 1
+}
+
+# .env if provided, fallback to volume copy
+if [ -f "$ENV_FILE_PATH" ]; then
+  sync_env_files "$ENV_FILE_PATH" "$ENV_FILE_VOLUME"
+  load_env "$ENV_FILE_PATH"
 else
-  echo "⚠ No external .env found — using defaults"
+  echo "⚠ No external .env found — trying volume copy"
+  if ! load_env "$ENV_FILE_VOLUME"; then
+    echo "⚠ No volume .env found — using defaults"
+  fi
 fi
 
-# --- Helper: detect pre-hashed password (32+ hex chars or contains space salt) ---
+#Helper: detect pre-hashed password (32+ hex chars or contains space salt)
 is_hashed() {
   echo "$1" | grep -Eq '^[0-9a-f]{32,}$|[A-Za-z0-9+/=]+\s+[A-Za-z0-9+/=]+'
 }
 
-# --- Helper: create Solr-compatible BasicAuth hash ---
+# Helper: create Solr-compatible BasicAuth hash
 # IMPORTANT: Solr uses DOUBLE SHA256: SHA256(SHA256(salt + password))
 hash_solr_basic_auth() {
   _pass="$1"
@@ -91,7 +147,7 @@ hash_solr_basic_auth() {
   _hash_b64="$($_base64_cmd < "$_hash2_file" | tr -d '\n\r')"
   _salt_b64="$($_base64_cmd < "$_salt_file" | tr -d '\n\r')"
 
-  # Secure cleanup (overwrite before delete)
+  # Cleanup (overwrite before delete)
   dd if=/dev/zero of="$_salt_file" bs=1 count="$(wc -c < "$_salt_file")" 2>/dev/null || true
   dd if=/dev/zero of="$_pass_file" bs=1 count="$(wc -c < "$_pass_file")" 2>/dev/null || true
   dd if=/dev/zero of="$_combined_file" bs=1 count="$(wc -c < "$_combined_file")" 2>/dev/null || true
@@ -103,12 +159,12 @@ hash_solr_basic_auth() {
   printf '%s %s' "${_hash_b64}" "${_salt_b64}"
 }
 
-# --- Helper: generate secure password ---
+#Helper: generate secure password ---
 generate_secure_password() {
   openssl rand -hex 16
 }
 
-# --- Load or generate defaults ---
+#Load or generate defaults ---
 load_or_generate() {
   var="$1"
   def="$2"
@@ -138,7 +194,7 @@ load_or_generate SOLR_ADMIN_PASSWORD ""
 load_or_generate SOLR_SUPPORT_PASSWORD ""
 load_or_generate SOLR_MOODLE_PASSWORD ""
 
-# --- Prepare credentials ---
+#credentials
 ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
 SUPPORT_USER="${SOLR_SUPPORT_USER:-support}"
 MOODLE_USER="${SOLR_MOODLE_USER:-moodle}"
@@ -160,7 +216,7 @@ SUPPORT_PASS_PLAIN="${SOLR_SUPPORT_PASSWORD}"
 MOODLE_PASS_PLAIN="${SOLR_MOODLE_PASSWORD}"
 
 # -------------------------------------------------------------------
-# [2] Detect password changes and regenerate security.json if needed
+# Detect password changes and regenerate security.json if needed
 # -------------------------------------------------------------------
 PASS_HASH_FILE="${DATA_DIR}/.password_checksum"
 
@@ -250,7 +306,7 @@ EOF
 fi
 
 # -------------------------------------------------------------------
-# [3] Dynamic Core Management
+# Dynamic Core Management
 # -------------------------------------------------------------------
 CORE_STATE_FILE="${DATA_DIR}/.core_state"
 CURRENT_CORES="${SOLR_CORE_NAME}"
@@ -387,7 +443,7 @@ chmod 600 "$CORE_STATE_FILE"
 chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
 
 # -------------------------------------------------------------------
-# [4] Generate Prometheus config into mounted volume
+# Generate Prometheus config into mounted volume
 # -------------------------------------------------------------------
 # NOTE: Prometheus requires plaintext credentials in config file.
 # This is a Prometheus limitation. File is protected with 600 permissions.
@@ -419,9 +475,7 @@ EOF
   echo "✓ Prometheus config created"
 fi
 
-# -------------------------------------------------------------------
-# [5] Fix file permissions
-# -------------------------------------------------------------------
+#Fix file permissions
 echo "→ Fixing permissions..."
 chown -R 8983:8983 "${DATA_DIR}" || true
 chmod -R 750 "${DATA_DIR}" || true
@@ -440,6 +494,10 @@ fi
 if [ -f "${CORE_STATE_FILE}" ]; then
     chmod 600 "${CORE_STATE_FILE}"
     echo "  → .core_state: 600"
+fi
+if [ -f "${ENV_FILE_PATH}" ]; then
+    chmod 600 "${ENV_FILE_PATH}" 2>/dev/null || true
+    echo "  → host .env: 600"
 fi
 
 # Ensure all filesystem changes are written to disk before exiting
