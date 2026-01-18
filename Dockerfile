@@ -13,8 +13,6 @@ FROM alpine:3.20@sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e
 # =========================================
 
 # Security: Update musl to fix CVE-2025-26519
-RUN apk upgrade --no-cache musl musl-utils
-
 # Install all required packages at build time
 # These packages are used by powerinit.sh at runtime:
 # - openssl: password hashing, random generation, checksums
@@ -23,26 +21,14 @@ RUN apk upgrade --no-cache musl musl-utils
 # - curl: health checks / API calls
 # - ca-certificates: SSL/TLS verification
 # - findutils: advanced file searching
-RUN apk add --no-cache \
-    openssl \
-    coreutils \
-    bash \
-    curl \
-    ca-certificates \
-    findutils
-
-# Create all required directories at build time
-# /config:            Template configurations for Solr cores
-# /workspace:         Working directory for temporary operations
-# /var/solr/data:     Persistent Solr data (volumes mounted here)
-# /prometheus-config: Prometheus configuration with runtime credentials
-# /init:              Initialization scripts and templates
-RUN mkdir -p \
-    /config \
-    /workspace \
-    /var/solr/data \
-    /prometheus-config \
-    /init
+RUN apk upgrade --no-cache musl musl-utils && \
+    apk add --no-cache \
+        openssl \
+        coreutils \
+        bash \
+        curl \
+        ca-certificates \
+        findutils
 
 # Copy static configuration files (build-time)
 # These are templates that will be used by powerinit.sh at runtime
@@ -50,9 +36,21 @@ COPY config/ /config/
 COPY init/security.json.template /init/security.json.template
 COPY init/powerinit.sh /init/powerinit.sh
 
+# Create all required directories at build time
+# /config:            Template configurations for Solr cores
+# /workspace:         Working directory for temporary operations
+# /var/solr/data:     Persistent Solr data (volumes mounted here)
+# /prometheus-config: Prometheus configuration with runtime credentials
+# /init:              Initialization scripts and templates
 # Set executable permissions on init script (build-time)
 # Permissions on /var/solr/data will be set at runtime by powerinit.sh
-RUN chmod +x /init/powerinit.sh && \
+RUN mkdir -p \
+        /config \
+        /workspace \
+        /var/solr/data \
+        /prometheus-config \
+        /init && \
+    chmod +x /init/powerinit.sh && \
     chmod 644 /init/security.json.template && \
     chmod 755 /init && \
     chmod -R 755 /config
