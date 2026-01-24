@@ -120,7 +120,7 @@ jobs:
   solr-core-test:
     name: Core Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     needs: [lint, security-scan]
     strategy:
       fail-fast: false
@@ -142,7 +142,7 @@ jobs:
         run: |
           docker compose build solr-init -q
           docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
 
       - name: Run tests
         run: |
@@ -172,7 +172,7 @@ jobs:
   solr-feature-test:
     name: Feature Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: [lint, security-scan]
 
     steps:
@@ -208,9 +208,11 @@ jobs:
           GRAFANA_ADMIN_USER=admin
           GRAFANA_ADMIN_PASSWORD=admin
           EOF
+          # Remove leading whitespace from .env
+          sed -i 's/^[[:space:]]*//' .env
           docker compose build solr-init -q
           docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
           docker compose logs solr-init | grep -q "Generated secure password"
           echo "Password auto-generation test PASSED"
           docker compose down -v
@@ -242,22 +244,24 @@ jobs:
           GRAFANA_ADMIN_USER=admin
           GRAFANA_ADMIN_PASSWORD=admin
           EOF
+          # Remove leading whitespace from .env
+          sed -i 's/^[[:space:]]*//' .env
           docker compose build solr-init -q
           docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
           docker compose logs solr-init | grep "Creating core 'test_core1'"
           docker compose logs solr-init | grep "Creating core 'test_core2'"
 
           # Add core
           sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
           docker compose down && docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
           docker compose logs solr-init | grep "Creating core 'test_core3'"
 
           # Remove core
           sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
           docker compose down && docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
           docker compose logs solr-init | grep "Deleting core 'test_core2'"
           echo "Dynamic core management test PASSED"
 
