@@ -121,7 +121,7 @@ jobs:
     name: Core Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    needs: [lint, security-scan]
+    needs: [lint, apache-config-test, security-scan]
     strategy:
       fail-fast: false
       matrix:
@@ -173,7 +173,7 @@ jobs:
     name: Feature Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint, security-scan]
+    needs: [lint, apache-config-test, security-scan]
 
     steps:
       - uses: actions/checkout@v4

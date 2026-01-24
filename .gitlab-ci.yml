@@ -190,6 +190,7 @@ solr-feature-test:
       GRAFANA_ADMIN_USER=admin
       GRAFANA_ADMIN_PASSWORD=admin
       ENVEOF
+    - sed -i 's/^[[:space:]]*//' .env
     - docker compose build solr-init -q
     - docker compose up -d
     - timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
@@ -225,6 +226,7 @@ solr-feature-test:
       GRAFANA_ADMIN_USER=admin
       GRAFANA_ADMIN_PASSWORD=admin
       ENVEOF
+    - sed -i 's/^[[:space:]]*//' .env
     - docker compose build solr-init -q
     - docker compose up -d
     - timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
