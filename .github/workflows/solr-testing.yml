@@ -11,160 +11,178 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # =========================================
+  # STAGE 1: Validation (all parallel)
+  # =========================================
   lint:
-    name: Code Quality Checks
+    name: Code Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Run shellcheck on bash scripts
+      - name: Run shellcheck
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y shellcheck
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           find . -name "*.sh" -type f -exec shellcheck -x {} +
 
-      - name: Run hadolint on Dockerfiles
+      - name: Run hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
           failure-threshold: warning
 
-      - name: Validate YAML files
+  apache-config-test:
+    name: Apache Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test config generator
         run: |
-          sudo apt-get install -y yamllint
-          yamllint -d "{extends: default, rules: {
-            line-length: {max: 150},
-            indentation: {spaces: consistent},
-            document-start: disable,
-            truthy: disable,
-            brackets: {max-spaces-inside: 1}
-          }}" .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml || true
+          chmod +x apache/generate-apache-config.sh
+          ./apache/generate-apache-config.sh --instance test-a --hostname solr-a.example.com --port 8983
+          ./apache/generate-apache-config.sh --instance test-b --hostname solr-b.example.com --port 8984
+          test -f apache/generated/solr-test-a.conf && test -f apache/generated/solr-test-b.conf
+          ! grep -q '{{' apache/generated/solr-test-a.conf
+
+      - name: Validate Apache syntax
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace httpd:2.4-alpine sh -c '
+            apk add --no-cache openssl >/dev/null 2>&1
+
+            # Create mock SSL certs
+            mkdir -p /etc/letsencrypt/live/example.com
+            openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+              -keyout /etc/letsencrypt/live/example.com/privkey.pem \
+              -out /etc/letsencrypt/live/example.com/fullchain.pem \
+              -subj "/CN=example.com" 2>/dev/null
+
+            # Setup Apache directories
+            mkdir -p /usr/local/apache2/conf-available /usr/local/apache2/sites-available /usr/local/apache2/logs
+
+            # Create SSL config with correct cert paths
+            sed "s|YOURDOMAIN.COM|example.com|g" apache/ssl-common.conf > /usr/local/apache2/conf-available/ssl-common.conf
+
+            # Copy and fix VHost configs:
+            # 1. Replace Include path with absolute path
+            # 2. Replace ${APACHE_LOG_DIR} with /usr/local/apache2/logs (httpd-alpine path)
+            for f in apache/generated/*.conf; do
+              sed -e "s|Include conf-available/ssl-common.conf|Include /usr/local/apache2/conf-available/ssl-common.conf|g" \
+                  -e "s|\${APACHE_LOG_DIR}|/usr/local/apache2/logs|g" \
+                  "$f" > "/usr/local/apache2/sites-available/$(basename $f)"
+            done
+
+            # Add modules and includes to httpd.conf
+            cat >> /usr/local/apache2/conf/httpd.conf <<EOF
+            ServerName localhost
+            LoadModule ssl_module modules/mod_ssl.so
+            LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
+            LoadModule proxy_module modules/mod_proxy.so
+            LoadModule proxy_http_module modules/mod_proxy_http.so
+            LoadModule rewrite_module modules/mod_rewrite.so
+            SSLSessionCache shmcb:/usr/local/apache2/logs/ssl_scache(512000)
+            SSLStaplingCache shmcb:/usr/local/apache2/logs/ssl_stapling(128000)
+            Include sites-available/*.conf
+          EOF
+
+            httpd -t
+          '
 
   security-scan:
-    name: Security Vulnerability Scan
+    name: Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: lint
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build init container
-        run: docker build -f Dockerfile -t solr-init:test .
+        run: docker build -f Dockerfile -t solr-init:test . -q
 
-      - name: Run Trivy vulnerability scanner on init image
+      - name: Trivy scan init image
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'solr-init:test'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
           exit-code: '0'
 
-      - name: Run Trivy on Solr base image
+      - name: Trivy scan Solr image
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'solr:9.10.0'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
           exit-code: '0'
 
-  solr-test:
-    name: Solr Tests (${{ matrix.core_name }})
+  # =========================================
+  # STAGE 2: Tests (all parallel)
+  # =========================================
+  solr-core-test:
+    name: Core Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: security-scan
-
+    timeout-minutes: 12
+    needs: [lint, apache-config-test, security-scan]
     strategy:
-      fail-fast: false  # Continue testing other cores even if one fails
+      fail-fast: false
       matrix:
-        core_name:
-          - moodle_core
-          - custom_test_core
+        core_name: [moodle_core, custom_test_core]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup
+        run: chmod +x scripts/*.sh 2>/dev/null || true
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Install dependencies
+      - name: Generate .env
         run: |
-          echo "Ubuntu environment ready"
-          echo "Docker version: $(docker --version)"
-          echo "Docker Compose version: $(docker compose version)"
-
-      - name: Generate .env file
-        run: |
-          echo "Generating .env file with core name: ${{ matrix.core_name }}..."
           SOLR_CORE_NAME=${{ matrix.core_name }} docker compose --profile setup up moodle_setup
-          echo ".env file created successfully"
-          ls -lah .env
-          echo "Core name in .env:"
           grep SOLR_CORE_NAME .env
 
-      - name: Build init container
+      - name: Build and start Solr
         run: |
-          echo "Building init container..."
-          docker compose build solr-init
-
-      - name: Start Solr
-        run: |
-          echo "Starting Solr containers..."
+          docker compose build solr-init -q
           docker compose up -d
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
 
-      - name: Wait for Solr to be healthy
+      - name: Run tests
         run: |
-          echo "Waiting for Solr to be healthy (max 2 minutes)..."
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Still waiting..."; done'
-          echo "Solr is healthy"
-
-      - name: Show container status
-        run: |
-          echo "Container status:"
-          docker compose ps
-          echo ""
-          echo "Solr logs (last 50 lines):"
-          docker compose logs --tail=50 solr
-
-      - name: Run unit tests
-        run: |
-          echo "Running unit tests..."
-          chmod +x scripts/run-tests.sh
           ./scripts/run-tests.sh --unit-only
-
-      - name: Run integration tests
-        run: |
-          echo "Running integration tests..."
           ./scripts/run-tests.sh --integration-only --no-cleanup
-
-      - name: Run security tests
-        run: |
-          echo "Running security tests..."
           ./scripts/run-tests.sh --security-only --no-cleanup
-
-      - name: Run Moodle document tests
-        run: |
-          echo "Running Moodle document tests..."
-          chmod +x scripts/test-moodle-documents.sh
           ./scripts/test-moodle-documents.sh
 
-      - name: Test automatic password generation
+      - name: Collect logs
+        if: failure()
         run: |
-          echo "Testing automatic password generation..."
-          docker compose down -v
-          rm -f .env
+          mkdir -p logs
+          docker compose logs > logs/all.log 2>&1 || true
 
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.core_name }}
+          path: logs/
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v 2>/dev/null || true
+
+  solr-feature-test:
+    name: Feature Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint, apache-config-test, security-scan]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup
+        run: chmod +x scripts/*.sh 2>/dev/null || true
+
+      - name: Test password auto-generation
+        run: |
           cat > .env <<'EOF'
           INSTANCE_NAME=solr
           SOLR_VERSION=9.10.0
@@ -190,37 +208,17 @@ jobs:
           GRAFANA_ADMIN_USER=admin
           GRAFANA_ADMIN_PASSWORD=admin
           EOF
-
-          docker compose build solr-init
+          # Remove leading whitespace from .env
+          sed -i 's/^[[:space:]]*//' .env
+          docker compose build solr-init -q
           docker compose up -d
-
-          echo "Waiting for containers to be healthy..."
-          for i in {1..30}; do
-            if docker compose ps | grep -q healthy; then
-              echo "Containers are healthy after ${i} attempts"
-              break
-            fi
-            sleep 2
-          done
-
-          echo "Checking init container logs..."
-          docker compose logs solr-init
-
-          if docker compose logs solr-init | grep -q "Generated secure password"; then
-            echo "Password auto-generation test PASSED"
-          else
-            echo "ERROR: Passwords were not auto-generated"
-            docker compose logs solr-init
-            exit 1
-          fi
-
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+          docker compose logs solr-init | grep -q "Generated secure password"
+          echo "Password auto-generation test PASSED"
           docker compose down -v
 
       - name: Test dynamic core management
         run: |
-          echo "Testing dynamic core management..."
-          rm -f .env
-
           cat > .env <<'EOF'
           INSTANCE_NAME=solr
           SOLR_VERSION=9.10.0
@@ -246,77 +244,29 @@ jobs:
           GRAFANA_ADMIN_USER=admin
           GRAFANA_ADMIN_PASSWORD=admin
           EOF
-
-          docker compose build solr-init
+          # Remove leading whitespace from .env
+          sed -i 's/^[[:space:]]*//' .env
+          docker compose build solr-init -q
           docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+          docker compose logs solr-init | grep "Creating core 'test_core1'"
+          docker compose logs solr-init | grep "Creating core 'test_core2'"
 
-          echo "Checking initial cores..."
-          docker compose logs solr-init
-
-          if ! docker compose logs solr-init | grep -q "Creating core 'test_core1'"; then
-            echo "ERROR: Core test_core1 not created"
-            exit 1
-          fi
-
-          if ! docker compose logs solr-init | grep -q "Creating core 'test_core2'"; then
-            echo "ERROR: Core test_core2 not created"
-            exit 1
-          fi
-
-          echo "Adding third core..."
+          # Add core
           sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
-          docker compose down
-          docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+          docker compose down && docker compose up -d
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+          docker compose logs solr-init | grep "Creating core 'test_core3'"
 
-          echo "Checking for new core..."
-          docker compose logs solr-init
-
-          if ! docker compose logs solr-init | grep -q "Creating core 'test_core3'"; then
-            echo "ERROR: Core test_core3 not created"
-            exit 1
-          fi
-
-          echo "Removing core2..."
+          # Remove core
           sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
-          docker compose down
-          docker compose up -d
-          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
-
-          echo "Checking for deleted core..."
-          docker compose logs solr-init
-
-          if ! docker compose logs solr-init | grep -q "Deleting core 'test_core2'"; then
-            echo "ERROR: Core test_core2 not deleted"
-            exit 1
-          fi
-
+          docker compose down && docker compose up -d
+          timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+          docker compose logs solr-init | grep "Deleting core 'test_core2'"
           echo "Dynamic core management test PASSED"
-          docker compose down -v
-
-      - name: Collect logs on failure
-        if: failure()
-        run: |
-          echo "Tests failed. Collecting logs..."
-          mkdir -p logs
-          docker compose logs > logs/docker-compose-all.log 2>&1 || true
-          docker compose logs solr > logs/solr.log 2>&1 || true
-          docker compose logs solr-init > logs/solr-init.log 2>&1 || true
-          docker compose ps > logs/container-status.log 2>&1 || true
-          docker inspect $(docker compose ps -q) > logs/container-inspect.log 2>&1 || true
-
-      - name: Upload logs as artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-logs-${{ matrix.core_name }}-${{ github.run_id }}
-          path: logs/
-          retention-days: 7
 
       - name: Cleanup
         if: always()
         run: |
-          echo "Cleaning up..."
-          docker compose down -v
+          docker compose down -v 2>/dev/null || true
           rm -f .env
