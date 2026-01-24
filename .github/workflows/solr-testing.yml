@@ -56,20 +56,20 @@ jobs:
               -keyout /etc/letsencrypt/live/example.com/privkey.pem \
               -out /etc/letsencrypt/live/example.com/fullchain.pem \
               -subj "/CN=example.com" 2>/dev/null
-            mkdir -p /usr/local/apache2/conf/conf-available /usr/local/apache2/conf/sites-available
-            sed "s|YOURDOMAIN.COM|example.com|g" apache/ssl-common.conf > /usr/local/apache2/conf/conf-available/ssl-common.conf
-            cp apache/generated/*.conf /usr/local/apache2/conf/sites-available/
+            # Apache ServerRoot is /usr/local/apache2, so conf-available must be there
+            mkdir -p /usr/local/apache2/conf-available /usr/local/apache2/sites-available
+            sed "s|YOURDOMAIN.COM|example.com|g" apache/ssl-common.conf > /usr/local/apache2/conf-available/ssl-common.conf
+            cp apache/generated/*.conf /usr/local/apache2/sites-available/
             cat >> /usr/local/apache2/conf/httpd.conf <<EOF
             LoadModule ssl_module modules/mod_ssl.so
             LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
             LoadModule proxy_module modules/mod_proxy.so
             LoadModule proxy_http_module modules/mod_proxy_http.so
-            LoadModule headers_module modules/mod_headers.so
             LoadModule rewrite_module modules/mod_rewrite.so
             SSLSessionCache shmcb:/usr/local/apache2/logs/ssl_scache(512000)
             SSLStaplingCache shmcb:/usr/local/apache2/logs/ssl_stapling(128000)
-            Include conf/conf-available/ssl-common.conf
-            Include conf/sites-available/*.conf
+            Include conf-available/ssl-common.conf
+            Include sites-available/*.conf
           EOF
             httpd -t
           '

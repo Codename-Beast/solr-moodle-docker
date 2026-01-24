@@ -51,15 +51,15 @@ apache-config-test:
         -out /etc/letsencrypt/live/example.com/fullchain.pem
         -subj "/CN=example.com"
 
-    # Prepare Apache config directory
-    - mkdir -p /usr/local/apache2/conf/conf-available
-    - mkdir -p /usr/local/apache2/conf/sites-available
+    # Prepare Apache config directory (relative to ServerRoot /usr/local/apache2)
+    - mkdir -p /usr/local/apache2/conf-available
+    - mkdir -p /usr/local/apache2/sites-available
 
     # Copy SSL common config with correct path
-    - sed 's|YOURDOMAIN.COM|example.com|g' apache/ssl-common.conf > /usr/local/apache2/conf/conf-available/ssl-common.conf
+    - sed 's|YOURDOMAIN.COM|example.com|g' apache/ssl-common.conf > /usr/local/apache2/conf-available/ssl-common.conf
 
     # Copy generated configs
-    - cp apache/generated/*.conf /usr/local/apache2/conf/sites-available/
+    - cp apache/generated/*.conf /usr/local/apache2/sites-available/
 
     # Create main config that includes our vhosts
     - |
@@ -70,7 +70,6 @@ apache-config-test:
       LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
       LoadModule proxy_module modules/mod_proxy.so
       LoadModule proxy_http_module modules/mod_proxy_http.so
-      LoadModule headers_module modules/mod_headers.so
       LoadModule rewrite_module modules/mod_rewrite.so
 
       # SSL Cache
@@ -78,8 +77,8 @@ apache-config-test:
       SSLStaplingCache shmcb:/usr/local/apache2/logs/ssl_stapling(128000)
 
       # Include configs
-      Include conf/conf-available/ssl-common.conf
-      Include conf/sites-available/*.conf
+      Include conf-available/ssl-common.conf
+      Include sites-available/*.conf
       EOF
 
     # Test Apache config syntax
