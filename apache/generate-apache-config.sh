@@ -90,14 +90,14 @@ if [[ "$INTERACTIVE" == "true" ]]; then
     echo ""
 
     # Instance Name
-    read -p "Instance name (e.g., kunde-a, produktion): " INSTANCE_NAME
+    read -rp "Instance name (e.g., kunde-a, produktion): " INSTANCE_NAME
     if [[ -z "$INSTANCE_NAME" ]]; then
         echo -e "${RED}Error: Instance name is required${NC}"
         exit 1
     fi
 
     # Hostname
-    read -p "Full hostname (e.g., solr-${INSTANCE_NAME}.example.com): " HOSTNAME
+    read -rp "Full hostname (e.g., solr-${INSTANCE_NAME}.example.com): " HOSTNAME
     if [[ -z "$HOSTNAME" ]]; then
         echo -e "${RED}Error: Hostname is required${NC}"
         exit 1
@@ -117,11 +117,11 @@ if [[ "$INTERACTIVE" == "true" ]]; then
         ((NEXT_PORT++))
     done
 
-    read -p "Solr port [${NEXT_PORT}]: " SOLR_PORT
+    read -rp "Solr port [${NEXT_PORT}]: " SOLR_PORT
     SOLR_PORT="${SOLR_PORT:-$NEXT_PORT}"
 
     # Admin Email
-    read -p "Admin email [admin@localhost]: " input_email
+    read -rp "Admin email [admin@localhost]: " input_email
     ADMIN_EMAIL="${input_email:-admin@localhost}"
 fi
 
