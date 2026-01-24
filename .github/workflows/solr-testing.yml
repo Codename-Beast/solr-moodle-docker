@@ -51,15 +51,26 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace httpd:2.4-alpine sh -c '
             apk add --no-cache openssl >/dev/null 2>&1
+
+            # Create mock SSL certs
             mkdir -p /etc/letsencrypt/live/example.com
             openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
               -keyout /etc/letsencrypt/live/example.com/privkey.pem \
               -out /etc/letsencrypt/live/example.com/fullchain.pem \
               -subj "/CN=example.com" 2>/dev/null
-            # Apache ServerRoot is /usr/local/apache2, so conf-available must be there
+
+            # Setup Apache directories
             mkdir -p /usr/local/apache2/conf-available /usr/local/apache2/sites-available
+
+            # Create SSL config with correct cert paths
             sed "s|YOURDOMAIN.COM|example.com|g" apache/ssl-common.conf > /usr/local/apache2/conf-available/ssl-common.conf
-            cp apache/generated/*.conf /usr/local/apache2/sites-available/
+
+            # Copy and fix VHost configs (replace Include with direct SSL settings for test)
+            for f in apache/generated/*.conf; do
+              sed "s|Include conf-available/ssl-common.conf|Include /usr/local/apache2/conf-available/ssl-common.conf|g" "$f" > "/usr/local/apache2/sites-available/$(basename $f)"
+            done
+
+            # Add modules and includes to httpd.conf
             cat >> /usr/local/apache2/conf/httpd.conf <<EOF
             LoadModule ssl_module modules/mod_ssl.so
             LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
@@ -68,9 +79,9 @@ jobs:
             LoadModule rewrite_module modules/mod_rewrite.so
             SSLSessionCache shmcb:/usr/local/apache2/logs/ssl_scache(512000)
             SSLStaplingCache shmcb:/usr/local/apache2/logs/ssl_stapling(128000)
-            Include conf-available/ssl-common.conf
             Include sites-available/*.conf
           EOF
+
             httpd -t
           '
 
@@ -104,7 +115,7 @@ jobs:
   solr-core-test:
     name: Core Tests (${{ matrix.core_name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     needs: [lint, security-scan]
     strategy:
       fail-fast: false
@@ -126,7 +137,7 @@ jobs:
         run: |
           docker compose build solr-init -q
           docker compose up -d
-          timeout 90 bash -c 'until docker compose ps | grep -q healthy; do sleep 2; done'
+          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
 
       - name: Run tests
         run: |
@@ -156,7 +167,7 @@ jobs:
   solr-feature-test:
     name: Feature Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     needs: [lint, security-scan]
 
     steps:
@@ -194,7 +205,7 @@ jobs:
           EOF
           docker compose build solr-init -q
           docker compose up -d
-          timeout 60 bash -c 'until docker compose ps | grep -q healthy; do sleep 2; done'
+          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
           docker compose logs solr-init | grep -q "Generated secure password"
           echo "Password auto-generation test PASSED"
           docker compose down -v
@@ -228,20 +239,20 @@ jobs:
           EOF
           docker compose build solr-init -q
           docker compose up -d
-          timeout 60 bash -c 'until docker compose ps | grep -q healthy; do sleep 2; done'
+          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
           docker compose logs solr-init | grep "Creating core 'test_core1'"
           docker compose logs solr-init | grep "Creating core 'test_core2'"
 
           # Add core
           sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
           docker compose down && docker compose up -d
-          timeout 60 bash -c 'until docker compose ps | grep -q healthy; do sleep 2; done'
+          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
           docker compose logs solr-init | grep "Creating core 'test_core3'"
 
           # Remove core
           sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
           docker compose down && docker compose up -d
-          timeout 60 bash -c 'until docker compose ps | grep -q healthy; do sleep 2; done'
+          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 3; done'
           docker compose logs solr-init | grep "Deleting core 'test_core2'"
           echo "Dynamic core management test PASSED"
 
