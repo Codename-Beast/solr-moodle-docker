@@ -295,8 +295,8 @@ print_info "  Keep Documents: ${KEEP_DOCUMENTS}"
 print_info "  Wait Time: ${WAIT_TIME}s"
 echo ""
 
-# Test 1: Solr connectivity
-print_header "1. CONNECTIVITY TEST"
+# Solr connectivity test
+print_header "CONNECTIVITY TEST"
 print_test "Solr connectivity and authentication"
 PING_RESULT=$(solr_get "admin/ping" 2>&1)
 if echo "$PING_RESULT" | grep -q '"status":"OK"'; then
@@ -307,8 +307,8 @@ else
   exit 1
 fi
 
-# Test 2: Index test documents
-print_header "2. DOCUMENT INDEXING"
+# Index test documents
+print_header "DOCUMENT INDEXING"
 for i in "${!ALL_DOCUMENTS[@]}"; do
   print_test "Indexing: ${DOCUMENT_NAMES[$i]}"
 
@@ -332,10 +332,10 @@ echo ""
 print_info "Waiting 2s for auto-soft-commit..."
 sleep 2
 
-# Test 3: Query tests
-print_header "3. QUERY TESTS"
+# Query tests
+print_header "QUERY TESTS"
 
-# Test 3.1: Simple text search
+# Simple text search
 print_test "Simple text search (q=Solr)"
 RESULT=$(solr_get "select?q=Solr&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -345,7 +345,7 @@ else
   print_fail "Expected at least 3 documents, found $NUM_FOUND"
 fi
 
-# Test 3.2: Field-specific search
+# Field-specific search
 print_test "Field-specific search (title:performance)"
 RESULT=$(solr_get "select?q=title:performance&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -355,7 +355,7 @@ else
   print_fail "Expected at least 1 document, found $NUM_FOUND"
 fi
 
-# Test 3.3: Filter query (courseid)
+# Filter query (courseid)
 print_test "Filter query (fq=courseid:5)"
 RESULT=$(solr_get "select?q=*:*&fq=courseid:5&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -365,7 +365,7 @@ else
   print_fail "Expected at least 2 documents, found $NUM_FOUND"
 fi
 
-# Test 3.4: Multiple area filter
+# Multiple area filter
 print_test "Area filter (fq=areaid:(mod_forum-posts OR mod_book-chapters))"
 RESULT=$(solr_get "select?q=*:*&fq=areaid:(mod_forum-posts%20OR%20mod_book-chapters)&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -375,7 +375,7 @@ else
   print_fail "Expected at least 3 documents, found $NUM_FOUND"
 fi
 
-# Test 3.5: Phrase search
+# Phrase search
 print_test "Phrase search (q=\"Apache Solr\")"
 RESULT=$(solr_get "select?q=%22Apache%20Solr%22&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -385,7 +385,7 @@ else
   print_fail "Expected at least 1 document, found $NUM_FOUND"
 fi
 
-# Test 3.6: Wildcard search
+# Wildcard search
 print_test "Wildcard search (q=optimi*)"
 RESULT=$(solr_get "select?q=optimi*&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -395,8 +395,8 @@ else
   print_fail "Expected at least 2 documents, found $NUM_FOUND"
 fi
 
-# Test 4: Highlighting
-print_header "4. HIGHLIGHTING TEST"
+# Highlighting
+print_header "HIGHLIGHTING TEST"
 print_test "Highlighting (hl=true, hl.fl=title,content)"
 RESULT=$(solr_get "select?q=Solr&hl=true&hl.fl=title,content&wt=json")
 HAS_HIGHLIGHTING=$(echo "$RESULT" | jq -r 'has("highlighting")' 2>/dev/null || echo "false")
@@ -407,8 +407,8 @@ else
   print_fail "Highlighting not working"
 fi
 
-# Test 5: Faceting
-print_header "5. FACETING TEST"
+# Faceting
+print_header "FACETING TEST"
 print_test "Faceting by areaid"
 RESULT=$(solr_get "select?q=*:*&facet=true&facet.field=areaid&wt=json")
 HAS_FACETS=$(echo "$RESULT" | jq -r 'has("facet_counts")' 2>/dev/null || echo "false")
@@ -419,8 +419,8 @@ else
   print_fail "Faceting not working"
 fi
 
-# Test 6: Sorting
-print_header "6. SORTING TEST"
+# Sorting
+print_header "SORTING TEST"
 print_test "Sort by modification date (sort=modified desc)"
 RESULT=$(solr_get "select?q=*:*&sort=modified%20desc&rows=2&wt=json")
 NUM_FOUND=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -431,8 +431,8 @@ else
   print_fail "Sorting test failed"
 fi
 
-# Test 7: Document count verification
-print_header "7. INDEX VERIFICATION"
+# Document count verification
+print_header "INDEX VERIFICATION"
 print_test "Total document count in index"
 RESULT=$(solr_get "select?q=*:*&rows=0&wt=json")
 TOTAL_DOCS=$(echo "$RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
@@ -473,7 +473,7 @@ fi
 
 # Cleanup
 if [ "$KEEP_DOCUMENTS" = false ]; then
-  print_header "8. CLEANUP"
+  print_header "CLEANUP"
   print_test "Removing test documents"
 
   # Use proper Content-Type for XML delete

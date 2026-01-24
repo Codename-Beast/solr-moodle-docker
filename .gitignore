@@ -24,6 +24,9 @@ grafana_data/
 *.log
 logs/
 
+# Generated Apache configs
+apache/generated/
+
 # Backup files
 *.bak
 backup/

@@ -1,9 +1,8 @@
 #!/bin/sh
 # =====================================================
 # /init/generate_env.sh
-# Purpose:
-#   Generate .env file in the root directory (where docker-compose.yml is)
-#   Works safely under SELinux (Fedora / RHEL)
+#   Generate .env file in the root directory 
+#   Works safely under SELinux
 # =====================================================
 
 set -eu
