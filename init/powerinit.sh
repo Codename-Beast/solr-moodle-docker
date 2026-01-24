@@ -1,12 +1,31 @@
 #!/bin/bash
-# /init/powerinit.sh
-#   - Initialize Solr data directory (security.json, Moodle core, Prometheus config)
-#   - Keep passwords stable across restarts
-#   - Load from external .env if provided
+# =========================================
+# /init/powerinit.sh - Solr Runtime Initialization
+# =========================================
+# This script handles all RUNTIME operations that depend on:
+# - Environment variables (loaded at container start)
+# - Volume-mounted data (persistent storage)
+# - Dynamic configuration (passwords, cores, etc.)
+#
+# BUILD-TIME operations (handled in Dockerfile):
+# ✓ Package installation (openssl, coreutils, bash, curl, etc.)
+# ✓ Directory creation (/config, /init, /var/solr/data, etc.)
+# ✓ File copying (config/, security.json.template)
+# ✓ Static permissions (executable bits on scripts)
+#
+# RUNTIME operations (handled by this script):
+# → Load and validate environment variables from .env files
+# → Generate secure passwords (if not provided)
+# → Create Solr BasicAuth hashes (double SHA256)
+# → Generate/update security.json with runtime credentials
+# → Manage Solr cores dynamically (create/rename/delete)
+# → Generate Prometheus config with plaintext credentials
+# → Set file permissions on mounted volumes (chown 8983:8983)
+# → Detect password changes and regenerate configs
+# → Filesystem sync before Solr starts
+# =========================================
 
 set -eu
-
-apk add --no-cache openssl coreutils >/dev/null 2>&1
 
 DATA_DIR="/var/solr/data"
 CORE_NAME="${SOLR_CORE_NAME:-moodle_core}"
