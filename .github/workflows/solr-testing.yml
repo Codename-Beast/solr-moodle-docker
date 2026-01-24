@@ -60,18 +60,23 @@ jobs:
               -subj "/CN=example.com" 2>/dev/null
 
             # Setup Apache directories
-            mkdir -p /usr/local/apache2/conf-available /usr/local/apache2/sites-available
+            mkdir -p /usr/local/apache2/conf-available /usr/local/apache2/sites-available /usr/local/apache2/logs
 
             # Create SSL config with correct cert paths
             sed "s|YOURDOMAIN.COM|example.com|g" apache/ssl-common.conf > /usr/local/apache2/conf-available/ssl-common.conf
 
-            # Copy and fix VHost configs (replace Include with direct SSL settings for test)
+            # Copy and fix VHost configs:
+            # 1. Replace Include path with absolute path
+            # 2. Replace ${APACHE_LOG_DIR} with /usr/local/apache2/logs (httpd-alpine path)
             for f in apache/generated/*.conf; do
-              sed "s|Include conf-available/ssl-common.conf|Include /usr/local/apache2/conf-available/ssl-common.conf|g" "$f" > "/usr/local/apache2/sites-available/$(basename $f)"
+              sed -e "s|Include conf-available/ssl-common.conf|Include /usr/local/apache2/conf-available/ssl-common.conf|g" \
+                  -e "s|\${APACHE_LOG_DIR}|/usr/local/apache2/logs|g" \
+                  "$f" > "/usr/local/apache2/sites-available/$(basename $f)"
             done
 
             # Add modules and includes to httpd.conf
             cat >> /usr/local/apache2/conf/httpd.conf <<EOF
+            ServerName localhost
             LoadModule ssl_module modules/mod_ssl.so
             LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
             LoadModule proxy_module modules/mod_proxy.so
