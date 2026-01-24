@@ -11,8 +11,89 @@ variables:
   DOCKER_VERSION: "5:24.0.7-1~ubuntu.22.04~jammy"
 
 stages:
+  - lint
   - security
   - test
+
+# =========================================
+# Apache Config Lint & Test
+# =========================================
+apache-config-test:
+  stage: lint
+  image: httpd:2.4-alpine
+  tags:
+    - docker
+  timeout: 5 minutes
+  needs: []
+  before_script:
+    - apk add --no-cache bash openssl
+    - chmod +x apache/generate-apache-config.sh
+  script:
+    - echo "=== Testing Apache Config Generator ==="
+
+    # Generate test configs with different parameters
+    - echo "Generating config for test-instance-a..."
+    - ./apache/generate-apache-config.sh --instance test-a --hostname solr-a.example.com --port 8983
+    - test -f apache/generated/solr-test-a.conf || { echo "Config not generated!"; exit 1; }
+
+    - echo "Generating config for test-instance-b..."
+    - ./apache/generate-apache-config.sh --instance test-b --hostname solr-b.example.com --port 8984
+    - test -f apache/generated/solr-test-b.conf || { echo "Config not generated!"; exit 1; }
+
+    # Verify placeholders are replaced
+    - echo "Verifying placeholders are replaced..."
+    - "! grep -q '{{' apache/generated/solr-test-a.conf || { echo 'Unreplaced placeholders found!'; exit 1; }"
+
+    # Create mock SSL certificates for syntax test
+    - mkdir -p /etc/letsencrypt/live/example.com
+    - openssl req -x509 -nodes -days 1 -newkey rsa:2048
+        -keyout /etc/letsencrypt/live/example.com/privkey.pem
+        -out /etc/letsencrypt/live/example.com/fullchain.pem
+        -subj "/CN=example.com"
+
+    # Prepare Apache config directory
+    - mkdir -p /usr/local/apache2/conf/conf-available
+    - mkdir -p /usr/local/apache2/conf/sites-available
+
+    # Copy SSL common config with correct path
+    - sed 's|YOURDOMAIN.COM|example.com|g' apache/ssl-common.conf > /usr/local/apache2/conf/conf-available/ssl-common.conf
+
+    # Copy generated configs
+    - cp apache/generated/*.conf /usr/local/apache2/conf/sites-available/
+
+    # Create main config that includes our vhosts
+    - |
+      cat >> /usr/local/apache2/conf/httpd.conf <<'EOF'
+
+      # Load required modules
+      LoadModule ssl_module modules/mod_ssl.so
+      LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
+      LoadModule proxy_module modules/mod_proxy.so
+      LoadModule proxy_http_module modules/mod_proxy_http.so
+      LoadModule headers_module modules/mod_headers.so
+      LoadModule rewrite_module modules/mod_rewrite.so
+
+      # SSL Cache
+      SSLSessionCache shmcb:/usr/local/apache2/logs/ssl_scache(512000)
+      SSLStaplingCache shmcb:/usr/local/apache2/logs/ssl_stapling(128000)
+
+      # Include configs
+      Include conf/conf-available/ssl-common.conf
+      Include conf/sites-available/*.conf
+      EOF
+
+    # Test Apache config syntax
+    - echo "Testing Apache configuration syntax..."
+    - httpd -t 2>&1 || { echo "Apache config syntax test FAILED!"; exit 1; }
+    - echo "Apache config syntax test PASSED!"
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "develop22"'
+    - changes:
+        - apache/**/*
 
 security-scan:
   stage: security
