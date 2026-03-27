@@ -4,7 +4,7 @@ set -eu
 
 PORT="${PROMETHEUS_PORT:-9090}"
 METRICS_USER="${SOLR_METRICS_USER:-support}"
-METRICS_PASS="${SOLR_METRICS_PASSWORD:-eledia_default}"
+METRICS_PASS="${SOLR_METRICS_PASSWORD:?ERROR: SOLR_METRICS_PASSWORD must be set}"
 
 cat > /tmp/prometheus.yml <<EOF
 global:
