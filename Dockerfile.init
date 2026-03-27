@@ -1,9 +1,12 @@
+# DEPRECATED: use Dockerfile + powerinit.sh instead
+# This file is no longer referenced by docker-compose.yml.
+# Kept for historical reference only.
 FROM alpine:3.20@sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e017a4b4a
 # =========================================
 # Solr Init Container - Dockerfile
 # Developer: BSC Bernd Schreistetter
 # Company: Eledia.de
-# Init version is just for playing and testing :) 
+# Init version is just for playing and testing :)
 # Version: v2.2.hotfix
 # Fix CVE-2025-26519
 # =========================================
@@ -72,8 +75,8 @@ fi
 for var in SOLR_ADMIN_PASSWORD SOLR_SUPPORT_PASSWORD SOLR_MOODLE_PASSWORD; do
   val="$(eval echo \${$var:-})"
   if [ -z "$val" ]; then
-    eval "$var='eledia_default'"
-    echo "→ Using default for $var"
+    eval "$var=\$(openssl rand -base64 36 | tr -d '/+=' | head -c 32)"
+    echo "→ Generated secure password for $var"
   fi
 done
 
@@ -190,24 +193,24 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       "${MOODLE_USER}": ["moodle"]
     },
     "permissions": [
-      { "name": "all", "role": "admin" },
-      { "name": "health-check-ping", "path": "/admin/ping", "role": null },
-      { "name": "health-check-detailed", "path": "/admin/health", "role": null },
-      { "name": "health-check-simple", "path": "/admin/healthcheck", "role": null },
-      { "name": "config-read", "role": ["admin", "support"] },
-      { "name": "metrics-read", "role": ["admin", "support"] },
-      { "name": "health", "role": ["admin", "support"] },
-      { "name": "read", "role": ["admin", "support", "moodle"] },
-      { "name": "update", "role": ["admin", "moodle"] }
+      { "name": "health",          "role": ["admin", "support", "moodle"] },
+      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "schema-edit",     "role": ["admin", "moodle"] },
+      { "name": "read",            "role": ["admin", "support", "moodle"] },
+      { "name": "update",          "role": ["admin", "moodle"] },
+      { "name": "config-read",     "role": ["admin", "support"] },
+      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin", "support", "moodle"] },
+      { "name": "all",             "role": "admin" }
     ]
   }
 }
 EOJ
   fi
 
-  chmod 644 "${DATA_DIR}/security.json"
+  chmod 600 "${DATA_DIR}/security.json"
   echo "$CURRENT_PASS_HASH" > "$PASS_HASH_FILE"
-  chmod 644 "$PASS_HASH_FILE"
+  chmod 600 "$PASS_HASH_FILE"
   echo "security.json created/updated"
 fi
 
@@ -257,56 +260,6 @@ find "${DATA_DIR}" -type f -exec chmod 640 {} \;
 chown -R 65534:65534 "${PROM_CFG_DIR}"
 chmod 600 "${DATA_DIR}/security.json"
 chmod 600 "${PASS_HASH_FILE}"
-
-# =========================================
-# .env Symlink Handling (Compose auto-detect)
-# =========================================
-echo "→ Ensure .env Symlink exists in main folder..."
-
-ENV_TARGET="./eledia-workplace/.env"
-ENV_LINK="./.env"
-
-# [CHECK] Target must exist
-if [ ! -f "${ENV_TARGET}" ]; then
-  echo "✖ ERROR: Env target file not found: ${ENV_TARGET}" >&2
-  exit 1
-fi
-
-# [CHECK] If .env exists but is NOT a symlink -> fail (avoid accidental overwrite)
-if [ -e "${ENV_LINK}" ] && [ ! -L "${ENV_LINK}" ]; then
-  echo "✖ ERROR: ${ENV_LINK} exists but is not a symlink. Refusing to overwrite." >&2
-  echo "  Hint: Move it away or delete it manually" >&2
-  exit 1
-fi
-
-# [CREATE/UPDATE] Create symlink only if missing or wrong target
-NEED_LINK=0
-if [ ! -L "${ENV_LINK}" ]; then
-  NEED_LINK=1
-else
-  CURRENT_TARGET="$(readlink "${ENV_LINK}")"
-  if [ "${CURRENT_TARGET}" != "${ENV_TARGET}" ]; then
-    NEED_LINK=1
-  fi
-fi
-
-if [ "${NEED_LINK}" -eq 1 ]; then
-  ln -sfn "${ENV_TARGET}" "${ENV_LINK}"
-fi
-
-# [VERIFY] Ensure symlink exists AND points to the correct target
-if [ ! -L "${ENV_LINK}" ]; then
-  echo "ERROR: Symlink ${ENV_LINK} was not created." >&2
-  exit 1
-fi
-
-VERIFY_TARGET="$(readlink "${ENV_LINK}")"
-if [ "${VERIFY_TARGET}" != "${ENV_TARGET}" ]; then
-  echo "✖ ERROR: Symlink ${ENV_LINK} points to '${VERIFY_TARGET}' but expected '${ENV_TARGET}'." >&2
-  exit 1
-fi
-
-echo "OK: ${ENV_LINK} -> ${ENV_TARGET}"
 
 echo "Permissions set"
 echo "Initialization completed successfully."

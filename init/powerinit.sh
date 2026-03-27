@@ -4,7 +4,7 @@
 #   - Keep passwords stable across restarts
 #   - Load from external .env if provided
 
-set -eu
+set -euo pipefail
 
 apk add --no-cache openssl coreutils >/dev/null 2>&1
 
@@ -142,7 +142,7 @@ hash_solr_basic_auth() {
 
 #Helper: generate secure password ---
 generate_secure_password() {
-  openssl rand -hex 16
+  openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }
 
 #Load or generate defaults ---
@@ -268,9 +268,15 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       "${MOODLE_USER}": ["moodle"]
     },
     "permissions": [
-      { "name": "all", "role": "admin" },
-      { "name": "read", "role": ["support", "moodle"] },
-      { "name": "update", "role": "moodle" }
+      { "name": "health",          "role": ["admin", "support", "moodle"] },
+      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "schema-edit",     "role": ["admin", "moodle"] },
+      { "name": "read",            "role": ["admin", "support", "moodle"] },
+      { "name": "update",          "role": ["admin", "moodle"] },
+      { "name": "config-read",     "role": ["admin", "support"] },
+      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin", "support", "moodle"] },
+      { "name": "all",             "role": "admin" }
     ]
   }
 }
