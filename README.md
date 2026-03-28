@@ -28,6 +28,11 @@ docker compose up -d
 # 3. Fertig
 ```
 
+> **Hinweis:** Nach Änderungen an `init/powerinit.sh` oder `init/security.json.template` muss das Init-Image neu gebaut werden:
+> ```bash
+> docker compose build --no-cache solr-init
+> ```
+
 Solr: `http://localhost:8983/solr`
 Zugangsdaten: `.env` im Root-Verzeichnis
 

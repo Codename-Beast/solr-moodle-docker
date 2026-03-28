@@ -54,7 +54,7 @@ services:
       solr-init:
         condition: service_completed_successfully
     ports:
-      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:8983"
+      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
@@ -88,7 +88,7 @@ services:
         - "CMD-SHELL"
         - >-
           curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
-          http://localhost:8983/solr/admin/info/system || exit 1
+          http://localhost:$${SOLR_PORT:-8983}/solr/admin/info/system || exit 1
       interval: 15s
       timeout: 10s
       retries: 5
