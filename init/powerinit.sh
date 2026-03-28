@@ -470,7 +470,7 @@ scrape_configs:
       username: "${SUPPORT_USER}"
       password: "${SUPPORT_PASS_PLAIN}"
     static_configs:
-      - targets: ["solr:8983"]
+      - targets: ["solr:${SOLR_PORT:-8983}"]
 EOF
   chmod 600 "${PROM_CFG_FILE}" 2>/dev/null || true
   chown 65534:65534 "${PROM_CFG_FILE}" 2>/dev/null || true
