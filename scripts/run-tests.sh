@@ -600,10 +600,15 @@ moodle_document_tests() {
 monitoring_tests() {
     print_header "MONITORING TESTS - Prometheus & Grafana Health"
 
+    local prom_bind="${PROMETHEUS_BIND:-127.0.0.1}"
+    local prom_port="${PROMETHEUS_PORT:-9090}"
+    local grafana_bind="${GRAFANA_BIND:-127.0.0.1}"
+    local grafana_port="${GRAFANA_PORT:-3000}"
+
     # Prometheus health
-    print_test "Prometheus health endpoint"
+    print_test "Prometheus health endpoint (${prom_bind}:${prom_port})"
     local prom_response
-    prom_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://127.0.0.1:9090/-/healthy" 2>/dev/null)
+    prom_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://${prom_bind}:${prom_port}/-/healthy" 2>/dev/null)
     if [ "$prom_response" = "200" ]; then
         print_pass "Prometheus healthy (HTTP 200)"
     else
@@ -611,9 +616,9 @@ monitoring_tests() {
     fi
 
     # Grafana health
-    print_test "Grafana health endpoint"
+    print_test "Grafana health endpoint (${grafana_bind}:${grafana_port})"
     local grafana_response
-    grafana_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://127.0.0.1:3000/api/health" 2>/dev/null)
+    grafana_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://${grafana_bind}:${grafana_port}/api/health" 2>/dev/null)
     if [ "$grafana_response" = "200" ]; then
         print_pass "Grafana healthy (HTTP 200)"
     else
