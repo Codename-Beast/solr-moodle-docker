@@ -280,7 +280,8 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "core-admin-edit", "role": ["admin"] },
       { "name": "all",             "role": "admin" }
     ]
-  }
+  },
+  "forwardCredentials": false
 }
 EOF
   fi
