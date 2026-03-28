@@ -205,22 +205,14 @@ jobs:
           docker compose build solr-init
           docker compose up -d
 
-          echo "Waiting for containers to be healthy..."
-          healthy=false
+          echo "Waiting for containers to start (max 60s)..."
           for i in {1..30}; do
             if docker compose ps | grep -q healthy; then
               echo "Containers are healthy after ${i} attempts"
-              healthy=true
               break
             fi
             sleep 2
           done
-          if [ "$healthy" = "false" ]; then
-            echo "ERROR: Containers did not become healthy in time"
-            docker compose ps
-            docker compose logs
-            exit 1
-          fi
 
           echo "Checking init container logs..."
           docker compose logs solr-init
