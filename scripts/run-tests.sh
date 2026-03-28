@@ -141,7 +141,7 @@ unit_tests() {
     #Docker image availability
     print_test "Docker images availability"
     if docker image inspect alpine:3.20 >/dev/null 2>&1 && \
-       docker image inspect solr:9.10.0 >/dev/null 2>&1; then
+       docker image inspect solr:9.10.1 >/dev/null 2>&1; then
         print_pass "Required Docker images available locally"
     else
         print_skip "Docker images not available locally (will be pulled on first run)"

@@ -75,7 +75,7 @@ jobs:
       - name: Run Trivy on Solr base image
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: 'solr:9.10.0'
+          image-ref: 'solr:9.10.1'
           format: 'table'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
@@ -178,7 +178,7 @@ jobs:
 
           cat > .env <<'EOF'
           INSTANCE_NAME=solr
-          SOLR_VERSION=9.10.0
+          SOLR_VERSION=9.10.1
           SOLR_PORT=8983
           SOLR_BIND=127.0.0.1
           SOLR_CORE_NAME=test_auto_core
@@ -234,7 +234,7 @@ jobs:
 
           cat > .env <<'EOF'
           INSTANCE_NAME=solr
-          SOLR_VERSION=9.10.0
+          SOLR_VERSION=9.10.1
           SOLR_PORT=8983
           SOLR_BIND=127.0.0.1
           SOLR_CORE_NAME=
