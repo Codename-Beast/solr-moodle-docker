@@ -277,7 +277,7 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "update",          "role": ["admin", "moodle"] },
       { "name": "config-read",     "role": ["admin", "support", "moodle"] },
       { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
-      { "name": "core-admin-edit", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin"] },
       { "name": "all",             "role": "admin" }
     ]
   }
@@ -286,51 +286,17 @@ EOF
   fi
 
   # -------------------------------------------------------------------
-  # Merge existing security.json with new template if one already exists.
-  # Preserves any extra users/roles not defined in the template.
-  # Template permissions are always authoritative (override existing).
-  # .env passwords always win — they are the single source of truth.
+  # Replace existing security.json with the freshly generated template.
+  # .env is the single source of truth: any user renamed or removed in
+  # .env must also disappear from security.json.  A union/merge approach
+  # would keep old credentials alive even after the operator removes them,
+  # allowing decommissioned accounts to continue authenticating.
   # -------------------------------------------------------------------
-  if [ -f "${DATA_DIR}/security.json" ] && command -v jq >/dev/null 2>&1; then
-    echo "→ Existing security.json found — merging with template"
-    MERGED_TMP="${DATA_DIR}/security.json.merged"
-
-    jq -s '
-      .[0] as $existing |
-      .[1] as $new |
-      {
-        "authentication": (
-          $new.authentication |
-          .credentials = (
-            $existing.authentication.credentials +
-            $new.authentication.credentials
-          )
-        ),
-        "authorization": (
-          $new.authorization |
-          .["user-role"] = (
-            $existing.authorization["user-role"] +
-            $new.authorization["user-role"]
-          )
-        )
-      }
-    ' "${DATA_DIR}/security.json" "${NEW_SECURITY_TMP}" > "${MERGED_TMP}"
-
-    # Count extra users preserved from existing deployment
-    EXTRA_USERS=$(jq -s '
-      (.[1].authentication.credentials | keys) as $new_users |
-      (.[0].authentication.credentials | keys) as $old_users |
-      ($old_users - $new_users) | length
-    ' "${DATA_DIR}/security.json" "${NEW_SECURITY_TMP}")
-    [ "${EXTRA_USERS}" -gt 0 ] && echo "  → ${EXTRA_USERS} extra user(s) from existing deployment preserved"
-
-    mv "${MERGED_TMP}" "${DATA_DIR}/security.json"
-    rm -f "${NEW_SECURITY_TMP}"
-    echo "✓ security.json merged"
-  else
-    mv "${NEW_SECURITY_TMP}" "${DATA_DIR}/security.json"
-    echo "✓ security.json created"
+  if [ -f "${DATA_DIR}/security.json" ]; then
+    echo "→ Existing security.json found — replacing with template (.env is source of truth)"
   fi
+  mv "${NEW_SECURITY_TMP}" "${DATA_DIR}/security.json"
+  echo "✓ security.json updated"
 
   chmod 600 "${DATA_DIR}/security.json"
 

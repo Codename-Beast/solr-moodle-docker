@@ -10,6 +10,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Force all actions to run on Node.js 24 to suppress Node.js 20 deprecation
+# warnings from actions that have not yet released a Node.js 24 build:
+#   - actions/cache@v4             (no v5/v6 yet)
+#   - docker/setup-buildx-action@v3 (no v4 yet)
+#   - aquasecurity/trivy-action internal cache (upstream, not in our control)
+# actions/checkout is already pinned to @v6 (Node.js 24 native).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   lint:
     name: Code Quality Checks
@@ -17,7 +26,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run shellcheck on bash scripts
         run: |
@@ -49,7 +58,7 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build init container
         run: docker build -f Dockerfile -t solr-init:test .
@@ -85,7 +94,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
