@@ -471,6 +471,12 @@ if [ "$KEEP_DOCUMENTS" = true ] || [ "$WAIT_TIME" -gt 0 ]; then
   fi
 fi
 
+# Abort if no documents were indexed — cleanup would be misleading
+if [ "$DOCS_INDEXED" -eq 0 ]; then
+  echo -e "${RED}ERROR: No documents were indexed — aborting without cleanup${NC}"
+  exit 1
+fi
+
 # Cleanup
 if [ "$KEEP_DOCUMENTS" = false ]; then
   print_header "CLEANUP"
