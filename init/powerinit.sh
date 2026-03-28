@@ -308,11 +308,29 @@ fi
 # Dynamic Core Management
 # -------------------------------------------------------------------
 CORE_STATE_FILE="${DATA_DIR}/.core_state"
-CURRENT_CORES="${SOLR_CORE_NAME}"
 
-# Handle multi-core setup
-if [ -n "${SOLR_CORES:-}" ]; then
+# Handle multi-core setup: merge SOLR_CORE_NAME and SOLR_CORES without duplicates
+if [ -n "${SOLR_CORES:-}" ] && [ -n "${SOLR_CORE_NAME:-}" ]; then
+  # Both set — combine them, removing duplicates
+  COMBINED="${SOLR_CORE_NAME},${SOLR_CORES}"
+  CURRENT_CORES=""
+  IFS=',' read -ra _PARTS <<< "$COMBINED"
+  for _part in "${_PARTS[@]}"; do
+    _part="$(echo "$_part" | tr -d ' ')"
+    [ -z "$_part" ] && continue
+    if [ -z "$CURRENT_CORES" ]; then
+      CURRENT_CORES="$_part"
+    elif ! echo ",$CURRENT_CORES," | grep -q ",${_part},"; then
+      CURRENT_CORES="${CURRENT_CORES},${_part}"
+    fi
+  done
+elif [ -n "${SOLR_CORES:-}" ]; then
   CURRENT_CORES="${SOLR_CORES}"
+elif [ -n "${SOLR_CORE_NAME:-}" ]; then
+  CURRENT_CORES="${SOLR_CORE_NAME}"
+else
+  echo "ERROR: Neither SOLR_CORE_NAME nor SOLR_CORES is set — cannot determine cores" >&2
+  exit 3
 fi
 
 # Read previous core state

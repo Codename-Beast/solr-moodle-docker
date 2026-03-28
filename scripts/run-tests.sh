@@ -76,6 +76,12 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
+# Check .env exists
+if [ ! -f ".env" ]; then
+    echo -e "${RED}ERROR: .env not found. Run setup first: docker compose --profile setup up moodle_setup${NC}"
+    exit 1
+fi
+
 # =========================================
 # UNIT TESTS - Component Level
 # =========================================
@@ -237,8 +243,11 @@ integration_tests() {
 
     #Password change detection
     print_test "Password change detection"
+    # Backup .env before modification
+    cp .env .env.test_backup
+
     # Change password
-    sed -i.bak 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=TESTPASS999/' .env 2>/dev/null
+    sed 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=TESTPASS999/' .env.test_backup > .env
 
     docker compose down >/dev/null 2>&1
     docker compose up -d >/dev/null 2>&1
@@ -250,8 +259,8 @@ integration_tests() {
         print_fail "Password change not detected"
     fi
 
-    # Restore old password for remaining tests
-    mv .env.bak .env 2>/dev/null
+    # Atomic restore of original .env
+    mv .env.test_backup .env
 
     # Restart containers with restored password
     docker compose down >/dev/null 2>&1
@@ -586,6 +595,33 @@ moodle_document_tests() {
 }
 
 # =========================================
+# MONITORING TESTS - Prometheus & Grafana
+# =========================================
+monitoring_tests() {
+    print_header "MONITORING TESTS - Prometheus & Grafana Health"
+
+    # Prometheus health
+    print_test "Prometheus health endpoint"
+    local prom_response
+    prom_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://127.0.0.1:9090/-/healthy" 2>/dev/null)
+    if [ "$prom_response" = "200" ]; then
+        print_pass "Prometheus healthy (HTTP 200)"
+    else
+        print_fail "Prometheus not healthy (HTTP $prom_response)"
+    fi
+
+    # Grafana health
+    print_test "Grafana health endpoint"
+    local grafana_response
+    grafana_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://127.0.0.1:3000/api/health" 2>/dev/null)
+    if [ "$grafana_response" = "200" ]; then
+        print_pass "Grafana healthy (HTTP 200)"
+    else
+        print_fail "Grafana not healthy (HTTP $grafana_response)"
+    fi
+}
+
+# =========================================
 # CLEANUP TESTS - Cleanup and Restart
 # =========================================
 cleanup_tests() {
@@ -648,6 +684,7 @@ EOF
     RUN_PERFORMANCE=1
     RUN_MOODLE=1
     RUN_CLEANUP=1
+    RUN_MONITORING=0
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -698,6 +735,10 @@ EOF
                 RUN_CLEANUP=0
                 shift
                 ;;
+            --monitoring)
+                RUN_MONITORING=1
+                shift
+                ;;
             --help)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
@@ -708,6 +749,7 @@ EOF
                 echo "  --negative-only      Run only negative tests (invalid inputs)"
                 echo "  --moodle-only        Run only Moodle document tests"
                 echo "  --no-cleanup         Skip cleanup tests"
+                echo "  --monitoring         Run Prometheus/Grafana health checks"
                 echo "  --help               Show this help"
                 echo ""
                 exit 0
@@ -727,6 +769,7 @@ EOF
     [ $RUN_NEGATIVE -eq 1 ] && negative_tests
     [ $RUN_PERFORMANCE -eq 1 ] && performance_tests
     [ $RUN_MOODLE -eq 1 ] && moodle_document_tests
+    [ $RUN_MONITORING -eq 1 ] && monitoring_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests
 
     # Print summary
