@@ -1,12 +1,19 @@
 # Solr für Moodle
 
-**Developer:** BSC Bernd Schreistetter | **Version:** v2.2
+[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.0)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
+![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![Solr](https://img.shields.io/badge/solr-9.10.0-orange)
+![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
+![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-**Solr 9.10.0** | **Moodle 4.1-5.x**
+**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.0
+
+**Solr 9.10.0** | **Moodle 4.1–5.x** | **Debian 12/13**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.2 | Security Hardening & CI/CD
+> v2.3.0 | Multi-Core, Security Hardening, Ghost-User-Fix
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
