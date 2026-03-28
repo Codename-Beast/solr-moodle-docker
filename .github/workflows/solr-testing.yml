@@ -65,7 +65,7 @@ jobs:
         run: docker build -f Dockerfile -t solr-init:test .
 
       - name: Run Trivy vulnerability scanner on init image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: 'solr-init:test'
           format: 'table'
@@ -73,7 +73,7 @@ jobs:
           exit-code: '0'
 
       - name: Run Trivy on Solr base image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: 'solr:9.10.0'
           format: 'table'
