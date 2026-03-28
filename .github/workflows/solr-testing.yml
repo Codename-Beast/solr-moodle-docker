@@ -118,6 +118,7 @@ jobs:
         run: |
           echo "Generating .env file with core name: ${{ matrix.core_name }}..."
           SOLR_CORE_NAME=${{ matrix.core_name }} docker compose --profile setup up moodle_setup
+          sudo chown "$USER" .env
           echo ".env file created successfully"
           ls -lah .env
           echo "Core name in .env:"
