@@ -85,11 +85,6 @@ else
   fi
 fi
 
-#Helper: detect pre-hashed password (32+ hex chars or contains space salt)
-is_hashed() {
-  echo "$1" | grep -Eq '^[0-9a-f]{32,}$|[A-Za-z0-9+/=]+\s+[A-Za-z0-9+/=]+'
-}
-
 # Helper: create Solr-compatible BasicAuth hash
 # IMPORTANT: Solr uses DOUBLE SHA256: SHA256(SHA256(salt + password))
 hash_solr_basic_auth() {
@@ -260,7 +255,8 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       "${ADMIN_USER}": "${ADMIN_CRED}",
       "${SUPPORT_USER}": "${SUPPORT_CRED}",
       "${MOODLE_USER}": "${MOODLE_CRED}"
-    }
+    },
+    "forwardCredentials": false
   },
   "authorization": {
     "class": "solr.RuleBasedAuthorizationPlugin",
@@ -280,8 +276,7 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "core-admin-edit", "role": ["admin"] },
       { "name": "all",             "role": "admin" }
     ]
-  },
-  "forwardCredentials": false
+  }
 }
 EOF
   fi
@@ -355,34 +350,6 @@ EOF
 
   chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
   echo "✓ Core created: ${core_name}"
-}
-
-# Function: rename core
-rename_core() {
-  local old_name="$1"
-  local new_name="$2"
-  local old_dir="${DATA_DIR}/${old_name}"
-  local new_dir="${DATA_DIR}/${new_name}"
-
-  if [ ! -d "$old_dir" ]; then
-    echo "→ Old core '${old_name}' not found, creating new core '${new_name}'"
-    create_core "$new_name"
-    return 0
-  fi
-
-  if [ -d "$new_dir" ]; then
-    echo "→ Target core '${new_name}' already exists, skipping rename"
-    return 0
-  fi
-
-  echo "→ Renaming core '${old_name}' to '${new_name}'"
-  mv "$old_dir" "$new_dir"
-
-  # Update core.properties
-  sed -i "s/^name=.*/name=${new_name}/" "${new_dir}/core.properties"
-
-  chown -R 8983:8983 "${new_dir}" 2>/dev/null || true
-  echo "✓ Core renamed: ${old_name} → ${new_name}"
 }
 
 # Function: delete core
@@ -471,7 +438,7 @@ scrape_configs:
       username: "${SUPPORT_USER}"
       password: "${SUPPORT_PASS_PLAIN}"
     static_configs:
-      - targets: ["solr:${SOLR_PORT:-8983}"]
+      - targets: ["solr:8983"]
 EOF
   chmod 600 "${PROM_CFG_FILE}" 2>/dev/null || true
   chown 65534:65534 "${PROM_CFG_FILE}" 2>/dev/null || true
