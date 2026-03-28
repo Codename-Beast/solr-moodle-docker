@@ -321,7 +321,7 @@ Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.1
+**Version:** v2.3.0
 **Status:** Docker Tested | CI/CD Tested (Github)
 
 **Links:**
