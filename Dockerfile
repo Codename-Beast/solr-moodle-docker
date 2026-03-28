@@ -15,7 +15,8 @@ RUN apk add --no-cache \
     bash \
     curl \
     ca-certificates \
-    findutils && \
+    findutils \
+    jq && \
     mkdir -p /config /workspace /var/solr/data /prometheus-config /init
 
 # Copy configuration files

@@ -4,7 +4,7 @@
 #   - Keep passwords stable across restarts
 #   - Load from external .env if provided
 
-set -eu
+set -euo pipefail
 
 apk add --no-cache openssl coreutils >/dev/null 2>&1
 
@@ -142,7 +142,7 @@ hash_solr_basic_auth() {
 
 #Helper: generate secure password ---
 generate_secure_password() {
-  openssl rand -hex 16
+  openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }
 
 #Load or generate defaults ---
@@ -229,12 +229,14 @@ fi
 if [ "$REGENERATE_SECURITY" = "1" ]; then
   mkdir -p "${DATA_DIR}"
 
-  # Hash plain passwords once for security.json
+  # Hash plain passwords from .env for all template users
   ADMIN_CRED="$(hash_solr_basic_auth "${ADMIN_PASS_PLAIN}")"
   SUPPORT_CRED="$(hash_solr_basic_auth "${SUPPORT_PASS_PLAIN}")"
   MOODLE_CRED="$(hash_solr_basic_auth "${MOODLE_PASS_PLAIN}")"
 
-  # Template ersetzen, falls vorhanden (aus /init, nicht /config)
+  # Build the new security.json from template into a temp file
+  NEW_SECURITY_TMP="${DATA_DIR}/security.json.new"
+
   if [ -f "/init/security.json.template" ]; then
     if ! sed -e "s#__ADMIN_USER__#${ADMIN_USER}#g" \
         -e "s#__SUPPORT_USER__#${SUPPORT_USER}#g" \
@@ -242,13 +244,13 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
         -e "s#__ADMIN_HASH__#${ADMIN_CRED}#g" \
         -e "s#__SUPPORT_HASH__#${SUPPORT_CRED}#g" \
         -e "s#__MOODLE_HASH__#${MOODLE_CRED}#g" \
-        "/init/security.json.template" > "${DATA_DIR}/security.json"; then
+        "/init/security.json.template" > "${NEW_SECURITY_TMP}"; then
       echo "ERROR: Failed to generate security.json from template" >&2
       exit 1
     fi
   else
     echo "No security.json.template found - generating minimal inline file"
-    cat > "${DATA_DIR}/security.json" <<EOF
+    cat > "${NEW_SECURITY_TMP}" <<EOF
 {
   "authentication": {
     "blockUnknown": true,
@@ -268,22 +270,76 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       "${MOODLE_USER}": ["moodle"]
     },
     "permissions": [
-      { "name": "all", "role": "admin" },
-      { "name": "read", "role": ["support", "moodle"] },
-      { "name": "update", "role": "moodle" }
+      { "name": "health",          "role": ["admin", "support", "moodle"] },
+      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "schema-edit",     "role": ["admin", "moodle"] },
+      { "name": "read",            "role": ["admin", "support", "moodle"] },
+      { "name": "update",          "role": ["admin", "moodle"] },
+      { "name": "config-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin", "support", "moodle"] },
+      { "name": "all",             "role": "admin" }
     ]
   }
 }
 EOF
   fi
+
+  # -------------------------------------------------------------------
+  # Merge existing security.json with new template if one already exists.
+  # Preserves any extra users/roles not defined in the template.
+  # Template permissions are always authoritative (override existing).
+  # .env passwords always win — they are the single source of truth.
+  # -------------------------------------------------------------------
+  if [ -f "${DATA_DIR}/security.json" ] && command -v jq >/dev/null 2>&1; then
+    echo "→ Existing security.json found — merging with template"
+    MERGED_TMP="${DATA_DIR}/security.json.merged"
+
+    jq -s '
+      .[0] as $existing |
+      .[1] as $new |
+      {
+        "authentication": (
+          $new.authentication |
+          .credentials = (
+            $existing.authentication.credentials +
+            $new.authentication.credentials
+          )
+        ),
+        "authorization": (
+          $new.authorization |
+          .["user-role"] = (
+            $existing.authorization["user-role"] +
+            $new.authorization["user-role"]
+          )
+        )
+      }
+    ' "${DATA_DIR}/security.json" "${NEW_SECURITY_TMP}" > "${MERGED_TMP}"
+
+    # Count extra users preserved from existing deployment
+    EXTRA_USERS=$(jq -s '
+      (.[1].authentication.credentials | keys) as $new_users |
+      (.[0].authentication.credentials | keys) as $old_users |
+      ($old_users - $new_users) | length
+    ' "${DATA_DIR}/security.json" "${NEW_SECURITY_TMP}")
+    [ "${EXTRA_USERS}" -gt 0 ] && echo "  → ${EXTRA_USERS} extra user(s) from existing deployment preserved"
+
+    mv "${MERGED_TMP}" "${DATA_DIR}/security.json"
+    rm -f "${NEW_SECURITY_TMP}"
+    echo "✓ security.json merged"
+  else
+    mv "${NEW_SECURITY_TMP}" "${DATA_DIR}/security.json"
+    echo "✓ security.json created"
+  fi
+
   chmod 600 "${DATA_DIR}/security.json"
 
-  # Save password checksum for future comparisons (secure permissions!)
+  # Save password checksum for future comparisons
   echo "$CURRENT_PASS_HASH" > "$PASS_HASH_FILE"
   chmod 600 "$PASS_HASH_FILE"
   chown 8983:8983 "$PASS_HASH_FILE" 2>/dev/null || true
 
-  echo "✓ security.json created/updated"
+  echo "✓ security.json written"
 fi
 
 # -------------------------------------------------------------------

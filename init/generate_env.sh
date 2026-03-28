@@ -11,8 +11,8 @@ set -eu
 TARGET_DIR="/app"
 ENV_FILE="${TARGET_DIR}/.env"
 
-# Helper: generate random 32-char secret
-rand() { openssl rand -hex 16; }
+# Helper: generate random 32-char secret (alphanumeric, high entropy)
+rand() { openssl rand -base64 36 | tr -d '/+=' | head -c 32; }
 
 # Ensure directory exists
 mkdir -p "${TARGET_DIR}"
