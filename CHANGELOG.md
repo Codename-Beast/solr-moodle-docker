@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-03-28
+
+### Security
+- **Solr 9.10.0 -> 9.10.1**: CVE-Fix-Update; alle Referenzen auf 9.10.1 aktualisiert
+
+### Changed
+- `docker-compose.yml`: SOLR_VERSION Default auf 9.10.1
+- `init/generate_env.sh`: SOLR_VERSION auf 9.10.1
+- `.github/workflows/solr-testing.yml`: Trivy-Scan auf `solr:9.10.1`
+- `README.md`: Versionsreferenzen auf v2.3.1 / Solr 9.10.1
+
+---
+
 ## [2.3.0] - 2026-03-27
 
 ### Fixed

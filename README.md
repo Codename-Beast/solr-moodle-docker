@@ -1,19 +1,19 @@
 # Solr für Moodle
 
-[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.0)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
-![Version](https://img.shields.io/badge/version-2.3.0-blue)
-![Solr](https://img.shields.io/badge/solr-9.10.0-orange)
+[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.1)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
+![Version](https://img.shields.io/badge/version-2.3.1-blue)
+![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.0
+**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.1
 
-**Solr 9.10.0** | **Moodle 4.1–5.x** | **Debian 12/13**
+**Solr 9.10.1** | **Moodle 4.1–5.x** | **Debian 12/13**
 
 Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
 
-> v2.3.0 | Multi-Core, Security Hardening, Ghost-User-Fix
+> v2.3.1 | CVE-Fix Solr 9.10.1, Multi-Core, Security Hardening
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
@@ -145,7 +145,7 @@ Passwörter werden automatisch generiert wenn leer oder "CHANGE_ME".
 **`.env` (automatisch generiert):**
 ```bash
 INSTANCE_NAME=solr                # Container-Prefix
-SOLR_VERSION=9.10.0               # Solr Version
+SOLR_VERSION=9.10.1               # Solr Version
 SOLR_HEAP=2g                      # RAM: 8GB→2g, 16GB→8g, 32GB→20g
 SOLR_CORE_NAME=moodle_core        # Single-Core
 SOLR_CORES=core1,core2            # Multi-Core (alternativ)
@@ -321,7 +321,7 @@ Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.3.0
+**Version:** v2.3.1
 **Status:** Docker Tested | CI/CD Tested (Github)
 
 **Links:**
