@@ -79,9 +79,8 @@ GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 # NOTES=<additional notes>
 EOF
 
-# Set permissions for host user readability
-# Use 644 for CI/CD compatibility (read for all, write for owner only)
-chmod 644 "${ENV_FILE}"
+# Restrict .env to owner-only — contains plaintext passwords
+chmod 600 "${ENV_FILE}"
 
 echo "Created ${ENV_FILE}"
 echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"

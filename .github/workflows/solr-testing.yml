@@ -50,7 +50,7 @@ jobs:
             document-start: disable,
             truthy: disable,
             brackets: {max-spaces-inside: 1}
-          }}" .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml || true
+          }}" .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml
 
   security-scan:
     name: Security Vulnerability Scan
@@ -65,7 +65,7 @@ jobs:
         run: docker build -f Dockerfile -t solr-init:test .
 
       - name: Run Trivy vulnerability scanner on init image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'solr-init:test'
           format: 'table'
@@ -73,7 +73,7 @@ jobs:
           exit-code: '0'
 
       - name: Run Trivy on Solr base image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'solr:9.10.0'
           format: 'table'
@@ -205,13 +205,21 @@ jobs:
           docker compose up -d
 
           echo "Waiting for containers to be healthy..."
+          healthy=false
           for i in {1..30}; do
             if docker compose ps | grep -q healthy; then
               echo "Containers are healthy after ${i} attempts"
+              healthy=true
               break
             fi
             sleep 2
           done
+          if [ "$healthy" = "false" ]; then
+            echo "ERROR: Containers did not become healthy in time"
+            docker compose ps
+            docker compose logs
+            exit 1
+          fi
 
           echo "Checking init container logs..."
           docker compose logs solr-init
