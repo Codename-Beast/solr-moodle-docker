@@ -12,9 +12,7 @@
   - Betrifft: `init/security.json.template` und `init/powerinit.sh` (Fallback-Permissions)
 
 ### Hinzugefuegt
-- **Monitoring-Stack reaktiviert** mit `docker compose --profile monitoring up -d`
-  - Solr-Exporter (Port 9854), Prometheus (Port 9090), Grafana (Port 3000)
-  - Alle Bind-Adressen auf `127.0.0.1` — extern nur ueber Reverse Proxy
+- `docs/monitoring.md` — Anleitung fuer Prometheus- und Loki-Integration (Groundwork, kein Service im Stack)
 
 ### Geaendert
 - `docker-compose.yml`: Resource Limits (`cpus`, `memory`) werden aus `.env` gelesen statt hardcoded (`${SOLR_CPU_LIMIT:-2}` etc.)

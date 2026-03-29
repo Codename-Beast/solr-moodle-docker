@@ -110,23 +110,11 @@ Cores werden automatisch erstellt/geloescht beim Restart.
 
 ---
 
-## Monitoring (Optional)
+## Monitoring
 
-```bash
-# Prometheus + Grafana + Solr-Exporter starten:
-docker compose --profile monitoring up -d
+Solr stellt Metriken unter `/solr/admin/metrics` bereit (BasicAuth, Support-User).
 
-# Status:
-docker compose --profile monitoring ps
-```
-
-- Solr-Exporter: `http://localhost:9854/metrics`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (Login: GRAFANA_ADMIN_USER/GRAFANA_ADMIN_PASSWORD aus `.env`)
-
-50 Solr-Metriken (Core Performance, JVM, HTTP, Cache).
-
-Bind-Adressen: `127.0.0.1` — extern nur ueber Reverse Proxy erreichbar.
+Prometheus- und Loki-Integration: [`docs/monitoring.md`](docs/monitoring.md)
 
 ---
 
