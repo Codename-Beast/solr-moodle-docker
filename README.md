@@ -1,4 +1,4 @@
-# Solr für Moodle
+# Solr fuer Moodle
 
 [![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.1)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
 ![Version](https://img.shields.io/badge/version-2.3.1-blue)
@@ -11,7 +11,7 @@
 
 **Solr 9.10.1** | **Moodle 4.1–5.x** | **Debian 12/13**
 
-Vollautomatisches Solr-Setup für Moodle Global Search mit optionalem Monitoring (Prometheus + Grafana).
+Docker-Stack fuer Solr + Moodle Global Search. Setup generiert `.env` mit sicheren Passwoertern, Init-Container erledigt den Rest (Cores, security.json, Permissions).
 
 > v2.3.1 | CVE-Fix Solr 9.10.1, Multi-Core, Security Hardening
 
@@ -23,7 +23,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 ## Quick Installation
 
 ```bash
-# 1. Setup (.env mit sicheren Passwörtern)
+# 1. Setup (.env mit sicheren Passwoertern)
 docker compose --profile setup up moodle_setup
 
 # Optional: Mit custom Core-Namen
@@ -35,7 +35,7 @@ docker compose up -d
 # 3. Fertig
 ```
 
-> **Hinweis:** Nach Änderungen an `init/powerinit.sh` oder `init/security.json.template` muss das Init-Image neu gebaut werden:
+> Nach Aenderungen an `init/powerinit.sh` oder `init/security.json.template` muss das Init-Image neu gebaut werden:
 > ```bash
 > docker compose build --no-cache solr-init
 > ```
@@ -64,11 +64,11 @@ Comming Soon
 | Port     | 8983                                      |
 | Path     | /solr                                     |
 |Index name| moodle_core                               |
-| Secure mode| Über Reverse Proxy ja! else only local  |
+| Secure mode| Ueber Reverse Proxy ja! else only local  |
 | Auth Username | moodle oder admin                    |
 | Auth Password | (aus `.env`)                         |
 
-**(der/die/das)Schema für die Moodle initialisieren per CLI anschubsen**
+Schema initialisieren und Index anstossen:
 ```bash
 php admin/cli/search.php --setupschema
 php admin/cli/search.php --reindex
@@ -87,28 +87,24 @@ SOLR_CORE_NAME=moodle_core
 SOLR_CORES=core1,core2,core3
 ```
 
-Cores werden automatisch erstellt/gelöscht beim Restart.
+Cores werden automatisch erstellt/geloescht beim Restart.
 
 ---
 
 ## Monitoring (Optional)
 
-### Mit Prometheus + Grafana:
 ```bash
+# Prometheus + Grafana:
 docker compose --profile monitoring up -d
-```
 
-### Nur Prometheus:
-```bash
+# Nur Prometheus:
 docker compose up -d solr prometheus
 ```
 
-**Zugriff:**
 - Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (extern erreichbar, Login: admin/admin)
+- Grafana: `http://localhost:3000` (Login: admin/admin)
 
-**Metriken:** 50 Solr-Metriken verfügbar (Core Performance, JVM, HTTP, Cache)
-**Dokumentation:** `Hier kommt irgendwann eine wenn ich es selbst rausgefunden habe. Prometheus läuft :) `
+50 Solr-Metriken (Core Performance, JVM, HTTP, Cache).
 
 ---
 
@@ -118,14 +114,14 @@ docker compose up -d solr prometheus
 docker compose ps                              # Status
 docker compose logs -f solr                    # Logs
 docker compose restart                         # Neustart
-docker compose down                            # Stoppen (Daten bleiben erhalten)
-docker compose down -v                         # Stoppen + Daten löschen
-grep PASSWORD .env                             # Credentials anzeigen
+docker compose down                            # Stoppen (Daten bleiben)
+docker compose down -v                         # Stoppen + Daten weg
+grep PASSWORD .env                             # Credentials
 ```
 
 ---
 
-## Passwörter ändern
+## Passwoerter aendern
 
 ```bash
 # 1. .env bearbeiten
@@ -136,7 +132,7 @@ docker compose down
 docker compose up -d
 ```
 
-Passwörter werden automatisch generiert wenn leer oder "CHANGE_ME".
+Passwoerter werden automatisch generiert wenn leer oder "CHANGE_ME".
 
 ---
 
@@ -152,7 +148,7 @@ SOLR_CORES=core1,core2            # Multi-Core (alternativ)
 SOLR_BIND=127.0.0.1               # Localhost-only
 ```
 
-**Heap Size Empfehlungen:**
+**Heap Size:**
 - 8 GB RAM → `SOLR_HEAP=2g`
 - 16 GB RAM → `SOLR_HEAP=8g`
 - 32 GB RAM → `SOLR_HEAP=20g`
@@ -167,7 +163,7 @@ SOLR_BIND=127.0.0.1               # Localhost-only
 | moodle  | Read + Update                  | Moodle-Integration (Indexierung) |
 | support | Read-only, Metrics             | Monitoring, Read-Only Zugriff |
 
-**Alle Passwörter:** `.env` im Root-Verzeichnis
+Alle Passwoerter stehen in `.env`.
 
 ---
 
@@ -175,10 +171,10 @@ SOLR_BIND=127.0.0.1               # Localhost-only
 
 - **Binding:** `127.0.0.1` (localhost-only)
 - **BasicAuth:** Solr-Standard
-- **Passwort-Änderungen:** Automatische Erkennung
-- **Extern Erreichbar:** Reverse Proxy erforderlich (nginx, Apache, Caddy)
+- **Passwort-Aenderungen:** Automatische Erkennung
+- **Extern erreichbar:** Nur ueber Reverse Proxy (nginx, Apache, Caddy)
 
-**Beispiel Nginx Reverse Proxy (ungetestet):**
+**Nginx Reverse Proxy (ungetestet):**
 ```nginx
 location /solr/ {
     proxy_pass http://127.0.0.1:8983/solr/;
@@ -191,29 +187,18 @@ location /solr/ {
 
 ## Testing
 
-### Moodle Document Tests:
 ```bash
-# Testet Indexierung + Queries (7 Dokumente)
+# Moodle Document Tests (7 Dokumente, Indexierung + Queries)
 ./scripts/test-moodle-documents.sh --keep-documents
-```
 
-### Connectivity Test:
-```bash
-# Test mit moodle User
+# Connectivity mit moodle User
 curl -u moodle:PASSWORD http://localhost:8983/solr/moodle_core/admin/ping
-
-# Erwartete Antwort: {"status":"OK"}
+# → {"status":"OK"}
 ```
 
 ---
 
 ## Troubleshooting
-
-### Known Issues
-
-Keine Bekannt
-
----
 
 ### Setup neu starten:
 ```bash
@@ -222,19 +207,17 @@ docker compose --profile setup up moodle_setup
 docker compose up -d
 ```
 
-### Logs prüfen:
+### Logs:
 ```bash
 docker compose logs solr-init    # Init-Container
-docker compose logs solr         # Solr - Hauptservice
-docker compose logs prometheus   # Prometheus - Monitoring
+docker compose logs solr         # Solr
+docker compose logs prometheus   # Monitoring
 ```
 
-### Permissions prüfen:
+### Permissions:
 ```bash
-# Solr Daten-Volume
 docker run --rm -v solr_data_solr:/data alpine:3.20 ls -la /data/
-
-# Sollte: drwxr-xr-x 8983:8983 zurückgeben
+# Sollte 8983:8983 sein
 ```
 
 ### Core manuell erstellen:
@@ -244,7 +227,11 @@ docker compose exec solr solr create -c <core_name>
 
 ---
 
-## Ansible Integration (Nicht getestet)
+## Ansible Integration
+
+Fuer produktiven Einsatz: [ansible-role-solr](https://github.com/Codename-Beast/ansible-role-solr) (getestet, idempotent, mit Smoke-Tests).
+
+Minimal-Beispiel (nicht getestet):
 
 ```yaml
 - name: Deploy Solr for Moodle
@@ -285,14 +272,14 @@ docker compose exec solr solr create -c <core_name>
 ### Service Flow:
 ```
 1. moodle_setup (profile: setup)
-   └─> Generiert .env mit zufälligen Passwörtern im Root-Verzeichnis
+   └─> Generiert .env mit Passwoertern
 
 2. solr-init (Dockerfile)
-   └─> Lädt .env, erstellt security.json, Cores, prometheus.yml
+   └─> Laedt .env, erstellt security.json, Cores, prometheus.yml
    └─> Setzt Permissions (8983:8983)
 
 3. solr (Hauptservice)
-   └─> Wartet auf init completion, startet mit BasicAuth
+   └─> Wartet auf init, startet mit BasicAuth
 
 4. prometheus + grafana (profile: monitoring, optional)
    └─> Metrics-Scraping von Solr
@@ -309,11 +296,11 @@ docker compose exec solr solr create -c <core_name>
 
 ---
 
-## CI/CD & Testing
+## CI/CD
 
-Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
+Tests laufen automatisch bei Push — GitHub Actions und GitLab CI.
 
-**Dokumentation:** [docs/CI-CD.md](docs/CI-CD.md)
+Doku: [docs/CI-CD.md](docs/CI-CD.md)
 
 ---
 
@@ -322,9 +309,7 @@ Automatisierte Tests für GitHub Actions und GitLab CI sind eingerichtet.
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
 **Version:** v2.3.1
-**Status:** Docker Tested | CI/CD Tested (Github)
 
-**Links:**
 - [Apache Solr Documentation](https://solr.apache.org/guide/)
 - [Moodle Global Search](https://docs.moodle.org/en/Global_search)
 - [Eledia GmbH](https://eledia.de)
