@@ -37,7 +37,7 @@ security-scan:
     - echo "Running Trivy vulnerability scanner on init image..."
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
     - echo "Running Trivy vulnerability scanner on Solr base image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.0 || true
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1 || true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -122,7 +122,7 @@ solr-test:
     - |
       cat > .env <<'EOF'
       INSTANCE_NAME=solr
-      SOLR_VERSION=9.10.0
+      SOLR_VERSION=9.10.1
       SOLR_PORT=8983
       SOLR_BIND=127.0.0.1
       SOLR_CORE_NAME=test_auto_core
@@ -167,7 +167,7 @@ solr-test:
     - |
       cat > .env <<EOF
       INSTANCE_NAME=solr
-      SOLR_VERSION=9.10.0
+      SOLR_VERSION=9.10.1
       SOLR_PORT=8983
       SOLR_BIND=127.0.0.1
       SOLR_CORE_NAME=

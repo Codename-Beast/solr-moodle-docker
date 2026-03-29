@@ -11,8 +11,8 @@ set -eu
 TARGET_DIR="/app"
 ENV_FILE="${TARGET_DIR}/.env"
 
-# Helper: generate random 32-char secret
-rand() { openssl rand -hex 16; }
+# Helper: generate random 32-char secret (alphanumeric, high entropy)
+rand() { openssl rand -base64 36 | tr -d '/+=' | head -c 32; }
 
 # Ensure directory exists
 mkdir -p "${TARGET_DIR}"
@@ -43,7 +43,7 @@ cat > "${ENV_FILE}" <<EOF
 INSTANCE_NAME=${INSTANCE_NAME:-solr}
 
 # Solr
-SOLR_VERSION=9.10.0
+SOLR_VERSION=9.10.1
 SOLR_PORT=8983
 SOLR_BIND=127.0.0.1
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
@@ -79,9 +79,10 @@ GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 # NOTES=<additional notes>
 EOF
 
-# Set permissions for host user readability
-# Use 644 for CI/CD compatibility (read for all, write for owner only)
-chmod 644 "${ENV_FILE}"
+# Allow docker group to read .env — required for non-root docker compose runs.
+# Passwords are protected: world access is denied (mode 640).
+chmod 640 "${ENV_FILE}"
+chgrp docker "${ENV_FILE}" 2>/dev/null || true
 
 echo "Created ${ENV_FILE}"
 echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"

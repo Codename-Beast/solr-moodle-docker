@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-03-28
+
+### Security
+- **Solr 9.10.0 -> 9.10.1**: CVE-Fix-Update; alle Referenzen auf 9.10.1 aktualisiert
+
+### Changed
+- `docker-compose.yml`: SOLR_VERSION Default auf 9.10.1
+- `init/generate_env.sh`: SOLR_VERSION auf 9.10.1
+- `.github/workflows/solr-testing.yml`: Trivy-Scan auf `solr:9.10.1`
+- `README.md`: Versionsreferenzen auf v2.3.1 / Solr 9.10.1
+
+---
+
+## [2.3.0] - 2026-03-27
+
+### Fixed
+- **`config-read` Permission auf `["admin", "support", "moodle"]` erweitert** — behebt `is_server_ready()` 403-Fehler in Moodle 4.x
+  - Root cause: Solrs `SystemInfoHandler` deklariert sich als `CONFIG_READ_PERM`. Custom Path-Permissions greifen nicht für solche Handler. Moodles `SolrClient->system()` → `/solr/<core>/admin/system/` benötigte `config-read`-Berechtigung.
+- **Passwort-Generierung** von `openssl rand -hex 16` (hex, 32 Zeichen) auf `openssl rand -base64 36 | tr -d '/+=' | head -c 32` (alphanumerisch, höhere Entropie) umgestellt
+
+### Changed
+- `generate_env.sh`: `rand()` Funktion auf base64-basierte Passwörter umgestellt
+- `powerinit.sh`: Fallback-Permissions korrigiert (config-read + vollständige Liste)
+- `security.json.template`: config-read Role-Liste korrigiert
+
+### Tests
+- Deploy-Testsuite hinzugefügt: 3x Fresh Deploy + 3x Bestandstest + 1x Final Fresh = 70/70 Tests bestanden
+
+> ⚠️ Nach Änderungen an `init/powerinit.sh` oder `init/security.json.template` muss das Init-Image neu gebaut werden:
+> ```bash
+> docker compose build --no-cache solr-init
+> ```
+
+---
+
 ## [2.2.0] - 2025-01-15
 
 ### Security
