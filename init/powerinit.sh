@@ -275,7 +275,7 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "update",          "role": ["admin", "moodle"] },
       { "name": "config-read",     "role": ["admin", "support", "moodle"] },
       { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
-      { "name": "core-admin-edit", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin"] },
       { "name": "all",             "role": "admin" }
     ]
   }
