@@ -1,6 +1,6 @@
 #!/bin/bash
 # /init/powerinit.sh
-#   - Initialize Solr data directory (security.json, Moodle core, Prometheus config)
+#   - Initialize Solr data directory (security.json, Moodle core)
 #   - Keep passwords stable across restarts
 #   - Load from external .env if provided
 
@@ -26,8 +26,6 @@ esac
 CONF_SRC="/config"
 CORE_DIR="${DATA_DIR}/${CORE_NAME}"
 CORE_CONF="${CORE_DIR}/conf"
-PROM_CFG_DIR="/prometheus-config"
-PROM_CFG_FILE="${PROM_CFG_DIR}/prometheus.yml"
 ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 ENV_FILE_VOLUME="${DATA_DIR}/.env"
 REALM_NAME="Eledia Moodle Search"
@@ -431,38 +429,6 @@ echo "$CURRENT_CORES" > "$CORE_STATE_FILE"
 chmod 600 "$CORE_STATE_FILE"
 chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
 
-# -------------------------------------------------------------------
-# Generate Prometheus config into mounted volume
-# -------------------------------------------------------------------
-# NOTE: Prometheus requires plaintext credentials in config file.
-# This is a Prometheus limitation. File is protected with 600 permissions.
-# Alternative: Use Prometheus with external secret management or OAuth proxy.
-mkdir -p "${PROM_CFG_DIR}" 2>/dev/null || true
-chmod 755 "${PROM_CFG_DIR}" 2>/dev/null || true
-if touch "${PROM_CFG_FILE}" 2>/dev/null; then
-  cat > "${PROM_CFG_FILE}" <<EOF
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-scrape_configs:
-  - job_name: solr
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /solr/admin/metrics
-    params:
-      wt: ["prometheus"]
-    basic_auth:
-      username: "${SUPPORT_USER}"
-      password: "${SUPPORT_PASS_PLAIN}"
-    static_configs:
-      - targets: ["solr:8983"]
-EOF
-  chmod 600 "${PROM_CFG_FILE}" 2>/dev/null || true
-  chown 65534:65534 "${PROM_CFG_FILE}" 2>/dev/null || true
-  chown 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
-  echo "✓ Prometheus config created"
-fi
 
 #Fix file permissions
 echo "→ Fixing permissions..."
