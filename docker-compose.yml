@@ -71,11 +71,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 4G
+          cpus: '${SOLR_CPU_LIMIT:-2}'
+          memory: ${SOLR_MEMORY_LIMIT:-4G}
         reservations:
-          cpus: '0.5'
-          memory: 2G
+          cpus: '${SOLR_CPU_RESERVATION:-0.5}'
+          memory: ${SOLR_MEMORY_RESERVATION:-2G}
     networks:
       - solr_network
     restart: unless-stopped
