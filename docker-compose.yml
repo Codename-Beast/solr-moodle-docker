@@ -56,7 +56,7 @@ services:
     ports:
       # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
       # External access goes through the reverse proxy (nginx/apache) with TLS.
-      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:8983"
+      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
@@ -90,7 +90,7 @@ services:
         - "CMD-SHELL"
         - >-
           curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
-          http://localhost:8983/solr/admin/info/system || exit 1
+          http://localhost:${SOLR_PORT:-8983}/solr/admin/info/system || exit 1
       interval: 15s
       timeout: 10s
       retries: 5
