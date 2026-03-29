@@ -5,7 +5,6 @@
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 **Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.2
 
@@ -178,37 +177,6 @@ Alle Passwoerter stehen in `.env`.
 
 ---
 
-## Sicherheit
-
-- **Binding:** `127.0.0.1` (localhost-only)
-- **BasicAuth:** Solr-Standard
-- **Passwort-Aenderungen:** Automatische Erkennung
-- **Extern erreichbar:** Nur ueber Reverse Proxy (nginx, Apache, Caddy)
-
-**Nginx Reverse Proxy (ungetestet):**
-```nginx
-location /solr/ {
-    proxy_pass http://127.0.0.1:8983/solr/;
-    proxy_set_header Authorization $http_authorization;
-    proxy_pass_header Authorization;
-}
-```
-
----
-
-## Testing
-
-```bash
-# Moodle Document Tests (7 Dokumente, Indexierung + Queries)
-./scripts/test-moodle-documents.sh --keep-documents
-
-# Connectivity mit moodle User
-curl -u moodle:PASSWORD http://localhost:8983/solr/moodle_core/admin/ping
-# → {"status":"OK"}
-```
-
----
-
 ## Troubleshooting
 
 ### Setup neu starten:
@@ -222,7 +190,6 @@ docker compose up -d
 ```bash
 docker compose logs solr-init    # Init-Container
 docker compose logs solr         # Solr
-docker compose logs solr         # Solr (nochmal fuer Details)
 ```
 
 ### Permissions:
@@ -257,37 +224,6 @@ ansible-playbook -i inventory examples/install_solr.yml
 ```
 
 Die Rolle clont dieses Repo automatisch, schreibt `.env` und startet den Stack.
-
----
-
-## Architecture
-
-### Service Flow:
-```
-1. moodle_setup (profile: setup)
-   └─> Generiert .env mit Passwoertern
-
-2. solr-init (Dockerfile)
-   └─> Laedt .env, erstellt security.json, Cores
-   └─> Setzt Permissions (8983:8983)
-
-3. solr (Hauptservice)
-   └─> Wartet auf init, startet mit BasicAuth
-```
-
-### Volumes:
-- `solr_data_<instance>` - Solr Index + Config + security.json
-
-### Networks:
-- `<instance>_network` - Bridge Network
-
----
-
-## CI/CD
-
-Tests laufen automatisch bei Push — GitHub Actions und GitLab CI.
-
-Doku: [docs/CI-CD.md](docs/CI-CD.md)
 
 ---
 
