@@ -73,18 +73,24 @@
   <query>
     <maxBooleanClauses>${solr.max.booleanClauses:2048}</maxBooleanClauses>
 
-    <!-- Cache Configuration - Single-Core optimized -->
+    <!-- Cache Configuration
+         Sizes are controlled via Solr system properties (-D flags in SOLR_OPTS).
+         Ansible variable solr_filter_cache_size  → -Dsolr.filterCache.size=N
+         Ansible variable solr_query_cache_size   → -Dsolr.queryResultCache.size=N
+         Ansible variable solr_document_cache_size → -Dsolr.documentCache.size=N
+         Defaults (512) are suitable for single-core with 2g heap.
+         Multi-core: reduce per-core values (e.g. 256) to share heap. -->
     <filterCache class="solr.CaffeineCache"
-                 size="512"
-                 initialSize="512"
+                 size="${solr.filterCache.size:512}"
+                 initialSize="${solr.filterCache.size:512}"
                  autowarmCount="128"/>
     <queryResultCache class="solr.CaffeineCache"
-                      size="512"
-                      initialSize="512"
+                      size="${solr.queryResultCache.size:512}"
+                      initialSize="${solr.queryResultCache.size:512}"
                       autowarmCount="128"/>
     <documentCache class="solr.CaffeineCache"
-                   size="512"
-                   initialSize="512"
+                   size="${solr.documentCache.size:512}"
+                   initialSize="${solr.documentCache.size:512}"
                    autowarmCount="0"/>
     <cache name="perSegFilter"
            class="solr.CaffeineCache"
