@@ -85,10 +85,8 @@ GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 # NOTES=<additional notes>
 EOF
 
-# Allow docker group to read .env — required for non-root docker compose runs.
-# Passwords are protected: world access is denied (mode 640).
-chmod 640 "${ENV_FILE}"
-chgrp docker "${ENV_FILE}" 2>/dev/null || true
+# Only root should read .env — it contains plaintext passwords.
+chmod 600 "${ENV_FILE}"
 
 echo "Created ${ENV_FILE}"
 echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
