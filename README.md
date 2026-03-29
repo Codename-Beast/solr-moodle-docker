@@ -47,9 +47,29 @@ Zugangsdaten: `.env` im Root-Verzeichnis
 
 ## Reverse Proxy
 
-```bash
-Comming Soon
+Solr laeuft auf `127.0.0.1:8983` — extern nur ueber Reverse Proxy erreichbar.
+
+**Nginx:**
+```nginx
+location /solr/ {
+    proxy_pass http://127.0.0.1:8983/solr/;
+    proxy_set_header Authorization $http_authorization;
+    proxy_pass_header Authorization;
+}
 ```
+
+**Apache:**
+```apache
+ProxyPass "/solr" "http://127.0.0.1:8983/solr"
+ProxyPassReverse "/solr" "http://127.0.0.1:8983/solr"
+```
+
+**Caddy:**
+```
+reverse_proxy /solr/* localhost:8983
+```
+
+Fuer produktiven Einsatz mit TLS, IP-Whitelist und Kollisionserkennung: [ansible-role-solr](https://github.com/Codename-Beast/ansible-role-solr).
 
 ---
 
@@ -229,41 +249,23 @@ docker compose exec solr solr create -c <core_name>
 
 ## Ansible Integration
 
-Fuer produktiven Einsatz: [ansible-role-solr](https://github.com/Codename-Beast/ansible-role-solr) (getestet, idempotent, mit Smoke-Tests).
-
-Minimal-Beispiel (nicht getestet):
+Fuer produktiven Einsatz (idempotent, mit Smoke-Tests, Proxy, Moodle-Integration):
+**[ansible-role-solr](https://github.com/Codename-Beast/ansible-role-solr)**
 
 ```yaml
-- name: Deploy Solr for Moodle
-  hosts: solr_servers
-  tasks:
-    - name: Sync Files
-      synchronize:
-        src: solr-docker-nativ/
-        dest: /opt/solr/
-        rsync_opts:
-          - "--exclude=.git"
-          - "--exclude=backup"
-
-    - name: Generate .env
-      docker_compose:
-        project_src: /opt/solr
-        files: docker-compose.yml
-        profiles: setup
-
-    - name: Start Solr
-      docker_compose:
-        project_src: /opt/solr
-        files: docker-compose.yml
-        state: present
-
-    - name: Start Monitoring (optional)
-      docker_compose:
-        project_src: /opt/solr
-        files: docker-compose.yml
-        profiles: monitoring
-        state: present
+# inventory/host_vars/moodle-server.yml
+solr_instance_name: "eledia-solr"
+solr_port:          8983
+solr_heap:          "2g"
+solr_core_name:     "moodle_core"
 ```
+
+```bash
+ansible-playbook -i inventory examples/install_solr.yml
+# Credentials werden am Ende ausgegeben — in host_vars speichern
+```
+
+Die Rolle clont dieses Repo automatisch, schreibt `.env` und startet den Stack.
 
 ---
 
