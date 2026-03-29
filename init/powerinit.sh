@@ -273,7 +273,7 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
       { "name": "schema-edit",     "role": ["admin", "moodle"] },
       { "name": "read",            "role": ["admin", "support", "moodle"] },
       { "name": "update",          "role": ["admin", "moodle"] },
-      { "name": "config-read",     "role": ["admin", "support"] },
+      { "name": "config-read",     "role": ["admin", "support", "moodle"] },
       { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
       { "name": "core-admin-edit", "role": ["admin", "support", "moodle"] },
       { "name": "all",             "role": "admin" }

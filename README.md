@@ -1,19 +1,19 @@
 # Solr fuer Moodle
 
-[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.1)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
-![Version](https://img.shields.io/badge/version-2.3.1-blue)
+[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.2)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
+![Version](https://img.shields.io/badge/version-2.3.2-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.1
+**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.2
 
 **Solr 9.10.1** | **Moodle 4.1–5.x** | **Debian 12/13**
 
 Docker-Stack fuer Solr + Moodle Global Search. Setup generiert `.env` mit sicheren Passwoertern, Init-Container erledigt den Rest (Cores, security.json, Permissions).
 
-> v2.3.1 | CVE-Fix Solr 9.10.1, Multi-Core, Security Hardening
+> v2.3.2 | config-read Fix fuer Moodle, Resource Limits aus .env, chmod 600
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
@@ -113,18 +113,9 @@ Cores werden automatisch erstellt/geloescht beim Restart.
 
 ## Monitoring (Optional)
 
-```bash
-# Prometheus + Grafana:
-docker compose --profile monitoring up -d
+Prometheus + Grafana Monitoring wird in einer spaeteren Version unterstuetzt.
 
-# Nur Prometheus:
-docker compose up -d solr prometheus
-```
-
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (Login: admin/admin)
-
-50 Solr-Metriken (Core Performance, JVM, HTTP, Cache).
+Fuer produktiven Betrieb mit Metriken: [ansible-role-solr](https://github.com/Codename-Beast/ansible-role-solr).
 
 ---
 
@@ -231,7 +222,7 @@ docker compose up -d
 ```bash
 docker compose logs solr-init    # Init-Container
 docker compose logs solr         # Solr
-docker compose logs prometheus   # Monitoring
+docker compose logs solr         # Solr (nochmal fuer Details)
 ```
 
 ### Permissions:
@@ -277,21 +268,15 @@ Die Rolle clont dieses Repo automatisch, schreibt `.env` und startet den Stack.
    └─> Generiert .env mit Passwoertern
 
 2. solr-init (Dockerfile)
-   └─> Laedt .env, erstellt security.json, Cores, prometheus.yml
+   └─> Laedt .env, erstellt security.json, Cores
    └─> Setzt Permissions (8983:8983)
 
 3. solr (Hauptservice)
    └─> Wartet auf init, startet mit BasicAuth
-
-4. prometheus + grafana (profile: monitoring, optional)
-   └─> Metrics-Scraping von Solr
 ```
 
 ### Volumes:
 - `solr_data_<instance>` - Solr Index + Config + security.json
-- `prometheus_data_<instance>` - Prometheus TSDB
-- `prometheus_config_<instance>` - Prometheus Config
-- `grafana_data_<instance>` - Grafana Dashboards
 
 ### Networks:
 - `<instance>_network` - Bridge Network
@@ -310,7 +295,7 @@ Doku: [docs/CI-CD.md](docs/CI-CD.md)
 
 **Developer:** BSC Bernd Schreistetter
 **Company:** Eledia.de
-**Version:** v2.3.1
+**Version:** v2.3.2
 
 - [Apache Solr Documentation](https://solr.apache.org/guide/)
 - [Moodle Global Search](https://docs.moodle.org/en/Global_search)

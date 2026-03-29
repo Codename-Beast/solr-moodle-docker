@@ -4,9 +4,15 @@
 
 ## [2.3.2] — 2026-03-30
 
+### Behoben
+- **`config-read` Permission auf `["admin", "support", "moodle"]` erweitert** — behebt `is_server_ready()` 403-Fehler in Moodle 4.x
+  - Betrifft: `init/security.json.template` und `init/powerinit.sh` (Fallback-Permissions)
+  - Root cause: analog zu v2.3.0-Fix in generate_env.sh, aber init-Templates waren noch nicht aktualisiert
+
 ### Geaendert
 - `docker-compose.yml`: Resource Limits (`cpus`, `memory`) werden aus `.env` gelesen statt hardcoded (`${SOLR_CPU_LIMIT:-2}` etc.)
 - `init/generate_env.sh`: `.env` wird mit `chmod 600` erstellt (nur root lesbar), `chgrp docker` entfernt
+- `README.md`: Versionsreferenzen auf v2.3.2, Monitoring-Abschnitt korrigiert (Services nicht im Stack)
 
 ---
 
