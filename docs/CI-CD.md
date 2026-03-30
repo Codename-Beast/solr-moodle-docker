@@ -1,6 +1,6 @@
 # CI/CD Pipeline
 
-Automatisierte Tests für Solr-Moodle-Docker bei jedem Push.
+Tests laufen bei jedem Push — GitHub Actions und GitLab CI.
 
 ---
 
@@ -9,25 +9,24 @@ Automatisierte Tests für Solr-Moodle-Docker bei jedem Push.
 ### Quick Start
 
 ```bash
-# .gitlab-ci.yml ist bereits konfiguriert
-# Pushe einfach zu GitLab:
+# .gitlab-ci.yml liegt schon im Repo
 git push gitlab develop
 ```
 
-### Was wird getestet?
+### Was getestet wird
 
-- Syntax & Struktur-Validierung
+- Syntax & Struktur
 - Container-Build
 - Unit Tests (Dateistruktur, Permissions)
-- Integration Tests (Container-Startup, Health-Checks)
-- Security Tests (Authentifizierung, Permissions)
+- Integration Tests (Startup, Health-Checks)
+- Security Tests (Auth, Permissions)
 - Moodle Document Tests (Indexierung, Queries)
-- Custom Core-Namen Feature (Matrix-Tests mit verschiedenen Core-Namen)
+- Custom Core-Namen (Matrix-Tests)
 
-### Setup-Anleitungen
+### Setup
 
-- [GitLab Quick Start (5 Min)](GITLAB-QUICKSTART.md) - Für GitLab.com
-- [Vollständige Anleitung](GITLAB-CI-CD-SETUP.md) - Für Self-Hosted GitLab
+- [GitLab Quick Start (5 Min)](GITLAB-QUICKSTART.md) — fuer GitLab.com
+- [Vollstaendige Anleitung](GITLAB-CI-CD-SETUP.md) — fuer Self-Hosted
 
 ### Pipeline Badge
 
@@ -37,28 +36,13 @@ git push gitlab develop
 
 ---
 
-## GitHub Actions (Alternative)
+## GitHub Actions
 
-Falls du GitHub verwendest, ist bereits eine Workflow-Datei vorhanden:
-[.github/workflows/solr-testing.yml](../.github/workflows/solr-testing.yml)
+Workflow: [.github/workflows/solr-testing.yml](../.github/workflows/solr-testing.yml)
 
-### Tests werden automatisch ausgeführt bei:
+Laeuft automatisch bei Push/PR auf `main` oder `develop`.
 
-- Push auf `main` oder `develop` Branches
-- Pull Requests auf `main` oder `develop`
-
-### Workflow-Schritte
-
-1. Environment Setup (Ubuntu + Docker)
-2. Generate `.env` file
-3. Build init container
-4. Start Solr containers
-5. Wait for health check
-6. Run unit tests
-7. Run integration tests
-8. Run security tests
-9. Run Moodle document tests
-10. Cleanup
+Ablauf: Environment Setup → `.env` generieren → Init-Container bauen → Solr starten → Health-Check → Unit/Integration/Security/Moodle Tests → Cleanup.
 
 ---
 
@@ -66,66 +50,49 @@ Falls du GitHub verwendest, ist bereits eine Workflow-Datei vorhanden:
 
 ### GitLab CI/CD
 
-Die Pipeline ist definiert in `.gitlab-ci.yml` und benötigt:
-- Docker-fähige Runner
-- Runner-Tag: `docker`
+Pipeline in `.gitlab-ci.yml`. Braucht:
+- Docker-faehige Runner (Tag: `docker`)
 - Mindestens 4 GB RAM
 
 ### GitHub Actions
 
-Verwendet `ubuntu-latest` Runner mit vorinstalliertem Docker.
-Keine zusätzliche Konfiguration erforderlich.
+`ubuntu-latest` mit Docker. Keine Extra-Konfiguration.
 
 ### Matrix-Tests
 
-Beide CI-Systeme (GitLab und GitHub Actions) führen Tests parallel mit verschiedenen Core-Namen aus:
+Beide Systeme testen parallel mit verschiedenen Core-Namen:
 - `moodle_core` (Standard)
-- `custom_test_core` (Test für custom Core-Namen Feature)
-
-Dies stellt sicher, dass das optionale SOLR_CORE_NAME Parameter beim Setup korrekt funktioniert.
+- `custom_test_core` (Custom-Core-Feature)
 
 ---
 
 ## Lokale Tests
 
-Du kannst die Tests auch lokal ausführen:
-
 ```bash
-# Setup mit Standard Core-Namen
+# Setup
 docker compose --profile setup up moodle_setup
 docker compose up -d
 
-# Unit Tests
+# Einzeln
 ./scripts/run-tests.sh --unit-only
-
-# Integration Tests
 ./scripts/run-tests.sh --integration-only
-
-# Security Tests
 ./scripts/run-tests.sh --security-only
-
-# Moodle Document Tests
 ./scripts/test-moodle-documents.sh
 
-# Alle Tests
+# Alles
 ./scripts/run-tests.sh
 
-# Cleanup
+# Aufraeumen
 docker compose down -v
 rm -f .env
 ```
 
-### Lokale Tests mit custom Core-Namen
+### Mit custom Core-Namen
 
 ```bash
-# Setup mit custom Core-Namen
 SOLR_CORE_NAME=test_core docker compose --profile setup up moodle_setup
 docker compose up -d
-
-# Tests ausführen
 ./scripts/run-tests.sh
-
-# Cleanup
 docker compose down -v
 rm -f .env
 ```
@@ -134,17 +101,11 @@ rm -f .env
 
 ## Troubleshooting
 
-### Pipeline schlägt fehl bei "Generate .env"
+**"Generate .env" schlaegt fehl:** `moodle_setup` Service in `docker-compose.yml` pruefen.
 
-Stelle sicher, dass das `moodle_setup` Service korrekt definiert ist in `docker-compose.yml`.
+**Tests erreichen Solr nicht:** Healthcheck-Config pruefen, Solr braucht etwas bis es antwortet.
 
-### Tests können Solr nicht erreichen
-
-Überprüfe die Healthcheck-Konfiguration und stelle sicher, dass Solr vollständig gestartet ist.
-
-### Permission Denied Fehler
-
-Stelle sicher, dass die Test-Scripts ausführbar sind:
+**Permission Denied:**
 ```bash
 chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
 ```
@@ -153,7 +114,4 @@ chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
 
 ## Support
 
-Bei Problemen mit der CI/CD Pipeline:
-1. Überprüfe die Pipeline-Logs
-2. Teste lokal mit den Skripten
-3. Erstelle ein Issue auf GitHub/GitLab
+Pipeline-Logs anschauen, lokal testen, Issue auf GitHub/GitLab erstellen.

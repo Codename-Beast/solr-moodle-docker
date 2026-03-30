@@ -2,7 +2,7 @@
 # Solr for Moodle
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.2
+# Version: v2.3.2
 # =========================================
 
 services:
@@ -17,6 +17,7 @@ services:
     volumes:
       - ./init:/init:ro,z
       - ./:/app:z
+      - /var/run/docker.sock:/var/run/docker.sock:ro,z
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
@@ -30,12 +31,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: solr-init:v2.2
+    image: solr-init:v2.3.2
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:
       - solr_data:/var/solr/data:z
-      - prometheus_config:/prometheus-config:z
       - ./.env:/.env:ro,z
     env_file:
       - .env
@@ -48,13 +48,15 @@ services:
   # Main service
   # =================================
   solr:
-    image: solr:${SOLR_VERSION:-9.10.0}
+    image: solr:${SOLR_VERSION:-9.10.1}
     container_name: ${INSTANCE_NAME:-solr}-solr
     depends_on:
       solr-init:
         condition: service_completed_successfully
     ports:
-      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:8983"
+      # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
+      # External access goes through the reverse proxy (nginx/apache) with TLS.
+      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
@@ -70,11 +72,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 4G
+          cpus: '${SOLR_CPU_LIMIT:-2}'
+          memory: ${SOLR_MEMORY_LIMIT:-4G}
         reservations:
-          cpus: '0.5'
-          memory: 2G
+          cpus: '${SOLR_CPU_RESERVATION:-0.5}'
+          memory: ${SOLR_MEMORY_RESERVATION:-2G}
     networks:
       - solr_network
     restart: unless-stopped
@@ -88,92 +90,11 @@ services:
         - "CMD-SHELL"
         - >-
           curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
-          http://localhost:8983/solr/admin/info/system || exit 1
+          http://localhost:${SOLR_PORT:-8983}/solr/admin/info/system || exit 1
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
-
-  # =================================
-  # [PROMETHEUS] monitoring
-  # =================================
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    profiles: ["monitoring"]
-    container_name: ${INSTANCE_NAME:-solr}-prometheus
-    user: "65534:65534"
-    depends_on:
-      solr:
-        condition: service_healthy
-    ports:
-      - "${PROMETHEUS_BIND:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
-    volumes:
-      - prometheus_data:/prometheus:z
-      - prometheus_config:/etc/prometheus:ro,z
-    env_file:
-      - .env
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.listen-address=:9090"
-      - "--storage.tsdb.retention.time=30d"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    networks:
-      - solr_network
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # =================================
-  # [GRAFANA] visualization
-  # =================================
-  grafana:
-    image: grafana/grafana:11.3.2
-    profiles: ["monitoring"]
-    container_name: ${INSTANCE_NAME:-solr}-grafana
-    depends_on:
-      prometheus:
-        condition: service_started
-    ports:
-      - "${GRAFANA_BIND:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
-    env_file:
-      - .env
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
-      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
-    volumes:
-      - grafana_data:/var/lib/grafana:z
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
-    networks:
-      - solr_network
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
 # =================================
 # Volumes
@@ -181,12 +102,6 @@ services:
 volumes:
   solr_data:
     name: solr_data_${INSTANCE_NAME:-solr}
-  prometheus_data:
-    name: prometheus_data_${INSTANCE_NAME:-solr}
-  prometheus_config:
-    name: prometheus_config_${INSTANCE_NAME:-solr}
-  grafana_data:
-    name: grafana_data_${INSTANCE_NAME:-solr}
 
 # =================================
 # Network

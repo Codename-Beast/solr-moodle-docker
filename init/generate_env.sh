@@ -11,8 +11,8 @@ set -eu
 TARGET_DIR="/app"
 ENV_FILE="${TARGET_DIR}/.env"
 
-# Helper: generate random 32-char secret
-rand() { openssl rand -hex 16; }
+# Helper: generate random 32-char secret (alphanumeric, high entropy)
+rand() { openssl rand -base64 36 | tr -d '/+=' | head -c 32; }
 
 # Ensure directory exists
 mkdir -p "${TARGET_DIR}"
@@ -26,13 +26,12 @@ if [ -f "${ENV_FILE}" ]; then
 fi
 
 # Dependencies
-apk add --no-cache openssl >/dev/null 2>&1
+apk add --no-cache openssl >/dev/null
 
 # Generate random passwords
 ADMIN_PASS="$(rand)"
 SUPPORT_PASS="$(rand)"
 MOODLE_PASS="$(rand)"
-GRAFANA_PASS="$(rand)"
 
 # Write .env file
 cat > "${ENV_FILE}" <<EOF
@@ -43,7 +42,7 @@ cat > "${ENV_FILE}" <<EOF
 INSTANCE_NAME=${INSTANCE_NAME:-solr}
 
 # Solr
-SOLR_VERSION=9.10.0
+SOLR_VERSION=9.10.1
 SOLR_PORT=8983
 SOLR_BIND=127.0.0.1
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
@@ -62,15 +61,11 @@ SOLR_SUPPORT_PASSWORD=${SUPPORT_PASS}
 SOLR_MOODLE_USER=moodle
 SOLR_MOODLE_PASSWORD=${MOODLE_PASS}
 
-# Monitoring (v1.5)
-MONITORING_BIND_IP=127.0.0.1
-SOLR_METRICS_PORT=9854
-PROMETHEUS_PORT=9090
-PROMETHEUS_BIND=127.0.0.1
-GRAFANA_PORT=3000
-GRAFANA_BIND=127.0.0.1
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
+# Docker resource limits
+SOLR_CPU_LIMIT=2
+SOLR_MEMORY_LIMIT=4G
+SOLR_CPU_RESERVATION=0.5
+SOLR_MEMORY_RESERVATION=2G
 
 # =========================================
 # Info / Documentation (not used in code)
@@ -79,9 +74,16 @@ GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 # NOTES=<additional notes>
 EOF
 
-# Set permissions for host user readability
-# Use 644 for CI/CD compatibility (read for all, write for owner only)
-chmod 644 "${ENV_FILE}"
+# .env: root-owned, docker-group-readable (640)
+# Anyone in the docker group (required to run docker compose) can read it.
+DOCKER_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo "0")
+if [ "$DOCKER_GID" != "0" ]; then
+  chown "root:${DOCKER_GID}" "${ENV_FILE}"
+  chmod 640 "${ENV_FILE}"
+else
+  # Fallback: only root (e.g. rootless Docker)
+  chmod 600 "${ENV_FILE}"
+fi
 
 echo "Created ${ENV_FILE}"
 echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
