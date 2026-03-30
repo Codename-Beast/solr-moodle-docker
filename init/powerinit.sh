@@ -6,8 +6,6 @@
 
 set -euo pipefail
 
-apk add --no-cache openssl coreutils >/dev/null 2>&1
-
 DATA_DIR="/var/solr/data"
 CORE_NAME="${SOLR_CORE_NAME:-moodle_core}"
 
