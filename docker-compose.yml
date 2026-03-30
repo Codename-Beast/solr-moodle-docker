@@ -17,6 +17,7 @@ services:
     volumes:
       - ./init:/init:ro,z
       - ./:/app:z
+      - /var/run/docker.sock:/var/run/docker.sock:ro,z
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
