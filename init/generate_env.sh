@@ -77,6 +77,13 @@ EOF
 # Only root should read .env — it contains plaintext passwords.
 chmod 600 "${ENV_FILE}"
 
+# Transfer ownership to host user (volume owner) so docker compose can read .env
+HOST_UID=$(stat -c %u /app)
+HOST_GID=$(stat -c %g /app)
+if [ "$HOST_UID" != "0" ]; then
+  chown "${HOST_UID}:${HOST_GID}" "${ENV_FILE}"
+fi
+
 echo "Created ${ENV_FILE}"
 echo "Owner (uid:gid): $(stat -c '%u:%g' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
 echo "Permissions: $(stat -c '%A' "${ENV_FILE}" 2>/dev/null || echo 'n/a')"
