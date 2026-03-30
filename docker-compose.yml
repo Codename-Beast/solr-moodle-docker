@@ -30,7 +30,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: solr-init:v2.3
+    image: solr-init:v2.3.2
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:
