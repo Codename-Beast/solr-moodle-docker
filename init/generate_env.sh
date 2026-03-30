@@ -74,14 +74,15 @@ SOLR_MEMORY_RESERVATION=2G
 # NOTES=<additional notes>
 EOF
 
-# Only root should read .env — it contains plaintext passwords.
-chmod 600 "${ENV_FILE}"
-
-# Transfer ownership to host user (volume owner) so docker compose can read .env
-HOST_UID=$(stat -c %u /app)
-HOST_GID=$(stat -c %g /app)
-if [ "$HOST_UID" != "0" ]; then
-  chown "${HOST_UID}:${HOST_GID}" "${ENV_FILE}"
+# .env: root-owned, docker-group-readable (640)
+# Anyone in the docker group (required to run docker compose) can read it.
+DOCKER_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo "0")
+if [ "$DOCKER_GID" != "0" ]; then
+  chown "root:${DOCKER_GID}" "${ENV_FILE}"
+  chmod 640 "${ENV_FILE}"
+else
+  # Fallback: only root (e.g. rootless Docker)
+  chmod 600 "${ENV_FILE}"
 fi
 
 echo "Created ${ENV_FILE}"
