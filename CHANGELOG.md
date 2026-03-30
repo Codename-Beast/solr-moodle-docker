@@ -5,6 +5,8 @@
 ## [2.3.2] — 2026-03-30
 
 ### Behoben
+- `init/security.json.template` + `init/powerinit.sh`: `/admin/metrics` explizite Path-Permission fuer Support-User ergaenzt (403-Fix)
+- `init/generate_env.sh`: `.env` Ownership an Host-User uebergeben (docker compose ohne sudo)
 - **`config-read` Permission auf `["admin", "support", "moodle"]` erweitert** — behebt `is_server_ready()` 403-Fehler in Moodle 4.x
   - Betrifft: `init/security.json.template` und `init/powerinit.sh` (Fallback-Permissions)
   - Root cause: analog zu v2.3.0-Fix in generate_env.sh, aber init-Templates waren noch nicht aktualisiert
