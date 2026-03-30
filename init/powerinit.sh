@@ -1,31 +1,10 @@
 #!/bin/bash
-# =========================================
-# /init/powerinit.sh - Solr Runtime Initialization
-# =========================================
-# This script handles all RUNTIME operations that depend on:
-# - Environment variables (loaded at container start)
-# - Volume-mounted data (persistent storage)
-# - Dynamic configuration (passwords, cores, etc.)
-#
-# BUILD-TIME operations (handled in Dockerfile):
-# ✓ Package installation (openssl, coreutils, bash, curl, etc.)
-# ✓ Directory creation (/config, /init, /var/solr/data, etc.)
-# ✓ File copying (config/, security.json.template)
-# ✓ Static permissions (executable bits on scripts)
-#
-# RUNTIME operations (handled by this script):
-# → Load and validate environment variables from .env files
-# → Generate secure passwords (if not provided)
-# → Create Solr BasicAuth hashes (double SHA256)
-# → Generate/update security.json with runtime credentials
-# → Manage Solr cores dynamically (create/rename/delete)
-# → Generate Prometheus config with plaintext credentials
-# → Set file permissions on mounted volumes (chown 8983:8983)
-# → Detect password changes and regenerate configs
-# → Filesystem sync before Solr starts
-# =========================================
+# /init/powerinit.sh
+#   - Initialize Solr data directory (security.json, Moodle core)
+#   - Keep passwords stable across restarts
+#   - Load from external .env if provided
 
-set -eu
+set -euo pipefail
 
 DATA_DIR="/var/solr/data"
 CORE_NAME="${SOLR_CORE_NAME:-moodle_core}"
@@ -45,11 +24,8 @@ esac
 CONF_SRC="/config"
 CORE_DIR="${DATA_DIR}/${CORE_NAME}"
 CORE_CONF="${CORE_DIR}/conf"
-PROM_CFG_DIR="/prometheus-config"
-PROM_CFG_FILE="${PROM_CFG_DIR}/prometheus.yml"
 ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 ENV_FILE_VOLUME="${DATA_DIR}/.env"
-REALM_NAME="Eledia Moodle Search"
 
 # Validate that config source directory exists
 if [ ! -d "$CONF_SRC" ]; then
@@ -161,7 +137,7 @@ hash_solr_basic_auth() {
 
 #Helper: generate secure password ---
 generate_secure_password() {
-  openssl rand -hex 16
+  openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }
 
 #Load or generate defaults ---
@@ -272,25 +248,33 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
   "authentication": {
     "blockUnknown": true,
     "class": "solr.BasicAuthPlugin",
-    "realm": "Eledia",
     "credentials": {
       "${ADMIN_USER}": "${ADMIN_CRED}",
       "${SUPPORT_USER}": "${SUPPORT_CRED}",
       "${MOODLE_USER}": "${MOODLE_CRED}"
-    }
+    },
+    "realm": "Eledia",
+    "forwardCredentials": false
   },
   "authorization": {
     "class": "solr.RuleBasedAuthorizationPlugin",
+    "permissions": [
+      { "name": "health",          "role": ["admin", "support", "moodle"] },
+      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "schema-edit",     "role": ["admin", "moodle"] },
+      { "name": "read",            "role": ["admin", "support", "moodle"] },
+      { "name": "update",          "role": ["admin", "moodle"] },
+      { "name": "config-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "metrics-read",    "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin"] },
+      { "name": "all",             "role": "admin" }
+    ],
     "user-role": {
       "${ADMIN_USER}": ["admin"],
       "${SUPPORT_USER}": ["support"],
       "${MOODLE_USER}": ["moodle"]
-    },
-    "permissions": [
-      { "name": "all", "role": "admin" },
-      { "name": "read", "role": ["support", "moodle"] },
-      { "name": "update", "role": "moodle" }
-    ]
+    }
   }
 }
 EOF
@@ -441,39 +425,6 @@ fi
 echo "$CURRENT_CORES" > "$CORE_STATE_FILE"
 chmod 600 "$CORE_STATE_FILE"
 chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
-
-# -------------------------------------------------------------------
-# Generate Prometheus config into mounted volume
-# -------------------------------------------------------------------
-# NOTE: Prometheus requires plaintext credentials in config file.
-# This is a Prometheus limitation. File is protected with 600 permissions.
-# Alternative: Use Prometheus with external secret management or OAuth proxy.
-mkdir -p "${PROM_CFG_DIR}" 2>/dev/null || true
-chmod 755 "${PROM_CFG_DIR}" 2>/dev/null || true
-if touch "${PROM_CFG_FILE}" 2>/dev/null; then
-  cat > "${PROM_CFG_FILE}" <<EOF
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-scrape_configs:
-  - job_name: solr
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /solr/admin/metrics
-    params:
-      wt: ["prometheus"]
-    basic_auth:
-      username: "${SUPPORT_USER}"
-      password: "${SUPPORT_PASS_PLAIN}"
-    static_configs:
-      - targets: ["solr:8983"]
-EOF
-  chmod 600 "${PROM_CFG_FILE}" 2>/dev/null || true
-  chown 65534:65534 "${PROM_CFG_FILE}" 2>/dev/null || true
-  chown 65534:65534 "${PROM_CFG_DIR}" 2>/dev/null || true
-  echo "✓ Prometheus config created"
-fi
 
 #Fix file permissions
 echo "→ Fixing permissions..."
