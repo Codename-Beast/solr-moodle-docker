@@ -3,7 +3,7 @@ FROM alpine:3.20@sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e
 # Solr Init Container
 # Developer: BSC Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.3
+# Version: v2.3.2
 # Fix CVE-2025-26519
 # =========================================
 # Update musl to fix CVE-2025-26519

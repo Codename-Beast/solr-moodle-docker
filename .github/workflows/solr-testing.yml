@@ -2,9 +2,9 @@ name: Solr Test Suite
 
 on:
   push:
-    branches: [main, develop, develop22]
+    branches: [main, develop, develop22, "feature/*", "fix/*"]
   pull_request:
-    branches: [main, develop, develop22]
+    branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
@@ -176,31 +176,27 @@ jobs:
           docker compose down -v
           rm -f .env
 
-          cat > .env <<'EOF'
-          INSTANCE_NAME=solr
-          SOLR_VERSION=9.10.1
-          SOLR_PORT=8983
-          SOLR_BIND=127.0.0.1
-          SOLR_CORE_NAME=test_auto_core
-          SOLR_CORES=
-          SOLR_HEAP=2g
-          SOLR_LOG_LEVEL=INFO
-          SOLR_NETWORK_NAME=solr_network
-          SOLR_ADMIN_USER=admin
-          SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN
-          SOLR_SUPPORT_USER=support
-          SOLR_SUPPORT_PASSWORD=
-          SOLR_MOODLE_USER=moodle
-          SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD
-          MONITORING_BIND_IP=127.0.0.1
-          SOLR_METRICS_PORT=9854
-          PROMETHEUS_PORT=9090
-          PROMETHEUS_BIND=127.0.0.1
-          GRAFANA_PORT=3000
-          GRAFANA_BIND=127.0.0.1
-          GRAFANA_ADMIN_USER=admin
-          GRAFANA_ADMIN_PASSWORD=admin
-          EOF
+          printf '%s\n' \
+            'INSTANCE_NAME=solr' \
+            'SOLR_VERSION=9.10.1' \
+            'SOLR_PORT=8983' \
+            'SOLR_BIND=127.0.0.1' \
+            'SOLR_CORE_NAME=test_auto_core' \
+            'SOLR_CORES=' \
+            'SOLR_HEAP=2g' \
+            'SOLR_LOG_LEVEL=INFO' \
+            'SOLR_NETWORK_NAME=solr_network' \
+            'SOLR_ADMIN_USER=admin' \
+            'SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN' \
+            'SOLR_SUPPORT_USER=support' \
+            'SOLR_SUPPORT_PASSWORD=' \
+            'SOLR_MOODLE_USER=moodle' \
+            'SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD' \
+            'SOLR_CPU_LIMIT=2' \
+            'SOLR_MEMORY_LIMIT=4G' \
+            'SOLR_CPU_RESERVATION=0.5' \
+            'SOLR_MEMORY_RESERVATION=2G' \
+            > .env
 
           docker compose build solr-init
           docker compose up -d
@@ -232,31 +228,27 @@ jobs:
           echo "Testing dynamic core management..."
           rm -f .env
 
-          cat > .env <<'EOF'
-          INSTANCE_NAME=solr
-          SOLR_VERSION=9.10.1
-          SOLR_PORT=8983
-          SOLR_BIND=127.0.0.1
-          SOLR_CORE_NAME=
-          SOLR_CORES=test_core1,test_core2
-          SOLR_HEAP=2g
-          SOLR_LOG_LEVEL=INFO
-          SOLR_NETWORK_NAME=solr_network
-          SOLR_ADMIN_USER=admin
-          SOLR_ADMIN_PASSWORD=test123
-          SOLR_SUPPORT_USER=support
-          SOLR_SUPPORT_PASSWORD=test123
-          SOLR_MOODLE_USER=moodle
-          SOLR_MOODLE_PASSWORD=test123
-          MONITORING_BIND_IP=127.0.0.1
-          SOLR_METRICS_PORT=9854
-          PROMETHEUS_PORT=9090
-          PROMETHEUS_BIND=127.0.0.1
-          GRAFANA_PORT=3000
-          GRAFANA_BIND=127.0.0.1
-          GRAFANA_ADMIN_USER=admin
-          GRAFANA_ADMIN_PASSWORD=admin
-          EOF
+          printf '%s\n' \
+            'INSTANCE_NAME=solr' \
+            'SOLR_VERSION=9.10.1' \
+            'SOLR_PORT=8983' \
+            'SOLR_BIND=127.0.0.1' \
+            'SOLR_CORE_NAME=' \
+            'SOLR_CORES=test_core1,test_core2' \
+            'SOLR_HEAP=2g' \
+            'SOLR_LOG_LEVEL=INFO' \
+            'SOLR_NETWORK_NAME=solr_network' \
+            'SOLR_ADMIN_USER=admin' \
+            'SOLR_ADMIN_PASSWORD=test123' \
+            'SOLR_SUPPORT_USER=support' \
+            'SOLR_SUPPORT_PASSWORD=test123' \
+            'SOLR_MOODLE_USER=moodle' \
+            'SOLR_MOODLE_PASSWORD=test123' \
+            'SOLR_CPU_LIMIT=2' \
+            'SOLR_MEMORY_LIMIT=4G' \
+            'SOLR_CPU_RESERVATION=0.5' \
+            'SOLR_MEMORY_RESERVATION=2G' \
+            > .env
 
           docker compose build solr-init
           docker compose up -d
