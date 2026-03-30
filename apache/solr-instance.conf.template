@@ -1,0 +1,67 @@
+# =========================================
+# Apache VirtualHost for Solr Instance
+# =========================================
+# Template for proxying to a Solr Docker instance
+#
+# Installation:
+#   1. Copy this file: sudo cp solr-instance.conf.template /etc/apache2/sites-available/solr-INSTANCENAME.conf
+#   2. Replace all placeholders (see below)
+#   3. Enable: sudo a2ensite solr-INSTANCENAME.conf
+#   4. Test: sudo apache2ctl configtest
+#   5. Reload: sudo systemctl reload apache2
+#
+# Placeholders to replace:
+#   {{INSTANCE_NAME}}  - Instance identifier (e.g., kunde-a, produktion)
+#   {{HOSTNAME}}       - Full hostname (e.g., solr-kunde-a.example.com)
+#   {{SOLR_PORT}}      - Local Solr port (e.g., 8983, 8984, 8985)
+#   {{ADMIN_EMAIL}}    - Admin email for ServerAdmin
+#
+# =========================================
+
+<VirtualHost *:443>
+    ServerName {{HOSTNAME}}
+    ServerAdmin {{ADMIN_EMAIL}}
+
+    # SSL Configuration - Include shared settings
+    Include conf-available/ssl-common.conf
+
+    # Logging
+    ErrorLog ${APACHE_LOG_DIR}/solr-{{INSTANCE_NAME}}-error.log
+    CustomLog ${APACHE_LOG_DIR}/solr-{{INSTANCE_NAME}}-access.log combined
+
+    # Security Headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Proxy Configuration
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    # WebSocket support (for Solr Admin UI)
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule ^/?(.*) ws://127.0.0.1:{{SOLR_PORT}}/$1 [P,L]
+
+    # Main Proxy
+    ProxyPass / http://127.0.0.1:{{SOLR_PORT}}/
+    ProxyPassReverse / http://127.0.0.1:{{SOLR_PORT}}/
+
+    # Timeout settings for long-running queries
+    ProxyTimeout 300
+    Timeout 300
+
+    # Optional: Restrict access to Solr Admin UI
+    # Uncomment to limit admin access to specific IPs
+    # <Location /solr/admin>
+    #     Require ip 10.0.0.0/8 192.168.0.0/16
+    # </Location>
+</VirtualHost>
+
+# HTTP to HTTPS Redirect
+<VirtualHost *:80>
+    ServerName {{HOSTNAME}}
+    Redirect permanent / https://{{HOSTNAME}}/
+</VirtualHost>

@@ -2,7 +2,7 @@
 # Solr for Moodle
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.3.1
+# Version: v2.3.2
 # =========================================
 
 services:
@@ -17,6 +17,7 @@ services:
     volumes:
       - ./init:/init:ro,z
       - ./:/app:z
+      - /var/run/docker.sock:/var/run/docker.sock:ro,z
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
@@ -30,7 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: solr-init:v2.3
+    image: solr-init:v2.3.2
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:

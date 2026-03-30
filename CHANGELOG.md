@@ -2,6 +2,35 @@
 
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) | [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [2.3.2] — 2026-03-30
+
+### Behoben
+- `init/security.json.template` + `init/powerinit.sh`: `/admin/metrics` explizite Path-Permission fuer Support-User ergaenzt (403-Fix)
+- `init/generate_env.sh`: `.env` Ownership an Host-User uebergeben (docker compose ohne sudo)
+- **`config-read` Permission auf `["admin", "support", "moodle"]` erweitert** — behebt `is_server_ready()` 403-Fehler in Moodle 4.x
+  - Betrifft: `init/security.json.template` und `init/powerinit.sh` (Fallback-Permissions)
+  - Root cause: analog zu v2.3.0-Fix in generate_env.sh, aber init-Templates waren noch nicht aktualisiert
+- **`core-admin-edit` Permission fuer moodle-User entfernt** — Sicherheitsfix, Moodle benoetigt keinen Core-Admin-Schreibzugriff
+  - Betrifft: `init/security.json.template` und `init/powerinit.sh` (Fallback-Permissions)
+- `init/powerinit.sh`: `forwardCredentials: false` in Inline-Fallback ergaenzt (Konsistenz mit security.json.template)
+- `init/powerinit.sh`: Prometheus-Config-Generierungsblock entfernt (toter Code — Volume nicht gemountet)
+- `init/generate_env.sh`: Monitoring-Variablen entfernt (Prometheus/Grafana nicht im Stack)
+- `.env.example`: Monitoring-Variablen entfernt
+- `.github/workflows/solr-testing.yml`: Fuehrende Whitespaces in inline `.env`-Bloecken behoben
+- `docker-compose.yml`: Image-Tag `solr-init:v2.3` → `solr-init:v2.3.2`
+
+### Hinzugefuegt
+- `docs/monitoring.md` — Anleitung fuer Prometheus- und Loki-Integration (Groundwork, kein Service im Stack)
+
+### Geaendert
+- `docker-compose.yml`: Resource Limits (`cpus`, `memory`) werden aus `.env` gelesen statt hardcoded (`${SOLR_CPU_LIMIT:-2}` etc.)
+- `docker-compose.yml`: Prometheus/Grafana/Exporter-Services vollständig entfernt (Breaking Change für bestehende Monitoring-Setups). Integration weiterhin möglich via separater `docker-compose.monitoring.yml` (siehe `docs/monitoring.md`)
+- `.github/workflows/solr-testing.yml`: `feature/*` und `fix/*` Branches zu push-Triggern hinzugefügt
+- `init/generate_env.sh`: `.env` wird mit `chmod 600` erstellt (nur root lesbar), `chgrp docker` entfernt
+- `README.md`: Versionsreferenzen auf v2.3.2, Monitoring-Abschnitt mit Nutzungsanleitung aktualisiert
+
+---
+
 ## [2.3.1] - 2026-03-28
 
 ### Security
@@ -160,5 +189,10 @@
 - Volume persistence
 - Docker Compose profiles for monitoring
 
+[2.3.2]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.1...v2.3.2
+[2.3.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.1.1...v2.2.0
+[2.1.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Codename-Beast/solr-moodle-docker/releases/tag/v2.0.0
