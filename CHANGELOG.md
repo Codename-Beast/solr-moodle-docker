@@ -16,6 +16,8 @@
 
 ### Geaendert
 - `docker-compose.yml`: Resource Limits (`cpus`, `memory`) werden aus `.env` gelesen statt hardcoded (`${SOLR_CPU_LIMIT:-2}` etc.)
+- `docker-compose.yml`: Prometheus/Grafana/Exporter-Services vollständig entfernt (Breaking Change für bestehende Monitoring-Setups). Integration weiterhin möglich via separater `docker-compose.monitoring.yml` (siehe `docs/monitoring.md`)
+- `.github/workflows/solr-testing.yml`: `feature/*` und `fix/*` Branches zu push-Triggern hinzugefügt
 - `init/generate_env.sh`: `.env` wird mit `chmod 600` erstellt (nur root lesbar), `chgrp docker` entfernt
 - `README.md`: Versionsreferenzen auf v2.3.2, Monitoring-Abschnitt mit Nutzungsanleitung aktualisiert
 
@@ -179,5 +181,10 @@
 - Volume persistence
 - Docker Compose profiles for monitoring
 
+[2.3.2]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.1...v2.3.2
+[2.3.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.1.1...v2.2.0
+[2.1.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Codename-Beast/solr-moodle-docker/releases/tag/v2.0.0
