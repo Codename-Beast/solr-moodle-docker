@@ -192,14 +192,10 @@ jobs:
           SOLR_SUPPORT_PASSWORD=
           SOLR_MOODLE_USER=moodle
           SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD
-          MONITORING_BIND_IP=127.0.0.1
-          SOLR_METRICS_PORT=9854
-          PROMETHEUS_PORT=9090
-          PROMETHEUS_BIND=127.0.0.1
-          GRAFANA_PORT=3000
-          GRAFANA_BIND=127.0.0.1
-          GRAFANA_ADMIN_USER=admin
-          GRAFANA_ADMIN_PASSWORD=admin
+          SOLR_CPU_LIMIT=2
+          SOLR_MEMORY_LIMIT=4G
+          SOLR_CPU_RESERVATION=0.5
+          SOLR_MEMORY_RESERVATION=2G
           EOF
 
           docker compose build solr-init
@@ -248,14 +244,10 @@ jobs:
           SOLR_SUPPORT_PASSWORD=test123
           SOLR_MOODLE_USER=moodle
           SOLR_MOODLE_PASSWORD=test123
-          MONITORING_BIND_IP=127.0.0.1
-          SOLR_METRICS_PORT=9854
-          PROMETHEUS_PORT=9090
-          PROMETHEUS_BIND=127.0.0.1
-          GRAFANA_PORT=3000
-          GRAFANA_BIND=127.0.0.1
-          GRAFANA_ADMIN_USER=admin
-          GRAFANA_ADMIN_PASSWORD=admin
+          SOLR_CPU_LIMIT=2
+          SOLR_MEMORY_LIMIT=4G
+          SOLR_CPU_RESERVATION=0.5
+          SOLR_MEMORY_RESERVATION=2G
           EOF
 
           docker compose build solr-init

@@ -10,6 +10,12 @@
   - Root cause: analog zu v2.3.0-Fix in generate_env.sh, aber init-Templates waren noch nicht aktualisiert
 - **`core-admin-edit` Permission fuer moodle-User entfernt** — Sicherheitsfix, Moodle benoetigt keinen Core-Admin-Schreibzugriff
   - Betrifft: `init/security.json.template` und `init/powerinit.sh` (Fallback-Permissions)
+- `init/powerinit.sh`: `forwardCredentials: false` in Inline-Fallback ergaenzt (Konsistenz mit security.json.template)
+- `init/powerinit.sh`: Prometheus-Config-Generierungsblock entfernt (toter Code — Volume nicht gemountet)
+- `init/generate_env.sh`: Monitoring-Variablen entfernt (Prometheus/Grafana nicht im Stack)
+- `.env.example`: Monitoring-Variablen entfernt
+- `.github/workflows/solr-testing.yml`: Fuehrende Whitespaces in inline `.env`-Bloecken behoben
+- `docker-compose.yml`: Image-Tag `solr-init:v2.3` → `solr-init:v2.3.2`
 
 ### Hinzugefuegt
 - `docs/monitoring.md` — Anleitung fuer Prometheus- und Loki-Integration (Groundwork, kein Service im Stack)

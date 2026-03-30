@@ -26,13 +26,12 @@ if [ -f "${ENV_FILE}" ]; then
 fi
 
 # Dependencies
-apk add --no-cache openssl >/dev/null 2>&1
+apk add --no-cache openssl >/dev/null
 
 # Generate random passwords
 ADMIN_PASS="$(rand)"
 SUPPORT_PASS="$(rand)"
 MOODLE_PASS="$(rand)"
-GRAFANA_PASS="$(rand)"
 
 # Write .env file
 cat > "${ENV_FILE}" <<EOF
@@ -67,16 +66,6 @@ SOLR_CPU_LIMIT=2
 SOLR_MEMORY_LIMIT=4G
 SOLR_CPU_RESERVATION=0.5
 SOLR_MEMORY_RESERVATION=2G
-
-# Monitoring (v1.5)
-MONITORING_BIND_IP=127.0.0.1
-SOLR_METRICS_PORT=9854
-PROMETHEUS_PORT=9090
-PROMETHEUS_BIND=127.0.0.1
-GRAFANA_PORT=3000
-GRAFANA_BIND=127.0.0.1
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 
 # =========================================
 # Info / Documentation (not used in code)
