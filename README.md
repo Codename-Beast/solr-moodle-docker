@@ -1,7 +1,7 @@
 # Solr fuer Moodle
 
-[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.2)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
-![Version](https://img.shields.io/badge/version-2.3.2-blue)
+[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=main)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
+![Version](https://img.shields.io/badge/version-2.3.3-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)

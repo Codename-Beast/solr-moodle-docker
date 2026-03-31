@@ -75,13 +75,22 @@ SOLR_MEMORY_RESERVATION=2G
 EOF
 
 # .env: root-owned, docker-group-readable (640)
-# Anyone in the docker group (required to run docker compose) can read it.
-DOCKER_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo "0")
-if [ "$DOCKER_GID" != "0" ]; then
+# DOCKER_GID can be passed as env var to avoid mounting the Docker socket.
+# Fallback: detect from /var/run/docker.sock (requires socket mount).
+if [ -n "${DOCKER_GID:-}" ] && [ "${DOCKER_GID}" != "0" ]; then
+  # GID provided via environment — no socket needed
   chown "root:${DOCKER_GID}" "${ENV_FILE}"
   chmod 640 "${ENV_FILE}"
+elif [ -S /var/run/docker.sock ]; then
+  DOCKER_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo "0")
+  if [ "$DOCKER_GID" != "0" ]; then
+    chown "root:${DOCKER_GID}" "${ENV_FILE}"
+    chmod 640 "${ENV_FILE}"
+  else
+    chmod 600 "${ENV_FILE}"
+  fi
 else
-  # Fallback: only root (e.g. rootless Docker)
+  # Fallback: only root (rootless Docker or no socket available)
   chmod 600 "${ENV_FILE}"
 fi
 

@@ -2,7 +2,7 @@
 # Solr for Moodle
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.3.2
+# Version: v2.3.3
 # =========================================
 
 services:
@@ -17,11 +17,16 @@ services:
     volumes:
       - ./init:/init:ro,z
       - ./:/app:z
+      # DOCKER_GID socket mount: only needed if DOCKER_GID is not set explicitly.
+      # To avoid mounting the socket, set DOCKER_GID in your environment before
+      # running: DOCKER_GID=$(stat -c %g /var/run/docker.sock) docker compose ...
       - /var/run/docker.sock:/var/run/docker.sock:ro,z
     entrypoint: ["/bin/sh", "/init/generate_env.sh"]
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-solr}
       SOLR_CORE_NAME: ${SOLR_CORE_NAME:-}
+      # Pass DOCKER_GID explicitly to skip socket-based GID detection.
+      DOCKER_GID: ${DOCKER_GID:-}
     restart: "no"
 
   # =================================
@@ -31,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: solr-init:v2.3.2
+    image: solr-init:v2.3.3
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:

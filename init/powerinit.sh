@@ -395,10 +395,27 @@ IFS=',' read -ra PREVIOUS_CORE_ARRAY <<< "$PREVIOUS_CORES"
 echo "→ Current cores: ${CURRENT_CORES}"
 echo "→ Previous cores: ${PREVIOUS_CORES}"
 
+# Validate core name — same rules as CORE_NAME (alphanumeric, dash, underscore)
+validate_core_name() {
+  local name="$1"
+  case "$name" in
+    *[!A-Za-z0-9_-]*)
+      echo "ERROR: Invalid core name '${name}' in SOLR_CORES. Only alphanumeric, dash, underscore allowed." >&2
+      exit 4
+      ;;
+    */*)
+      echo "ERROR: Core name '${name}' cannot contain path separators." >&2
+      exit 4
+      ;;
+  esac
+}
+
 # Create new cores
 for core in "${CURRENT_CORE_ARRAY[@]}"; do
   core="$(echo "$core" | tr -d ' ')"  # Trim whitespace
   if [ -z "$core" ]; then continue; fi
+
+  validate_core_name "$core"
 
   # Check if core is new
   if ! echo ",$PREVIOUS_CORES," | grep -q ",${core},"; then
@@ -413,6 +430,7 @@ if [ -n "$PREVIOUS_CORES" ]; then
   for core in "${PREVIOUS_CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"  # Trim whitespace
     if [ -z "$core" ]; then continue; fi
+    validate_core_name "$core"
 
     # Check if core was removed
     if ! echo ",$CURRENT_CORES," | grep -q ",${core},"; then
