@@ -25,6 +25,9 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 TESTS_SKIPPED=0
 
+# Read a KEY=value pair from the .env file in the current directory.
+get_env() { grep "^${1}=" .env | head -1 | cut -d= -f2-; }
+
 # Test results array
 declare -a FAILED_TESTS
 
@@ -209,7 +212,7 @@ integration_tests() {
     print_test "Basic authentication"
     local admin_pass
 
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    admin_pass=$(get_env SOLR_ADMIN_PASSWORD)
     local response
 
     response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
@@ -339,7 +342,7 @@ security_tests() {
     print_test "No default passwords used"
     local admin_pass
 
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    admin_pass=$(get_env SOLR_ADMIN_PASSWORD)
     if [ "$admin_pass" = "eledia_default" ]; then
         print_fail "Default password still in use (CHANGE IT!)"
     else
@@ -381,7 +384,7 @@ negative_tests() {
     local admin_pass
 
     # Test Invalid credentials
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    admin_pass=$(get_env SOLR_ADMIN_PASSWORD)
     print_test "Reject invalid credentials"
     local invalid_response
 
@@ -462,7 +465,7 @@ performance_tests() {
     # Test Response time
 
 
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    admin_pass=$(get_env SOLR_ADMIN_PASSWORD)
     print_test "API response time (<2s)"
     local start_time
 
@@ -635,7 +638,7 @@ cleanup_tests() {
     local admin_pass
 
     # Test Restart without data loss
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    admin_pass=$(get_env SOLR_ADMIN_PASSWORD)
     print_test "Restart without data loss"
     docker compose restart solr >/dev/null 2>&1
     sleep 20
