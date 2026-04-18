@@ -229,7 +229,7 @@ if [ "$REGENERATE_SECURITY" = "1" ]; then
   SUPPORT_CRED="$(hash_solr_basic_auth "${SUPPORT_PASS_PLAIN}")"
   MOODLE_CRED="$(hash_solr_basic_auth "${MOODLE_PASS_PLAIN}")"
 
-  # Template ersetzen, falls vorhanden (aus /init, nicht /config)
+  # Replace template if present (from /init, not /config)
   if [ -f "/init/security.json.template" ]; then
     if ! sed -e "s#__ADMIN_USER__#${ADMIN_USER}#g" \
         -e "s#__SUPPORT_USER__#${SUPPORT_USER}#g" \
