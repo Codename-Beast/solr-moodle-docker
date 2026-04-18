@@ -2,6 +2,15 @@
 
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) | [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [2.5.0] — 2026-04-18
+
+### Geaendert
+- README: Dokumentation zum Mounten der nativen Solr-Log-Verzeichnisse hinzugefuegt
+  (`/var/solr/logs/` via `docker-compose.override.yml`)
+- `docker-compose.yml`: Version auf v2.5.0 aktualisiert
+
+---
+
 ## [2.4.0] — 2026-04-18
 
 ### Geaendert

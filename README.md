@@ -192,6 +192,20 @@ docker compose logs solr-init    # Init-Container
 docker compose logs solr         # Solr
 ```
 
+Solr native log files (within container at `/var/solr/logs/`):
+```bash
+docker exec <instance>-solr tail -f /var/solr/logs/solr.log
+```
+
+To mount native logs to the host, add to `docker-compose.override.yml`:
+```yaml
+services:
+  solr:
+    volumes:
+      - ./logs/solr:/var/solr/logs:z
+```
+Then `mkdir -p logs/solr && chmod 777 logs/solr` before starting.
+
 ### Permissions:
 ```bash
 docker run --rm -v solr_data_solr:/data alpine:3.20 ls -la /data/
