@@ -2,6 +2,14 @@
 
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) | [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [2.4.0] — 2026-04-18
+
+### Geaendert
+- `init/powerinit.sh`: deutschen Code-Kommentar auf Englisch uebersetzt (Zeile 232)
+- `.github/workflows/solr-testing.yml`: CI-Trigger auf `main` und `feature/*` reduziert — `develop`, `develop22`, `fix/*` entfernt
+
+---
+
 ## [2.3.2] — 2026-03-30
 
 ### Behoben

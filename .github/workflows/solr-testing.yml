@@ -2,9 +2,9 @@ name: Solr Test Suite
 
 on:
   push:
-    branches: [main, develop, develop22, "feature/*", "fix/*"]
+    branches: [main, "feature/*"]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
