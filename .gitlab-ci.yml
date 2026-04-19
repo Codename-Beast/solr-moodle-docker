@@ -75,6 +75,9 @@ solr-test:
     - apt-get install -y -qq jq
     - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
     - echo "Docker Compose version:" $(docker compose version)
+    # Clean up any leftover containers from a previous run (setup profile not
+    # removed by plain 'docker compose down').
+    - docker rm -f solr-setup 2>/dev/null || true
 
   script:
     - echo "Generating .env file with core name:" $SOLR_CORE_NAME
@@ -200,7 +203,9 @@ solr-test:
         docker compose ps > logs/container-status.log 2>&1 || true
       fi
     - echo "Cleaning up..."
-    - docker compose down -v || true
+    - docker compose --profile setup down -v --remove-orphans || true
+    - docker compose down -v --remove-orphans || true
+    - docker rm -f solr-setup 2>/dev/null || true
     - rm -f .env || true
 
   rules:
