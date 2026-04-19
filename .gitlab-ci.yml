@@ -64,8 +64,12 @@ solr-test:
 
   parallel:
     matrix:
+      # INSTANCE_NAME isolates container names between parallel jobs so
+      # 'docker compose --profile setup up moodle_setup' does not conflict.
       - SOLR_CORE_NAME: moodle_core
+        INSTANCE_NAME: ci-moodle
       - SOLR_CORE_NAME: custom_test_core
+        INSTANCE_NAME: ci-custom
 
   needs:
     - security-scan
@@ -77,7 +81,7 @@ solr-test:
     - echo "Docker Compose version:" $(docker compose version)
     # Clean up any leftover containers from a previous run (setup profile not
     # removed by plain 'docker compose down').
-    - docker rm -f solr-setup 2>/dev/null || true
+    - docker rm -f ${INSTANCE_NAME}-setup 2>/dev/null || true
 
   script:
     - echo "Generating .env file with core name:" $SOLR_CORE_NAME
@@ -205,7 +209,7 @@ solr-test:
     - echo "Cleaning up..."
     - docker compose --profile setup down -v --remove-orphans || true
     - docker compose down -v --remove-orphans || true
-    - docker rm -f solr-setup 2>/dev/null || true
+    - docker rm -f ${INSTANCE_NAME}-setup 2>/dev/null || true
     - rm -f .env || true
 
   rules:
