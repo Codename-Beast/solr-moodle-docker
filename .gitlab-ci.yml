@@ -32,16 +32,11 @@ security-scan:
     - echo "Building init container for security scan..."
     - docker build -f Dockerfile -t solr-init:test .
     - echo "Running Trivy vulnerability scanner on init image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
-        aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
     - echo "Running Trivy vulnerability scanner on Solr base image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
-        aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1 || true
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1 || true
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH == "develop22"'
     - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
   timeout: 15 minutes
 
@@ -226,10 +221,7 @@ solr-test:
     - rm -f .env || true
 
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH == "develop22"'
     - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
 
   artifacts:
