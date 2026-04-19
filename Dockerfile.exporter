@@ -1,0 +1,20 @@
+# =========================================
+# Eledia — Solr Prometheus Exporter Image
+# Developer: Bernd Schreistetter
+# Company: Eledia.de
+# =========================================
+#
+# Based on the official Solr image which ships the Prometheus Exporter
+# at /opt/solr/prometheus-exporter/bin/solr-exporter
+#
+# Ref: https://solr.apache.org/guide/solr/latest/deployment-guide/monitoring-with-prometheus-and-grafana.html
+
+ARG SOLR_VERSION=9.10.1
+FROM solr:${SOLR_VERSION}
+
+LABEL org.opencontainers.image.vendor="Eledia.de" \
+      org.opencontainers.image.title="eledia-solr-exporter" \
+      org.opencontainers.image.description="Solr Prometheus Exporter — Eledia distribution" \
+      org.opencontainers.image.source="https://github.com/eledia/solr-moodle-docker"
+
+EXPOSE 8989

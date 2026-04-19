@@ -8,49 +8,48 @@ variables:
   CACHE_COMPRESSION_LEVEL: "fast"
   GIT_STRATEGY: clone
   GIT_DEPTH: 1
-  DOCKER_VERSION: "5:24.0.7-1~ubuntu.22.04~jammy"
 
 stages:
   - security
   - test
 
+# Security scan uses Docker socket sharing (same runner pattern as solr-test).
+# Docker-in-Docker (docker:24-dind) is intentionally avoided: the runner host
+# uses overlayfs, which makes nested overlay mounts fail in DinD containers
+# (err: invalid argument).
 security-scan:
   stage: security
-  image: docker:24-git
-  services:
-    - name: docker:24-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-    DOCKER_DRIVER: overlay2
+  image: ubuntu:22.04
   tags:
     - docker
-  timeout: 15 minutes
-  needs: []
+  variables:
+    DOCKER_HOST: unix:///var/run/docker.sock
   before_script:
-    - apk add --no-cache curl
-    - sleep 5  # Wait for Docker daemon to start
-    - docker info || exit 1
+    - apt-get update -qq
+    - apt-get install -y -qq curl ca-certificates
+    - docker info
   script:
     - echo "Building init container for security scan..."
     - docker build -f Dockerfile -t solr-init:test .
     - echo "Running Trivy vulnerability scanner on init image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+        aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
     - echo "Running Trivy vulnerability scanner on Solr base image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1 || true
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+        aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1 || true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_BRANCH == "develop22"'
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
+  timeout: 15 minutes
 
 .test-template:
   stage: test
   tags:
     - docker
   interruptible: true
-  needs:
-    - security-scan
   retry:
     max: 1
     when:
@@ -70,10 +69,13 @@ solr-test:
       - SOLR_CORE_NAME: moodle_core
       - SOLR_CORE_NAME: custom_test_core
 
+  needs:
+    - security-scan
+
   before_script:
     - echo "Installing dependencies for Ubuntu $(lsb_release -rs || cat /etc/os-release | grep VERSION_ID)"
     - apt-get update -qq
-    - apt-get install -y -qq curl jq docker-compose-plugin=${DOCKER_VERSION} docker.io=${DOCKER_VERSION} ||
+    - apt-get install -y -qq curl jq docker-compose-plugin docker.io ||
       apt-get install -y -qq curl jq docker-compose docker.io
     - echo "Ubuntu environment ready"
     - echo "Docker version:" $(docker --version)
@@ -228,6 +230,7 @@ solr-test:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_BRANCH == "develop22"'
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
 
   artifacts:
     when: on_failure

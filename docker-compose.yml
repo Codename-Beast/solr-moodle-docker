@@ -96,6 +96,44 @@ services:
       retries: 5
       start_period: 90s
 
+  # =================================
+  # [MONITORING] Solr Prometheus Exporter
+  # Optional — activate with: docker compose --profile monitoring up -d
+  # Ref: https://solr.apache.org/guide/solr/latest/deployment-guide/monitoring-with-prometheus-and-grafana.html
+  # Metrics endpoint: http://127.0.0.1:SOLR_EXPORTER_PORT/metrics
+  # =================================
+  solr-exporter:
+    image: solr:${SOLR_VERSION:-9.10.1}
+    container_name: ${INSTANCE_NAME:-solr}-solr-exporter
+    profiles: ["monitoring"]
+    command:
+      - "/opt/solr/prometheus-exporter/bin/solr-exporter"
+      - "-p"
+      - "8989"
+      - "-b"
+      - "http://${INSTANCE_NAME:-solr}-solr:${SOLR_PORT:-8983}/solr"
+      - "-u"
+      - "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}"
+      - "--cluster-id"
+      - "${INSTANCE_NAME:-solr}"
+      - "--num-threads"
+      - "4"
+    ports:
+      - "127.0.0.1:${SOLR_EXPORTER_PORT:-8989}:8989"
+    env_file:
+      - .env
+    networks:
+      - solr_network
+    depends_on:
+      solr:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 # =================================
 # Volumes
 # =================================
