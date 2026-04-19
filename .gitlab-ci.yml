@@ -13,6 +13,17 @@ stages:
   - security
   - test
 
+# Shared Docker CE CLI setup (single-line echo avoids YAML multiline URI corruption).
+# docker-compose-plugin from Docker CE repo required — ubuntu:22.04 packages lack it.
+.docker_setup: &docker_setup
+  - apt-get update -qq
+  - apt-get install -y -qq curl ca-certificates gnupg
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  - . /etc/os-release && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update -qq && apt-get install -y -qq docker-ce-cli docker-compose-plugin
+  - docker info
+
 # Security scan uses Docker socket sharing (same runner pattern as solr-test).
 # Docker-in-Docker (docker:24-dind) is intentionally avoided: the runner host
 # uses overlayfs, which makes nested overlay mounts fail in DinD containers
@@ -24,10 +35,7 @@ security-scan:
     - docker
   variables:
     DOCKER_HOST: unix:///var/run/docker.sock
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq curl ca-certificates docker.io
-    - docker info
+  before_script: *docker_setup
   script:
     - echo "Building init container for security scan..."
     - docker build -f Dockerfile -t solr-init:test .
@@ -50,11 +58,6 @@ security-scan:
     when:
       - runner_system_failure
       - stuck_or_timeout_failure
-  cache:
-    key: docker-compose-cache
-    paths:
-      - .cache/docker
-    policy: pull-push
 
 solr-test:
   extends: .test-template
@@ -68,21 +71,17 @@ solr-test:
     - security-scan
 
   before_script:
-    - echo "Installing dependencies for Ubuntu $(lsb_release -rs || cat /etc/os-release | grep VERSION_ID)"
-    - apt-get update -qq
-    - apt-get install -y -qq curl jq docker-compose-plugin docker.io ||
-      apt-get install -y -qq curl jq docker-compose docker.io
-    - echo "Ubuntu environment ready"
-    - echo "Docker version:" $(docker --version)
-    - echo "Docker Compose version:" $(docker compose version)
+    - *docker_setup
+    - apt-get install -y -qq jq
     - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
+    - echo "Docker Compose version:" $(docker compose version)
 
   script:
     - echo "Generating .env file with core name:" $SOLR_CORE_NAME
     - SOLR_CORE_NAME=$SOLR_CORE_NAME docker compose --profile setup up moodle_setup
+    - sudo chown "$USER" .env 2>/dev/null || true
     - echo ".env file created successfully"
     - ls -lah .env
-    - echo "Core name in .env:"
     - grep SOLR_CORE_NAME .env
 
     - echo "Building init container..."
@@ -95,10 +94,7 @@ solr-test:
     - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Still waiting..."; done'
     - echo "Solr is healthy"
 
-    - echo "Container status:"
     - docker compose ps
-    - echo ""
-    - echo "Solr logs (last 50 lines):"
     - docker compose logs --tail=50 solr
 
     - echo "Running unit tests..."
@@ -117,43 +113,36 @@ solr-test:
     - docker compose down -v
     - rm -f .env
     - |
-      cat > .env <<'EOF'
-      INSTANCE_NAME=solr
-      SOLR_VERSION=9.10.1
-      SOLR_PORT=8983
-      SOLR_BIND=127.0.0.1
-      SOLR_CORE_NAME=test_auto_core
-      SOLR_CORES=
-      SOLR_HEAP=2g
-      SOLR_LOG_LEVEL=INFO
-      SOLR_NETWORK_NAME=solr_network
-      SOLR_ADMIN_USER=admin
-      SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN
-      SOLR_SUPPORT_USER=support
-      SOLR_SUPPORT_PASSWORD=
-      SOLR_MOODLE_USER=moodle
-      SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD
-      MONITORING_BIND_IP=127.0.0.1
-      SOLR_METRICS_PORT=9854
-      PROMETHEUS_PORT=9090
-      PROMETHEUS_BIND=127.0.0.1
-      GRAFANA_PORT=3000
-      GRAFANA_BIND=127.0.0.1
-      GRAFANA_ADMIN_USER=admin
-      GRAFANA_ADMIN_PASSWORD=admin
-      EOF
+      printf '%s\n' \
+        'INSTANCE_NAME=solr' \
+        'SOLR_VERSION=9.10.1' \
+        'SOLR_PORT=8983' \
+        'SOLR_BIND=127.0.0.1' \
+        'SOLR_CORE_NAME=test_auto_core' \
+        'SOLR_CORES=' \
+        'SOLR_HEAP=2g' \
+        'SOLR_LOG_LEVEL=INFO' \
+        'SOLR_ADMIN_USER=admin' \
+        'SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN' \
+        'SOLR_SUPPORT_USER=support' \
+        'SOLR_SUPPORT_PASSWORD=' \
+        'SOLR_MOODLE_USER=moodle' \
+        'SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD' \
+        'SOLR_CPU_LIMIT=2' \
+        'SOLR_MEMORY_LIMIT=4G' \
+        'SOLR_CPU_RESERVATION=0.5' \
+        'SOLR_MEMORY_RESERVATION=2G' \
+        > .env
     - docker compose build solr-init
     - docker compose up -d
     - |
-      echo "Waiting for containers to be healthy..."
-      for i in {1..30}; do
+      for i in $(seq 1 30); do
         if docker compose ps | grep -q healthy; then
-          echo "Containers are healthy after attempt ${i}"
+          echo "Containers healthy after attempt $i"
           break
         fi
         sleep 2
       done
-    - echo "Checking init container logs..."
     - docker compose logs solr-init
     - docker compose logs solr-init | grep -q "Generated secure password" || exit 1
     - echo "Password auto-generation test PASSED"
@@ -162,31 +151,26 @@ solr-test:
     - echo "Testing dynamic core management..."
     - rm -f .env
     - |
-      cat > .env <<EOF
-      INSTANCE_NAME=solr
-      SOLR_VERSION=9.10.1
-      SOLR_PORT=8983
-      SOLR_BIND=127.0.0.1
-      SOLR_CORE_NAME=
-      SOLR_CORES=test_core1,test_core2
-      SOLR_HEAP=2g
-      SOLR_LOG_LEVEL=INFO
-      SOLR_NETWORK_NAME=solr_network
-      SOLR_ADMIN_USER=admin
-      SOLR_ADMIN_PASSWORD=test123
-      SOLR_SUPPORT_USER=support
-      SOLR_SUPPORT_PASSWORD=test123
-      SOLR_MOODLE_USER=moodle
-      SOLR_MOODLE_PASSWORD=test123
-      MONITORING_BIND_IP=127.0.0.1
-      SOLR_METRICS_PORT=9854
-      PROMETHEUS_PORT=9090
-      PROMETHEUS_BIND=127.0.0.1
-      GRAFANA_PORT=3000
-      GRAFANA_BIND=127.0.0.1
-      GRAFANA_ADMIN_USER=admin
-      GRAFANA_ADMIN_PASSWORD=admin
-      EOF
+      printf '%s\n' \
+        'INSTANCE_NAME=solr' \
+        'SOLR_VERSION=9.10.1' \
+        'SOLR_PORT=8983' \
+        'SOLR_BIND=127.0.0.1' \
+        'SOLR_CORE_NAME=' \
+        'SOLR_CORES=test_core1,test_core2' \
+        'SOLR_HEAP=2g' \
+        'SOLR_LOG_LEVEL=INFO' \
+        'SOLR_ADMIN_USER=admin' \
+        'SOLR_ADMIN_PASSWORD=test123' \
+        'SOLR_SUPPORT_USER=support' \
+        'SOLR_SUPPORT_PASSWORD=test123' \
+        'SOLR_MOODLE_USER=moodle' \
+        'SOLR_MOODLE_PASSWORD=test123' \
+        'SOLR_CPU_LIMIT=2' \
+        'SOLR_MEMORY_LIMIT=4G' \
+        'SOLR_CPU_RESERVATION=0.5' \
+        'SOLR_MEMORY_RESERVATION=2G' \
+        > .env
     - docker compose build solr-init
     - docker compose up -d
     - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
@@ -214,7 +198,6 @@ solr-test:
         docker compose logs solr > logs/solr.log 2>&1 || true
         docker compose logs solr-init > logs/solr-init.log 2>&1 || true
         docker compose ps > logs/container-status.log 2>&1 || true
-        docker inspect $(docker compose ps -q) > logs/container-inspect.log 2>&1 || true
       fi
     - echo "Cleaning up..."
     - docker compose down -v || true
@@ -223,12 +206,5 @@ solr-test:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
-
-  artifacts:
-    when: on_failure
-    paths:
-      - .env
-      - logs/
-    expire_in: 7 days
 
   timeout: 15 minutes
