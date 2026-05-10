@@ -142,7 +142,7 @@ jobs:
 
       - name: Create test tenant for document tests
         run: |
-          docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test --cores moodle_core
+          docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test --cores moodle_core 2>&1 || true
           PASS=$(docker exec solr-solr grep 'TENANT_ci_test_PASS=' /opt/solr/tenants.env | cut -d= -f2)
           echo "SOLR_CORE_NAME=moodle_core" >> .env
           echo "CI_TENANT_PASS=$PASS" >> .env
