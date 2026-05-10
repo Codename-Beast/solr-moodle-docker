@@ -367,10 +367,17 @@ jq 'del(.authentication.credentials) | . + {"note": "credentials removed from ba
 _log "  security.json written ($(jq '.authorization.permissions | length' "${DATA_DIR}/security.json") permissions)"
 
 # ---------------------------------------------------------------------------
-# Step 4: Pre-create core directories for active tenants
+# Step 4: Pre-create core directories for active tenants (standalone only)
+# In SolrCloud mode, cores/collections are created via Collections API after
+# Solr starts (inside solr-tenant.sh create / apply). No directories needed.
 # ---------------------------------------------------------------------------
+SOLR_MODE="${SOLR_MODE:-}"
+if [ "$SOLR_MODE" = "solrcloud" ]; then
+  _log "Step 4: SolrCloud mode — skipping core directory pre-creation (Collections API handles this)"
+fi
 _log "Step 4: Pre-creating core directories"
 
+if [ "$SOLR_MODE" != "solrcloud" ]; then
 for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" = "false" ] && continue
@@ -398,9 +405,10 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
     _log "  Core '$core' directory created"
   done
 done
+fi
 
-# Legacy core pre-creation (backward compat — when SOLR_MOODLE_USER/PASSWORD are set)
-if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ] && [ -n "$LEGACY_CORE" ]; then
+# Legacy core pre-creation (backward compat — standalone only)
+if [ "$SOLR_MODE" != "solrcloud" ] && [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ] && [ -n "$LEGACY_CORE" ]; then
   core_dir="${DATA_DIR}/${LEGACY_CORE}"
   if [ -f "${core_dir}/core.properties" ]; then
     _log "  Legacy core '$LEGACY_CORE' already exists — skipping"

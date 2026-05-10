@@ -23,6 +23,14 @@ LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
 ENV_FILE="${ENV_FILE:-/var/solr/data/.env}"
 DRY_RUN=0
 
+# SolrCloud mode: set SOLR_MODE=solrcloud in .env
+# Standalone (default): direct file writes + Core Admin API
+# SolrCloud: Security API writes + Collections API + true collection isolation
+SOLR_MODE="${SOLR_MODE:-}"
+ZK_HOST="${ZK_HOST:-localhost:9983}"
+
+_is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -110,10 +118,14 @@ _validate_name() {
 
 _core_exists() {
   local core="$1"
-  # Solr's STATUS API returns {"status":{"core":{}}} even for non-existent cores.
-  # Only an existing core has "instanceDir" in its status object.
-  _solr_api GET "/admin/cores?action=STATUS&core=${core}&wt=json" 2>/dev/null \
-    | grep -q '"instanceDir"'
+  if _is_cloud_mode; then
+    _collection_exists "$core"
+  else
+    # Solr's STATUS API returns {"status":{"core":{}}} even for non-existent cores.
+    # Only an existing core has "instanceDir" in its status object.
+    _solr_api GET "/admin/cores?action=STATUS&core=${core}&wt=json" 2>/dev/null \
+      | grep -q '"instanceDir"'
+  fi
 }
 
 _tenant_exists() {
@@ -170,20 +182,24 @@ _hash_password() {
   printf '%s %s' "$hb" "$sb"
 }
 
-# Create a Solr core via Admin API
+# Create a Solr core (standalone) or collection (SolrCloud) via Admin/Collections API
 _create_core() {
   local core="$1"
-  if _core_exists "$core"; then
-    _log "INFO" "Core '$core' already exists"
-    return 0
+  if _is_cloud_mode; then
+    _create_collection "$core"
+  else
+    if _core_exists "$core"; then
+      _log "INFO" "Core '$core' already exists"
+      return 0
+    fi
+    _log "INFO" "Creating core '$core'"
+    if [ "$DRY_RUN" = "1" ]; then
+      printf '[DRY-RUN] Would create core: %s\n' "$core"
+      return 0
+    fi
+    _solr_api GET "/admin/cores?action=CREATE&name=${core}&configSet=moodle-tenant&wt=json" > /dev/null
+    _log "INFO" "Core '$core' created"
   fi
-  _log "INFO" "Creating core '$core'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would create core: %s\n' "$core"
-    return 0
-  fi
-  _solr_api GET "/admin/cores?action=CREATE&name=${core}&configSet=moodle-tenant&wt=json" > /dev/null
-  _log "INFO" "Core '$core' created"
 }
 
 # ---------------------------------------------------------------------------
@@ -199,8 +215,13 @@ _create_core() {
 
 _SEC_FILE="/var/solr/data/security.json"
 
-# Low-level: apply a jq filter to security.json in-place.
+# Low-level: apply a jq filter to security.json in-place (standalone only).
+# In SolrCloud mode, security.json lives in ZooKeeper — use Security API instead.
 _write_security() {
+  if _is_cloud_mode; then
+    _log "ERROR" "_write_security called in SolrCloud mode — use Security API"
+    return 1
+  fi
   local tmp
   tmp="$(mktemp)"
   chmod 600 "$tmp"
@@ -214,6 +235,81 @@ _write_security() {
   chown 8983:8983 "$_SEC_FILE" 2>/dev/null || true
 }
 
+# ---------------------------------------------------------------------------
+# Cloud mode — Security API helpers
+#
+# In SolrCloud mode, security.json lives in ZooKeeper (managed by Solr).
+# Direct file writes are ignored after first start; all changes must go
+# through the Security API. Credentials are passed as plaintext — Solr
+# hashes them server-side. jq builds payloads to handle special chars safely.
+# ---------------------------------------------------------------------------
+
+# POST to /solr/admin/authentication (credentials management)
+_cloud_auth_api() {
+  local payload="$1"
+  _solr_api POST "/admin/authentication" "$payload" > /dev/null
+}
+
+# POST to /solr/admin/authorization (roles/permissions management)
+_cloud_authz_api() {
+  local payload="$1"
+  _solr_api POST "/admin/authorization" "$payload" > /dev/null
+}
+
+# ---------------------------------------------------------------------------
+# Cloud mode — Collections API helpers
+# ---------------------------------------------------------------------------
+
+_collection_exists() {
+  local name="$1"
+  local resp
+  resp="$(_solr_api GET "/admin/collections?action=LIST&wt=json" 2>/dev/null)"
+  printf '%s' "$resp" | jq -e --arg n "$name" '.collections | index($n) != null' > /dev/null 2>&1
+}
+
+# Upload configset to ZooKeeper via built-in solr CLI.
+# Runs inside the Solr container where /opt/solr/bin/solr is available.
+# ZK must be running (i.e., Solr already started) when this is called.
+_ensure_configset_zk() {
+  local conf_dir="/var/solr/data/configsets/moodle-tenant/conf"
+  local resp
+  resp="$(_solr_api GET "/admin/configs?action=LIST&wt=json" 2>/dev/null)"
+  if printf '%s' "$resp" | jq -e '.configSets | index("moodle-tenant") != null' > /dev/null 2>&1; then
+    _log "INFO" "Configset 'moodle-tenant' already in ZooKeeper"
+    return 0
+  fi
+  _log "INFO" "Uploading configset 'moodle-tenant' to ZooKeeper ($ZK_HOST)"
+  if [ ! -d "$conf_dir" ]; then
+    _log "ERROR" "Configset source not found: $conf_dir"
+    return 1
+  fi
+  /opt/solr/bin/solr zk upconfig \
+    -n moodle-tenant \
+    -d "$conf_dir" \
+    -z "$ZK_HOST" 2>&1 | while IFS= read -r line; do _log "INFO" "[zk] $line"; done
+  _log "INFO" "Configset 'moodle-tenant' uploaded"
+}
+
+_create_collection() {
+  local name="$1"
+  if _collection_exists "$name"; then
+    _log "INFO" "Collection '$name' already exists"
+    return 0
+  fi
+  _log "INFO" "Creating collection '$name'"
+  if [ "$DRY_RUN" = "1" ]; then
+    printf '[DRY-RUN] Would create collection: %s\n' "$name"
+    return 0
+  fi
+  _ensure_configset_zk
+  _solr_api GET "/admin/collections?action=CREATE&name=${name}&numShards=1&replicationFactor=1&collection.configName=moodle-tenant&wt=json" > /dev/null
+  _log "INFO" "Collection '$name' created"
+}
+
+# ---------------------------------------------------------------------------
+# Write credential — dispatches to Security API (cloud) or file (standalone)
+# ---------------------------------------------------------------------------
+
 # Write a hashed credential for user directly to security.json.
 _write_credential() {
   local user="$1" pass="$2"
@@ -222,11 +318,18 @@ _write_credential() {
     printf '[DRY-RUN] Would write credential for: %s\n' "$user"
     return 0
   fi
-  local hash
-  hash="$(_hash_password "$pass")"
-  # shellcheck disable=SC2016
-  _write_security --arg u "$user" --arg h "$hash" \
-    '.authentication.credentials[$u] = $h'
+  if _is_cloud_mode; then
+    # Security API: plaintext — Solr hashes server-side (ZK-safe)
+    local payload
+    payload="$(jq -n --arg u "$user" --arg p "$pass" '{"set-user": {($u): $p}}')"
+    _cloud_auth_api "$payload"
+  else
+    local hash
+    hash="$(_hash_password "$pass")"
+    # shellcheck disable=SC2016
+    _write_security --arg u "$user" --arg h "$hash" \
+      '.authentication.credentials[$u] = $h'
+  fi
 }
 
 # Write a random (blocking) credential — user cannot log in.
@@ -237,15 +340,22 @@ _block_user() {
     printf '[DRY-RUN] Would block user: %s\n' "$user"
     return 0
   fi
-  local rand_pass hash
+  local rand_pass
   rand_pass="$(_gen_password)"
-  hash="$(_hash_password "$rand_pass")"
-  # shellcheck disable=SC2016
-  _write_security --arg u "$user" --arg h "$hash" \
-    '.authentication.credentials[$u] = $h'
+  if _is_cloud_mode; then
+    local payload
+    payload="$(jq -n --arg u "$user" --arg p "$rand_pass" '{"set-user": {($u): $p}}')"
+    _cloud_auth_api "$payload"
+  else
+    local hash
+    hash="$(_hash_password "$rand_pass")"
+    # shellcheck disable=SC2016
+    _write_security --arg u "$user" --arg h "$hash" \
+      '.authentication.credentials[$u] = $h'
+  fi
 }
 
-# Write user-role mapping directly to security.json.
+# Write user-role mapping.
 _write_user_role() {
   local user="$1" role="$2"
   _log "INFO" "Writing user-role: '$user' -> '$role'"
@@ -253,15 +363,21 @@ _write_user_role() {
     printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"
     return 0
   fi
-  # shellcheck disable=SC2016
-  _write_security --arg u "$user" --arg r "$role" \
-    '.authorization["user-role"][$u] = $r'
+  if _is_cloud_mode; then
+    local payload
+    payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): [$r]}}')"
+    _cloud_authz_api "$payload"
+  else
+    # shellcheck disable=SC2016
+    _write_security --arg u "$user" --arg r "$role" \
+      '.authorization["user-role"][$u] = $r'
+  fi
 }
 
-# Add a collection-scoped permission directly to security.json.
-# collection MUST be a JSON array [$c] — a bare string is parsed as null by
-# Solr's Java Permission class (List<String> cast fails on String), which
-# disables collection filtering and breaks tenant isolation.
+# Add a collection-scoped permission.
+# In standalone mode: collection field written but NOT enforced by Solr
+#   (collection field is SolrCloud-only — use a reverse proxy for URL isolation).
+# In SolrCloud mode: collection field IS enforced — true tenant isolation.
 _add_permission() {
   local name="$1" role="$2" core="$3"
   _log "INFO" "Adding permission '$name' for core '$core'"
@@ -269,22 +385,35 @@ _add_permission() {
     printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"
     return 0
   fi
-  # Remove any stale entry with the same name first
-  # shellcheck disable=SC2016
-  _write_security --arg n "$name" \
-    'del(.authorization.permissions[] | select(.name == $n))' || return 1
-  # Append new permission; collection as array so Solr parses it as List<String>
-  # shellcheck disable=SC2016
-  _write_security --arg n "$name" --arg r "$role" --arg c "$core" \
-    '.authorization.permissions += [{
-      "name": $n,
-      "role": ["admin","support",$r],
-      "collection": [$c],
-      "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-    }]'
+  if _is_cloud_mode; then
+    local payload
+    payload="$(jq -n \
+      --arg n "$name" --arg r "$role" --arg c "$core" \
+      '{"set-permission": {
+        "name": $n,
+        "role": ["admin","support",$r],
+        "collection": [$c],
+        "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
+      }}')"
+    _cloud_authz_api "$payload"
+  else
+    # Remove any stale entry with the same name first
+    # shellcheck disable=SC2016
+    _write_security --arg n "$name" \
+      'del(.authorization.permissions[] | select(.name == $n))' || return 1
+    # Append; collection as array so Solr parses it as List<String>
+    # shellcheck disable=SC2016
+    _write_security --arg n "$name" --arg r "$role" --arg c "$core" \
+      '.authorization.permissions += [{
+        "name": $n,
+        "role": ["admin","support",$r],
+        "collection": [$c],
+        "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
+      }]'
+  fi
 }
 
-# Remove a permission directly from security.json.
+# Remove a permission.
 _remove_permission() {
   local perm_name="$1"
   _log "INFO" "Removing permission '$perm_name'"
@@ -292,22 +421,30 @@ _remove_permission() {
     printf '[DRY-RUN] Would remove permission: %s\n' "$perm_name"
     return 0
   fi
-  # shellcheck disable=SC2016
-  _write_security --arg n "$perm_name" \
-    'del(.authorization.permissions[] | select(.name == $n))'
+  if _is_cloud_mode; then
+    local payload
+    payload="$(jq -n --arg n "$perm_name" '{"delete-permission": $n}')"
+    _cloud_authz_api "$payload"
+  else
+    # shellcheck disable=SC2016
+    _write_security --arg n "$perm_name" \
+      'del(.authorization.permissions[] | select(.name == $n))'
+  fi
 }
 
-# Poll until Solr has reloaded security.json and the given user can authenticate.
-# Tests /solr/<core>/admin/ping which the predefined "health" permission allows
-# for any authenticated user. Solr's PathWatcher reloads within 1-5 seconds.
+# Poll until the given user can authenticate successfully.
+# Standalone: Solr's PathWatcher reloads security.json within 1-5s after file write.
+# SolrCloud: Security API writes are applied via ZK — poll with shorter timeout.
 # Args: user pass [core] [max_secs]
 _wait_for_security_reload() {
   local user="$1" pass="$2" core="${3:-}" max_secs="${4:-20}"
+  if _is_cloud_mode; then
+    max_secs="${4:-10}"  # ZK propagation is faster
+  fi
   local url
   if [ -n "$core" ]; then
     url="${SOLR_BASE}/${core}/admin/ping"
   else
-    # Fall back to system info (requires admin; used when no core is known)
     url="${SOLR_BASE}/admin/info/system"
   fi
   local i=0
@@ -873,6 +1010,99 @@ cmd_export() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: caddy-config
+# Generates a Caddyfile snippet for all active tenants.
+# Each tenant gets a subdomain that only passes their own cores through to Solr.
+# Apache: NOT generated here — an existing Moodle Apache config must not be touched.
+# ---------------------------------------------------------------------------
+cmd_caddy_config() {
+  local domain="" port="${SOLR_PORT:-8983}"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --domain) domain="$2"; shift 2 ;;
+      --port)   port="$2"; shift 2 ;;
+      --dry-run) DRY_RUN=1; shift ;;
+      -*) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
+      *) shift ;;
+    esac
+  done
+
+  if [ -z "$domain" ]; then
+    printf 'Usage: solr-tenant.sh caddy-config --domain solr.example.com [--port 8983]\n' >&2
+    printf '\n' >&2
+    printf 'Generates a Caddyfile with per-tenant subdomains for URL-level core isolation.\n' >&2
+    printf 'Each tenant can only reach their own Solr cores through the proxy.\n' >&2
+    exit 1
+  fi
+
+  printf '# ============================================================\n'
+  printf '# Caddyfile — generated by solr-tenant.sh caddy-config\n'
+  printf '# Domain:  %s\n' "$domain"
+  printf '# Port:    %s\n' "$port"
+  printf '# Mode:    %s\n' "${SOLR_MODE:-standalone}"
+  printf '# WARNING: Do NOT edit manually — regenerate via solr-tenant.sh\n'
+  printf '# ============================================================\n\n'
+
+  printf '# Admin endpoint — restrict access in production (e.g., IP allowlist)\n'
+  printf '%s {\n' "$domain"
+  printf '    # tls /path/to/cert /path/to/key\n'
+  printf '    reverse_proxy localhost:%s\n' "$port"
+  printf '}\n\n'
+
+  if [ ! -f "$TENANTS_ENV" ]; then
+    printf '# No tenants configured (tenants.env not found)\n'
+    return 0
+  fi
+
+  local tenant_count=0
+  # shellcheck disable=SC2094
+  while IFS='=' read -r key value; do
+    case "$key" in
+      TENANT_*_CORES)
+        local name="${key#TENANT_}"; name="${name%_CORES}"
+        local active cores
+        active="$(grep "^TENANT_${name}_ACTIVE=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+        [ "${active:-true}" = "false" ] && continue
+
+        cores="$value"
+        # Build path matcher list: /solr/<core> and /solr/<core>/*
+        local path_args=""
+        IFS=',' read -ra CORE_ARRAY <<< "$cores"
+        for core in "${CORE_ARRAY[@]}"; do
+          core="$(printf '%s' "$core" | tr -d ' ')"
+          [ -z "$core" ] && continue
+          path_args="${path_args} /solr/${core} /solr/${core}/*"
+        done
+
+        # Subdomain: replace _ with - for valid hostname
+        local tenant_host
+        tenant_host="$(printf '%s' "$name" | tr '_' '-').${domain}"
+
+        printf '# Tenant: %s — cores: %s\n' "$name" "$cores"
+        printf '%s {\n' "$tenant_host"
+        printf '    # tls /path/to/cert /path/to/key\n\n'
+        printf '    @allowed path%s\n' "$path_args"
+        printf '\n'
+        printf '    handle @allowed {\n'
+        printf '        reverse_proxy localhost:%s\n' "$port"
+        printf '    }\n'
+        printf '\n'
+        printf '    handle {\n'
+        printf '        respond "Forbidden" 403\n'
+        printf '    }\n'
+        printf '}\n\n'
+        tenant_count=$((tenant_count + 1))
+        ;;
+    esac
+  done < "$TENANTS_ENV"
+
+  if [ "$tenant_count" -eq 0 ]; then
+    printf '# No active tenants found in tenants.env\n'
+  fi
+  _log "INFO" "caddy-config generated: $tenant_count tenant(s) for domain $domain"
+}
+
+# ---------------------------------------------------------------------------
 # Usage
 # ---------------------------------------------------------------------------
 usage() {
@@ -890,9 +1120,14 @@ Commands:
   core-remove <name> --core <core>    Remove core permission from tenant
   apply                               Re-apply all tenants from tenants.env (idempotent)
   export                              YAML output for Ansible host_vars
+  caddy-config --domain <d>           Generate Caddyfile for URL-level tenant isolation
 
 Global options:
   --dry-run   Show what would happen without making changes
+
+Modes (set SOLR_MODE in .env):
+  standalone  (default) Direct file writes; isolation via Caddy reverse proxy
+  solrcloud   Security API + Collections API; true collection-level isolation
 
 Examples:
   solr-tenant.sh create schule_a --cores moodle_prod_a,moodle_test_a
@@ -901,6 +1136,7 @@ Examples:
   solr-tenant.sh delete schule_b
   solr-tenant.sh apply
   solr-tenant.sh export
+  solr-tenant.sh caddy-config --domain solr.example.com
 
 Logs: /var/log/solr/tenant.log
 EOF
@@ -913,17 +1149,18 @@ COMMAND="${1:-}"
 shift || true
 
 case "$COMMAND" in
-  create)     cmd_create "$@" ;;
-  delete)     cmd_delete "$@" ;;
-  enable)     cmd_enable "$@" ;;
-  passwd)     cmd_passwd "$@" ;;
-  list)       cmd_list "$@" ;;
-  info)       cmd_info "$@" ;;
-  core-add)   cmd_core_add "$@" ;;
-  core-remove) cmd_core_remove "$@" ;;
-  apply)      cmd_apply "$@" ;;
-  export)     cmd_export "$@" ;;
+  create)       cmd_create "$@" ;;
+  delete)       cmd_delete "$@" ;;
+  enable)       cmd_enable "$@" ;;
+  passwd)       cmd_passwd "$@" ;;
+  list)         cmd_list "$@" ;;
+  info)         cmd_info "$@" ;;
+  core-add)     cmd_core_add "$@" ;;
+  core-remove)  cmd_core_remove "$@" ;;
+  apply)        cmd_apply "$@" ;;
+  export)       cmd_export "$@" ;;
+  caddy-config) cmd_caddy_config "$@" ;;
   --help|-h|help) usage ;;
-  '')         usage; exit 1 ;;
-  *)          printf 'Unknown command: %s\nRun: solr-tenant.sh --help\n' "$COMMAND" >&2; exit 1 ;;
+  '')           usage; exit 1 ;;
+  *)            printf 'Unknown command: %s\nRun: solr-tenant.sh --help\n' "$COMMAND" >&2; exit 1 ;;
 esac

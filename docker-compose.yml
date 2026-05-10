@@ -27,6 +27,7 @@ services:
       - .env
     environment:
       ENV_FILE_PATH: /.env
+      SOLR_MODE: ${SOLR_MODE:-}
     networks:
       - solr_network
     restart: "no"
@@ -60,6 +61,11 @@ services:
     environment:
       SOLR_HEAP: ${SOLR_HEAP:-2g}
       SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
+      # SolrCloud: set SOLR_MODE=solrcloud in .env — enables embedded ZooKeeper.
+      # Leave empty (default) for standalone mode.
+      SOLR_MODE: ${SOLR_MODE:-}
+      # Disable usage analytics — no data sent to Solr vendor.
+      SOLR_OPTS: "-Dsolr.usage.analytics.enabled=false ${SOLR_JAVA_OPTS:-}"
     ulimits:
       nofile:
         soft: 65536
