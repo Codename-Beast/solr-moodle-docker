@@ -35,8 +35,6 @@
     <str name="managedSchemaResourceName">managed-schema</str>
   </schemaFactory>
 
-  <!-- Tika extraction library — required for /update/extract (Moodle file indexing) -->
-  <lib dir="${solr.install.dir:../../../..}/modules/extraction/lib" regex=".*\.jar" />
 
   <!-- Index Configuration -->
   <indexConfig>

@@ -64,6 +64,8 @@ services:
       # SolrCloud: set SOLR_MODE=solrcloud in .env — enables embedded ZooKeeper.
       # Leave empty (default) for standalone mode.
       SOLR_MODE: ${SOLR_MODE:-}
+      # Enable Tika extraction module (Moodle file indexing via /update/extract)
+      SOLR_MODULES: extraction
       # Disable usage analytics — no data sent to Solr vendor.
       SOLR_OPTS: "-Dsolr.usage.analytics.enabled=false ${SOLR_JAVA_OPTS:-}"
     ulimits:
