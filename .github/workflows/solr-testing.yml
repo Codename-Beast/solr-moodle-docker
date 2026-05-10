@@ -200,7 +200,7 @@ jobs:
             'SOLR_CPU_RESERVATION=0.5' \
             'SOLR_MEMORY_RESERVATION=2G' \
             > .env
-          touch tenants.env
+          > tenants.env
           chmod 666 tenants.env
           docker compose build solr-init
           docker compose up -d

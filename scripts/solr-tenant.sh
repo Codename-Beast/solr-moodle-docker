@@ -110,8 +110,10 @@ _validate_name() {
 
 _core_exists() {
   local core="$1"
+  # Solr's STATUS API returns {"status":{"core":{}}} even for non-existent cores.
+  # Only an existing core has "instanceDir" in its status object.
   _solr_api GET "/admin/cores?action=STATUS&core=${core}&wt=json" 2>/dev/null \
-    | grep -q "\"${core}\""
+    | grep -q '"instanceDir"'
 }
 
 _tenant_exists() {
