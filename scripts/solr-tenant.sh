@@ -212,23 +212,39 @@ _block_user() {
     "{\"set-user\":{\"${user}\":\"${block_pass}\"}}" > /dev/null
 }
 
-# Add permission rule for a core.
-# Uses core-prefixed paths (e.g. /core_a/select) instead of the "collection" field
-# because the collection filter is SolrCloud-only and is silently ignored in standalone mode.
+# Add permission rule for a core by writing directly to security.json.
+# The Security API's set-permission does not preserve the collection field in
+# standalone mode. Writing directly ensures it survives API write-backs, and the
+# subsequent _assign_role API call triggers Solr to reload the updated file.
 _add_permission() {
   local name="$1" role="$2" core="$3"
+  local sec_file="/var/solr/data/security.json"
   _log "INFO" "Adding permission '$name' for core '$core'"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"
     return 0
   fi
-  local p="/${core}" payload
-  payload="$(printf '{"set-permission":{"name":"%s","role":["admin","support","%s"],"path":["%s/select","%s/update","%s/update/extract","%s/admin/ping","%s/schema","%s/schema/*","%s/replication"]}}' \
-    "$name" "$role" "$p" "$p" "$p" "$p" "$p" "$p" "$p")"
-  _solr_api POST "/admin/authorization" "$payload" > /dev/null
+  local tmp
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
+  jq --arg n "$name" \
+    'del(.authorization.permissions[] | select(.name == $n))' \
+    "$sec_file" > "$tmp" && mv "$tmp" "$sec_file" || { rm -f "$tmp"; return 1; }
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
+  jq --arg n "$name" --arg r "$role" --arg c "$core" \
+    '.authorization.permissions += [{
+      "name": $n,
+      "role": ["admin","support",$r],
+      "collection": $c,
+      "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
+    }]' "$sec_file" > "$tmp" && mv "$tmp" "$sec_file" || { rm -f "$tmp"; return 1; }
+  chmod 600 "$sec_file"
+  chown 8983:8983 "$sec_file" 2>/dev/null || true
 }
 
-# Assign user to role
+# Assign user to role (API call also triggers Solr to reload security.json,
+# picking up any permissions written directly by _add_permission above).
 _assign_role() {
   local user="$1" role="$2"
   _log "INFO" "Assigning user '$user' to role '$role'"
@@ -240,16 +256,26 @@ _assign_role() {
     "{\"set-user-role\":{\"${user}\":\"${role}\"}}" > /dev/null
 }
 
-# Remove permission rule by name
+# Remove permission rule by writing directly to security.json, then trigger reload.
 _remove_permission() {
   local perm_name="$1"
+  local sec_file="/var/solr/data/security.json"
   _log "INFO" "Removing permission '$perm_name'"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would remove permission: %s\n' "$perm_name"
     return 0
   fi
+  local tmp
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
+  jq --arg n "$perm_name" \
+    'del(.authorization.permissions[] | select(.name == $n))' \
+    "$sec_file" > "$tmp" && mv "$tmp" "$sec_file" || { rm -f "$tmp"; return 1; }
+  chmod 600 "$sec_file"
+  chown 8983:8983 "$sec_file" 2>/dev/null || true
+  # Trigger Solr to reload the updated security.json
   _solr_api POST "/admin/authorization" \
-    "{\"delete-permission\":\"${perm_name}\"}" > /dev/null || true
+    "{\"set-user-role\":{\"${ADMIN_USER}\":\"admin\"}}" > /dev/null 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -387,16 +413,18 @@ cmd_create() {
     _create_core "$core"
   done
 
-  # Register user
+  # Register user (API → triggers reload, permissions not yet written)
   _register_user "$user" "$pass"
-  _assign_role "$user" "$role"
 
-  # Add permissions per core
+  # Write permissions directly to security.json BEFORE assign_role
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
     [ -z "$core" ] && continue
     _add_permission "tenant-${name}-${core}" "$role" "$core"
   done
+
+  # Assign role via API — triggers reload that picks up the permissions above
+  _assign_role "$user" "$role"
 
   # Write tenants.env
   if [ "$DRY_RUN" = "0" ]; then
@@ -496,15 +524,16 @@ cmd_enable() {
   new_pass="$(_gen_password)"
 
   _register_user "$user" "$new_pass"
-  _assign_role "$user" "$role"
 
-  # Re-add permissions for each core
+  # Write permissions before assign_role triggers reload
   IFS=',' read -ra CORE_ARRAY <<< "$cores"
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
     [ -z "$core" ] && continue
     _add_permission "tenant-${name}-${core}" "$role" "$core"
   done
+
+  _assign_role "$user" "$role"
 
   if [ "$DRY_RUN" = "0" ]; then
     _set_tenant_field "$name" "PASS" "$new_pass"
@@ -732,7 +761,6 @@ cmd_apply() {
         [ -z "$pass" ] && { _log "WARN" "No password for tenant $name — skipping"; continue; }
 
         _register_user "$user" "$pass"
-        _assign_role "$user" "$role"
 
         IFS=',' read -ra CORE_ARRAY <<< "$cores"
         for core in "${CORE_ARRAY[@]}"; do
@@ -741,6 +769,8 @@ cmd_apply() {
           _create_core "$core" || true
           _add_permission "tenant-${name}-${core}" "$role" "$core" || true
         done
+
+        _assign_role "$user" "$role"
 
         ((count++)) || true
         ;;
