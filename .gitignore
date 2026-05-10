@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+tenants.env
 eledia-workplace/
 *.env.backup
 

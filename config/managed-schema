@@ -124,9 +124,6 @@
   <!-- Root field for nested documents -->
   <field name="_root_" type="string" indexed="true" stored="false" docValues="false"/>
 
-  <!-- Catch-all text field -->
-  <field name="_text_" type="text_general" indexed="true" stored="false" multiValued="true"/>
-
   <!-- ===============================
        Dynamic Fields (for flexibility)
   ================================== -->
@@ -137,14 +134,11 @@
   <dynamicField name="*_b" type="boolean" indexed="true" stored="true"/>
   <dynamicField name="*_dt" type="pdate" indexed="true" stored="true"/>
 
+  <!-- Catch-all for unknown Moodle fields — prevents indexing errors on unexpected fields -->
+  <fieldType name="ignored" class="solr.StrField" stored="false" indexed="false" multiValued="true"/>
+  <dynamicField name="*" type="ignored" stored="false" docValues="false"/>
+
   <!-- Unique Key -->
   <uniqueKey>id</uniqueKey>
-
-  <!-- Copy Fields to catch-all -->
-  <copyField source="title" dest="_text_"/>
-  <copyField source="content" dest="_text_"/>
-  <copyField source="description1" dest="_text_"/>
-  <copyField source="description2" dest="_text_"/>
-  <copyField source="intro" dest="_text_"/>
 
 </schema>

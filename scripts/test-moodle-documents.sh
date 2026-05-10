@@ -79,7 +79,7 @@ done
 if [ -f ".env" ]; then
   source .env
 else
-  echo -e "${RED}ERROR: .env not found. Run setup first: docker compose --profile setup up moodle_setup${NC}"
+  echo -e "${RED}ERROR: .env not found. Run setup first: ./setup.sh${NC}"
   exit 1
 fi
 
