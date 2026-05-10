@@ -358,31 +358,21 @@ _write_user_role() {
 }
 
 # Add a permission for a core/collection.
-# SolrCloud: includes "collection" field — enforced by Solr (true isolation).
-# Standalone: omits "collection" — not enforced; URL isolation via Caddy proxy.
-# In both cases: powerinit.sh writes the collection field to security.json on
-# disk so it is available after restart or SolrCloud migration.
+# The collection field is always included — in Solr 9.x it maps to the core name
+# in standalone mode and prevents first-match cross-denial between tenants.
+# (Without collection, tenant_a's permission would deny tenant_b for the same paths.)
 _add_permission() {
   local name="$1" role="$2" core="$3"
   _log "INFO" "Adding permission '$name' for core '$core'"
   if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"; return 0; fi
   local payload
-  if _is_cloud_mode; then
-    payload="$(jq -n --arg n "$name" --arg r "$role" --arg c "$core" \
-      '{"set-permission": {
-        "name": $n,
-        "role": ["admin","support",$r],
-        "collection": [$c],
-        "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-      }}')"
-  else
-    payload="$(jq -n --arg n "$name" --arg r "$role" \
-      '{"set-permission": {
-        "name": $n,
-        "role": ["admin","support",$r],
-        "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-      }}')"
-  fi
+  payload="$(jq -n --arg n "$name" --arg r "$role" --arg c "$core" \
+    '{"set-permission": {
+      "name": $n,
+      "role": ["admin","support",$r],
+      "collection": [$c],
+      "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
+    }}')"
   _cloud_authz_api "$payload"
 }
 
