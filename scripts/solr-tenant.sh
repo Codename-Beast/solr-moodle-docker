@@ -96,7 +96,7 @@ _solr_api() {
 
   if [ "$http_code" != "200" ]; then
     _log "ERROR" "Solr API $method $path returned HTTP ${http_code:-<no response>}"
-    _log "ERROR" "Response body: $(cat /tmp/_solr_resp 2>/dev/null | head -5 || true)"
+    _log "ERROR" "Response body: $(head -5 /tmp/_solr_resp 2>/dev/null || true)"
     _log "ERROR" "Curl error: $(cat /tmp/_solr_err 2>/dev/null || true)"
     return 1
   fi
