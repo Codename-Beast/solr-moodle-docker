@@ -17,7 +17,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-SOLR_BASE="http://localhost:8983/solr"
+SOLR_BASE="http://localhost:${SOLR_PORT:-8983}/solr"
 TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
 LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
 ENV_FILE="${ENV_FILE:-/var/solr/data/.env}"
@@ -186,105 +186,144 @@ _create_core() {
   _log "INFO" "Core '$core' created"
 }
 
-# Register user in Solr Security API (plaintext — Solr hashes internally)
-_register_user() {
-  local user="$1" pass="$2"
-  _log "INFO" "Registering user '$user' in Security API"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would register user: %s\n' "$user"
-    return 0
+# ---------------------------------------------------------------------------
+# Direct security.json write helpers
+#
+# All credential/role/permission writes go directly to security.json on disk.
+# Solr's PathWatcher detects the file change and reloads auth config within
+# a few seconds — no Security API write calls are needed or used.
+#
+# Using in-place write (cat > file) preserves the inode so inotify fires
+# MODIFY (not DELETE+CREATE), which is what Solr's PathWatcher listens for.
+# ---------------------------------------------------------------------------
+
+_SEC_FILE="/var/solr/data/security.json"
+
+# Low-level: apply a jq filter to security.json in-place.
+_write_security() {
+  local tmp
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
+  if ! jq "$@" "$_SEC_FILE" > "$tmp"; then
+    rm -f "$tmp"
+    return 1
   fi
-  _solr_api POST "/admin/authentication" \
-    "{\"set-user\":{\"${user}\":\"${pass}\"}}" > /dev/null
+  cat "$tmp" > "$_SEC_FILE"
+  rm -f "$tmp"
+  chmod 600 "$_SEC_FILE"
+  chown 8983:8983 "$_SEC_FILE" 2>/dev/null || true
 }
 
-# Block user by setting unknown random password (plaintext — Solr hashes internally)
+# Write a hashed credential for user directly to security.json.
+_write_credential() {
+  local user="$1" pass="$2"
+  _log "INFO" "Writing credential for '$user'"
+  if [ "$DRY_RUN" = "1" ]; then
+    printf '[DRY-RUN] Would write credential for: %s\n' "$user"
+    return 0
+  fi
+  local hash
+  hash="$(_hash_password "$pass")"
+  # shellcheck disable=SC2016
+  _write_security --arg u "$user" --arg h "$hash" \
+    '.authentication.credentials[$u] = $h'
+}
+
+# Write a random (blocking) credential — user cannot log in.
 _block_user() {
   local user="$1"
-  local block_pass
-  block_pass="$(_gen_password)"
   _log "INFO" "Blocking user '$user'"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would block user: %s\n' "$user"
     return 0
   fi
-  _solr_api POST "/admin/authentication" \
-    "{\"set-user\":{\"${user}\":\"${block_pass}\"}}" > /dev/null
+  local rand_pass hash
+  rand_pass="$(_gen_password)"
+  hash="$(_hash_password "$rand_pass")"
+  # shellcheck disable=SC2016
+  _write_security --arg u "$user" --arg h "$hash" \
+    '.authentication.credentials[$u] = $h'
 }
 
-# Add permission rule for a core by writing directly to security.json.
-# The Security API's set-permission does not preserve the collection field in
-# standalone mode. Writing directly ensures it survives API write-backs, and the
-# subsequent _assign_role API call triggers Solr to reload the updated file.
+# Write user-role mapping directly to security.json.
+_write_user_role() {
+  local user="$1" role="$2"
+  _log "INFO" "Writing user-role: '$user' -> '$role'"
+  if [ "$DRY_RUN" = "1" ]; then
+    printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"
+    return 0
+  fi
+  # shellcheck disable=SC2016
+  _write_security --arg u "$user" --arg r "$role" \
+    '.authorization["user-role"][$u] = $r'
+}
+
+# Add a collection-scoped permission directly to security.json.
+# collection MUST be a JSON array [$c] — a bare string is parsed as null by
+# Solr's Java Permission class (List<String> cast fails on String), which
+# disables collection filtering and breaks tenant isolation.
 _add_permission() {
   local name="$1" role="$2" core="$3"
-  local sec_file="/var/solr/data/security.json"
   _log "INFO" "Adding permission '$name' for core '$core'"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"
     return 0
   fi
-  local tmp
-  tmp="$(mktemp)"
-  chmod 600 "$tmp"
-  if ! jq --arg n "$name" \
-    'del(.authorization.permissions[] | select(.name == $n))' \
-    "$sec_file" > "$tmp"; then
-    rm -f "$tmp"; return 1
-  fi
-  mv "$tmp" "$sec_file"
-  tmp="$(mktemp)"
-  chmod 600 "$tmp"
-  if ! jq --arg n "$name" --arg r "$role" --arg c "$core" \
+  # Remove any stale entry with the same name first
+  # shellcheck disable=SC2016
+  _write_security --arg n "$name" \
+    'del(.authorization.permissions[] | select(.name == $n))' || return 1
+  # Append new permission; collection as array so Solr parses it as List<String>
+  # shellcheck disable=SC2016
+  _write_security --arg n "$name" --arg r "$role" --arg c "$core" \
     '.authorization.permissions += [{
       "name": $n,
       "role": ["admin","support",$r],
-      "collection": $c,
+      "collection": [$c],
       "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-    }]' "$sec_file" > "$tmp"; then
-    rm -f "$tmp"; return 1
-  fi
-  mv "$tmp" "$sec_file"
-  chmod 600 "$sec_file"
-  chown 8983:8983 "$sec_file" 2>/dev/null || true
+    }]'
 }
 
-# Assign user to role (API call also triggers Solr to reload security.json,
-# picking up any permissions written directly by _add_permission above).
-_assign_role() {
-  local user="$1" role="$2"
-  _log "INFO" "Assigning user '$user' to role '$role'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"
-    return 0
-  fi
-  _solr_api POST "/admin/authorization" \
-    "{\"set-user-role\":{\"${user}\":\"${role}\"}}" > /dev/null
-}
-
-# Remove permission rule by writing directly to security.json, then trigger reload.
+# Remove a permission directly from security.json.
 _remove_permission() {
   local perm_name="$1"
-  local sec_file="/var/solr/data/security.json"
   _log "INFO" "Removing permission '$perm_name'"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would remove permission: %s\n' "$perm_name"
     return 0
   fi
-  local tmp
-  tmp="$(mktemp)"
-  chmod 600 "$tmp"
-  if ! jq --arg n "$perm_name" \
-    'del(.authorization.permissions[] | select(.name == $n))' \
-    "$sec_file" > "$tmp"; then
-    rm -f "$tmp"; return 1
+  # shellcheck disable=SC2016
+  _write_security --arg n "$perm_name" \
+    'del(.authorization.permissions[] | select(.name == $n))'
+}
+
+# Poll until Solr has reloaded security.json and the given user can authenticate.
+# Tests /solr/<core>/admin/ping which the predefined "health" permission allows
+# for any authenticated user. Solr's PathWatcher reloads within 1-5 seconds.
+# Args: user pass [core] [max_secs]
+_wait_for_security_reload() {
+  local user="$1" pass="$2" core="${3:-}" max_secs="${4:-20}"
+  local url
+  if [ -n "$core" ]; then
+    url="${SOLR_BASE}/${core}/admin/ping"
+  else
+    # Fall back to system info (requires admin; used when no core is known)
+    url="${SOLR_BASE}/admin/info/system"
   fi
-  mv "$tmp" "$sec_file"
-  chmod 600 "$sec_file"
-  chown 8983:8983 "$sec_file" 2>/dev/null || true
-  # Trigger Solr to reload the updated security.json
-  _solr_api POST "/admin/authorization" \
-    "{\"set-user-role\":{\"${ADMIN_USER}\":\"admin\"}}" > /dev/null 2>/dev/null || true
+  local i=0
+  while [ "$i" -lt "$max_secs" ]; do
+    local code
+    code="$(curl -so /dev/null -w '%{http_code}' -u "${user}:${pass}" \
+      "$url" 2>/dev/null)"
+    if [ "$code" = "200" ]; then
+      _log "INFO" "Security reload confirmed after ${i}s"
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  _log "WARN" "Security reload not confirmed after ${max_secs}s — continuing"
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -414,7 +453,7 @@ cmd_create() {
   pass="$(_gen_password)"
   local role="tenant-${name}"
 
-  # Create cores
+  # Create cores via Admin API
   IFS=',' read -ra CORE_ARRAY <<< "$cores"
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
@@ -422,18 +461,18 @@ cmd_create() {
     _create_core "$core"
   done
 
-  # Register user (API → triggers reload, permissions not yet written)
-  _register_user "$user" "$pass"
-
-  # Write permissions directly to security.json BEFORE assign_role
+  # Write all security changes directly to security.json (no Security API writes).
+  # Direct writes avoid API round-trip stripping the collection field.
+  _write_credential "$user" "$pass"
+  _write_user_role  "$user" "$role"
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
     [ -z "$core" ] && continue
     _add_permission "tenant-${name}-${core}" "$role" "$core"
   done
 
-  # Assign role via API — triggers reload that picks up the permissions above
-  _assign_role "$user" "$role"
+  # Wait for Solr's PathWatcher to detect the file change and reload auth config
+  _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"
 
   # Write tenants.env
   if [ "$DRY_RUN" = "0" ]; then
@@ -448,7 +487,6 @@ cmd_create() {
   _print_credentials "$name" "$user" "$pass" "$cores"
 
   # Endpoint test (non-fatal on failure)
-  sleep 2
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
     [ -z "$core" ] && continue
@@ -532,9 +570,9 @@ cmd_enable() {
   local new_pass
   new_pass="$(_gen_password)"
 
-  _register_user "$user" "$new_pass"
+  _write_credential "$user" "$new_pass"
+  _write_user_role  "$user" "$role"
 
-  # Write permissions before assign_role triggers reload
   IFS=',' read -ra CORE_ARRAY <<< "$cores"
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
@@ -542,7 +580,7 @@ cmd_enable() {
     _add_permission "tenant-${name}-${core}" "$role" "$core"
   done
 
-  _assign_role "$user" "$role"
+  _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"
 
   if [ "$DRY_RUN" = "0" ]; then
     _set_tenant_field "$name" "PASS" "$new_pass"
@@ -582,9 +620,11 @@ cmd_passwd() {
   user="${user:-solr_${name}}"
   cores="$(_get_tenant_field "$name" "CORES")"
 
-  local new_pass
+  local new_pass first_core
   new_pass="$(_gen_password)"
-  _register_user "$user" "$new_pass"
+  first_core="$(printf '%s' "$cores" | cut -d, -f1)"
+  _write_credential "$user" "$new_pass"
+  _wait_for_security_reload "$user" "$new_pass" "$first_core"
 
   if [ "$DRY_RUN" = "0" ]; then
     _set_tenant_field "$name" "PASS" "$new_pass"
@@ -690,8 +730,8 @@ cmd_core_add() {
   pass="$(_get_tenant_field "$name" "PASS")"
   printf '✔ Core "%s" added to tenant "%s"\n' "$core" "$name"
 
-  sleep 2
   if [ -n "$pass" ]; then
+    _wait_for_security_reload "$user" "$pass" "$core"
     _test_endpoints "$user" "$pass" "$core" || true
   fi
 
@@ -769,7 +809,8 @@ cmd_apply() {
 
         [ -z "$pass" ] && { _log "WARN" "No password for tenant $name — skipping"; continue; }
 
-        _register_user "$user" "$pass"
+        _write_credential "$user" "$pass"
+        _write_user_role  "$user" "$role"
 
         IFS=',' read -ra CORE_ARRAY <<< "$cores"
         for core in "${CORE_ARRAY[@]}"; do
@@ -779,12 +820,16 @@ cmd_apply() {
           _add_permission "tenant-${name}-${core}" "$role" "$core" || true
         done
 
-        _assign_role "$user" "$role"
-
         ((count++)) || true
         ;;
     esac
   done < "$TENANTS_ENV"
+
+  # Wait for Solr to reload the updated security.json before returning
+  if [ "$count" -gt 0 ]; then
+    _log "INFO" "Waiting for Solr security reload..."
+    sleep 5
+  fi
 
   printf '✔ Applied %s tenant(s) from tenants.env\n' "$count"
   _log "INFO" "apply completed: $count tenant(s)"
