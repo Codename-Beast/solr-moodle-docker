@@ -30,7 +30,7 @@ _log() {
   local level="$1"; shift
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
-  printf '[%s] [%-5s] %s\n' "$ts" "$level" "$*" | tee -a "$LOG_FILE"
+  printf '[%s] [%-5s] %s\n' "$ts" "$level" "$*" | tee -a "$LOG_FILE" 2>/dev/null || true
 }
 
 _log_action() {

@@ -48,7 +48,7 @@ services:
     volumes:
       - solr_data:/var/solr/data:z
       - ./scripts:/opt/solr/scripts:ro,z
-      - ./tenants.env:/opt/solr/tenants.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:z
       - /var/log/solr:/var/log/solr:z
     env_file:
       - .env
