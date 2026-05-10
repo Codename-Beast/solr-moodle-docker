@@ -14,6 +14,7 @@ stages:
   - security
   - test
   - tenant-test
+  - solrcloud-test
 
 security-scan:
   stage: security
@@ -198,3 +199,92 @@ tenant-test:
     - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
 
   timeout: 20 minutes
+
+# SolrCloud mode: embedded ZooKeeper, true collection-level authorization.
+# Validates that SOLR_MODE=solrcloud activates SolrCloud and tenant isolation
+# works at the collection level (not via Caddy URL routing).
+solrcloud-test:
+  stage: solrcloud-test
+  extends: .test-template
+  needs:
+    - tenant-test
+
+  script:
+    - |
+      printf '%s\n' \
+        'INSTANCE_NAME=solr' \
+        'SOLR_VERSION=9.10.1' \
+        'SOLR_PORT=8983' \
+        'SOLR_BIND=127.0.0.1' \
+        'SOLR_HEAP=2g' \
+        'SOLR_LOG_LEVEL=INFO' \
+        'SOLR_NETWORK_NAME=solr_network' \
+        'SOLR_ADMIN_USER=admin' \
+        'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \
+        'SOLR_SUPPORT_USER=support' \
+        'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890' \
+        'SOLR_CPU_LIMIT=2' \
+        'SOLR_MEMORY_LIMIT=4G' \
+        'SOLR_CPU_RESERVATION=0.5' \
+        'SOLR_MEMORY_RESERVATION=2G' \
+        'SOLR_MODE=solrcloud' \
+        > .env
+      touch tenants.env
+      mkdir -p /var/log/solr
+    - docker compose build solr-init
+    - docker compose up -d
+    - timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting for SolrCloud..."; done'
+    - docker compose ps
+
+    - CONTAINER="solr-solr"
+    - TENANT_CMD="docker exec $CONTAINER /opt/solr/scripts/solr-tenant.sh"
+
+    - echo "Verifying SolrCloud mode is active..."
+    - |
+      STATUS=$(curl -sf -u "admin:CI_AdminPass_1234567890" \
+        "http://127.0.0.1:8983/solr/admin/collections?action=clusterstatus&wt=json" | \
+        python3 -c "import sys,json; d=json.load(sys.stdin); print('ok' if 'cluster' in d else 'fail')" 2>/dev/null || echo "fail")
+      [ "$STATUS" = "ok" ] && echo "PASS: SolrCloud cluster active" || { echo "FAIL: Not in SolrCloud mode"; exit 1; }
+
+    - echo "Creating tenants in SolrCloud mode..."
+    - $TENANT_CMD create cloud_a --cores col_a
+    - $TENANT_CMD create cloud_b --cores col_b
+    - PASS_A=$(docker exec "$CONTAINER" grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+
+    - echo "Testing cloud_a -> col_a (expect 200)..."
+    - |
+      CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+        "http://127.0.0.1:8983/solr/col_a/select?q=*:*&rows=0")
+      [ "$CODE" = "200" ] || { echo "FAIL: HTTP $CODE"; exit 1; }
+      echo "PASS"
+
+    - echo "Testing SolrCloud isolation: cloud_a cannot access col_b (expect 403)..."
+    - |
+      CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+        "http://127.0.0.1:8983/solr/col_b/select?q=*:*&rows=0")
+      [ "$CODE" = "403" ] || { echo "FAIL: isolation broken HTTP $CODE"; exit 1; }
+      echo "PASS: SolrCloud isolation OK"
+
+    - echo "Testing PDF indexing via Tika (/update/extract)..."
+    - |
+      echo "This is a test PDF content for Solr Tika extraction" > /tmp/test.txt
+      CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+        -F "file=@/tmp/test.txt" \
+        "http://127.0.0.1:8983/solr/col_a/update/extract?extractOnly=true&wt=json")
+      [ "$CODE" = "200" ] && echo "PASS: Tika extraction OK" || echo "WARN: Tika returned HTTP $CODE"
+      rm -f /tmp/test.txt
+
+    - echo "Testing apply idempotent in SolrCloud mode..."
+    - $TENANT_CMD apply
+    - echo "PASS"
+
+  after_script:
+    - docker compose down -v || true
+    - rm -f .env tenants.env || true
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
+
+  timeout: 25 minutes

@@ -60,43 +60,46 @@
   <field name="description1" type="text_general" indexed="true" stored="true" multiValued="false"/>
   <field name="description2" type="text_general" indexed="true" stored="true" multiValued="false"/>
 
-  <!-- Moodle context ID (required) -->
-  <field name="contextid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+  <!-- Moodle context ID — plong: contextid exceeds pint range in large Moodle installations -->
+  <field name="contextid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
 
-  <!-- Moodle course ID (required) -->
-  <field name="courseid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+  <!-- Moodle course ID -->
+  <field name="courseid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
 
-  <!-- Owner user ID (required) -->
-  <field name="owneruserid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+  <!-- Owner user ID -->
+  <field name="owneruserid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- Modification timestamp (required) -->
   <field name="modified" type="pdate" indexed="true" stored="true" required="true" multiValued="false"/>
 
-  <!-- Document type (required) - integer type for Moodle -->
+  <!-- Document type (required) -->
   <field name="type" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- Search area ID (required) -->
   <field name="areaid" type="string" indexed="true" stored="true" required="true" multiValued="false"/>
 
-  <!-- Moodle item ID (required) -->
-  <field name="itemid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
+  <!-- Moodle item ID -->
+  <field name="itemid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- ===============================
        Moodle Optional Fields
   ================================== -->
 
   <!-- User ID -->
-  <field name="userid" type="pint" indexed="true" stored="true" multiValued="false"/>
+  <field name="userid" type="plong" indexed="true" stored="true" multiValued="false"/>
 
   <!-- Group ID -->
-  <field name="groupid" type="pint" indexed="true" stored="true" multiValued="false"/>
+  <field name="groupid" type="plong" indexed="true" stored="true" multiValued="false"/>
 
   <!-- Introduction/Summary -->
   <field name="intro" type="text_general" indexed="true" stored="true" multiValued="false"/>
 
+  <!-- Parent document ID — Moodle 4.1+ sub-document search; must be explicit or ignored catchall hides it -->
+  <field name="parentid" type="string" indexed="true" stored="true" multiValued="false"/>
+
   <!-- ===============================
        Moodle File Indexing Fields
-       (Solr-specific fields for file search)
+       (Solr-specific fields for file search via Tika /update/extract)
   ================================== -->
 
   <!-- File grouping ID -->
@@ -111,7 +114,7 @@
   <!-- File indexing status -->
   <field name="solr_fileindexstatus" type="pint" indexed="true" stored="true" multiValued="false"/>
 
-  <!-- File content (not stored, only indexed for search) -->
+  <!-- File content (indexed only — text extracted by Tika from PDF/Office/etc.) -->
   <field name="solr_filecontent" type="text_general" indexed="true" stored="false" multiValued="false"/>
 
   <!-- ===============================

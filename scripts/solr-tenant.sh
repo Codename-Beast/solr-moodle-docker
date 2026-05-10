@@ -1001,8 +1001,14 @@ cmd_export() {
         local state="present"
         [ "${active:-true}" = "false" ] && state="absent"
 
+        local pass user
+        pass="$(grep "^TENANT_${name}_PASS=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+        user="$(grep "^TENANT_${name}_USER=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+
         printf '  - name: %s\n' "$name"
         printf '    state: %s\n' "$state"
+        [ -n "$user" ] && printf '    solr_user: "%s"\n' "$user"
+        [ -n "$pass" ] && printf '    solr_password: "%s"\n' "$pass"
         printf '    cores:\n'
         IFS=',' read -ra CORE_ARRAY <<< "$cores"
         for core in "${CORE_ARRAY[@]}"; do
