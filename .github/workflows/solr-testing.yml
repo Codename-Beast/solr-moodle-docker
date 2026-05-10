@@ -344,6 +344,15 @@ jobs:
             "http://127.0.0.1:8983/solr/admin/zookeeper?detail=true&path=%2F&wt=json")
           [ "$CODE" = "200" ] || { echo "FAIL: ZooKeeper API not reachable (HTTP $CODE)"; exit 1; }
           echo "PASS: Embedded ZooKeeper running (HTTP 200)"
+          # Diagnose security API accessibility before tenant creation
+          AUTH_CODE=$(curl -so /tmp/auth_resp -w '%{http_code}' -u "admin:CI_AdminPass_1234567890" \
+            "http://127.0.0.1:8983/solr/admin/authentication")
+          echo "Security API (GET /admin/authentication): HTTP $AUTH_CODE"
+          cat /tmp/auth_resp | head -5 || true
+          AUTHZ_CODE=$(curl -so /tmp/authz_resp -w '%{http_code}' -u "admin:CI_AdminPass_1234567890" \
+            "http://127.0.0.1:8983/solr/admin/authorization")
+          echo "Authorization API (GET /admin/authorization): HTTP $AUTHZ_CODE"
+          cat /tmp/authz_resp | head -5 || true
 
       - name: Create tenant via Collections API
         run: |
