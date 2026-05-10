@@ -13,9 +13,13 @@
     "class": "solr.RuleBasedAuthorizationPlugin",
     "permissions": [
       { "name": "health",          "role": null },
+      { "name": "all",             "role": "admin" },
+      { "name": "read",            "role": ["admin", "support"] },
+      { "name": "metrics-read",    "role": ["admin", "support"] },
       { "name": "core-admin-read", "role": ["admin", "support"] },
       { "name": "core-admin-edit", "role": "admin" },
-      { "name": "metrics-read",    "role": ["admin", "support"] }
+      { "name": "schema-read",     "role": ["admin", "support"] },
+      { "name": "config-read",     "role": ["admin", "support"] }
     ],
     "user-role": {
       "__ADMIN_USER__":   "admin",
