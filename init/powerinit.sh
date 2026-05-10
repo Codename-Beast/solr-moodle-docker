@@ -150,11 +150,11 @@ if [ ! -f "$TENANTS_ENV" ]; then
 fi
 
 # Parse tenants into arrays.
-# TENANT_NAMES is an indexed array — safe with set -u even when empty.
-# Associative arrays trigger "unbound variable" on empty access with set -u
-# in bash 5.2 on Alpine, so iteration always goes through TENANT_NAMES.
-declare -a TENANT_NAMES
-declare -A TENANT_CORES TENANT_USER TENANT_PASS TENANT_ACTIVE
+# Explicit =() initialization is required — in bash 5.2 on Alpine, declare-only
+# (without assignment) does not mark a variable as "set" for set -u purposes.
+TENANT_NAMES=()
+TENANT_COUNT=0
+declare -A TENANT_CORES=() TENANT_USER=() TENANT_PASS=() TENANT_ACTIVE=()
 
 _load_tenants() {
   local key value name field _dup _n
@@ -173,10 +173,13 @@ _load_tenants() {
         CORES)
           TENANT_CORES["$name"]="$value"
           _dup=0
-          for _n in "${TENANT_NAMES[@]}"; do
-            [ "$_n" = "$name" ] && _dup=1 && break
+          for _n in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
+            [ "$_n" = "$name" ] && { _dup=1; break; }
           done
-          [ "$_dup" -eq 0 ] && TENANT_NAMES+=("$name")
+          if [ "$_dup" -eq 0 ]; then
+            TENANT_NAMES+=("$name")
+            ((TENANT_COUNT++)) || true
+          fi
           ;;
         USER)   TENANT_USER["$name"]="$value" ;;
         PASS)   TENANT_PASS["$name"]="$value" ;;
@@ -187,7 +190,7 @@ _load_tenants() {
 }
 
 _load_tenants
-_log "  Found ${#TENANT_NAMES[@]} tenant(s)"
+_log "  Found $TENANT_COUNT tenant(s)"
 
 # ---------------------------------------------------------------------------
 # Step 2: Create configset (idempotent)
@@ -238,7 +241,7 @@ sed \
   "$TEMPLATE" > "$TMP_SEC"
 
 # Merge each active tenant using jq
-for tenant_name in "${TENANT_NAMES[@]}"; do
+for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" = "false" ] && continue
 
@@ -293,7 +296,7 @@ for tenant_name in "${TENANT_NAMES[@]}"; do
 done
 
 # Inactive tenants: add credential with random hash (blocks login, keeps user visible)
-for tenant_name in "${TENANT_NAMES[@]}"; do
+for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" != "false" ] && continue
 
@@ -331,7 +334,7 @@ _log "  security.json written ($(jq '.authorization.permissions | length' "${DAT
 # ---------------------------------------------------------------------------
 _log "Step 4: Pre-creating core directories"
 
-for tenant_name in "${TENANT_NAMES[@]}"; do
+for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" = "false" ] && continue
 
