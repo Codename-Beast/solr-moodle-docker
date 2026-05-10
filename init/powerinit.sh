@@ -149,11 +149,15 @@ if [ ! -f "$TENANTS_ENV" ]; then
   touch "$TENANTS_ENV" 2>/dev/null || true
 fi
 
-# Parse tenants into arrays
+# Parse tenants into arrays.
+# TENANT_NAMES is an indexed array — safe with set -u even when empty.
+# Associative arrays trigger "unbound variable" on empty access with set -u
+# in bash 5.2 on Alpine, so iteration always goes through TENANT_NAMES.
+declare -a TENANT_NAMES
 declare -A TENANT_CORES TENANT_USER TENANT_PASS TENANT_ACTIVE
 
 _load_tenants() {
-  local key value name field
+  local key value name field _dup _n
   while IFS='=' read -r key value; do
     # Skip comments and empty lines
     case "$key" in
@@ -166,7 +170,14 @@ _load_tenants() {
       field="${name##*_}"
       name="${name%_*}"
       case "$field" in
-        CORES)  TENANT_CORES["$name"]="$value" ;;
+        CORES)
+          TENANT_CORES["$name"]="$value"
+          _dup=0
+          for _n in "${TENANT_NAMES[@]}"; do
+            [ "$_n" = "$name" ] && _dup=1 && break
+          done
+          [ "$_dup" -eq 0 ] && TENANT_NAMES+=("$name")
+          ;;
         USER)   TENANT_USER["$name"]="$value" ;;
         PASS)   TENANT_PASS["$name"]="$value" ;;
         ACTIVE) TENANT_ACTIVE["$name"]="$value" ;;
@@ -176,7 +187,7 @@ _load_tenants() {
 }
 
 _load_tenants
-_log "  Found ${#TENANT_CORES[@]} tenant(s)"
+_log "  Found ${#TENANT_NAMES[@]} tenant(s)"
 
 # ---------------------------------------------------------------------------
 # Step 2: Create configset (idempotent)
@@ -227,7 +238,7 @@ sed \
   "$TEMPLATE" > "$TMP_SEC"
 
 # Merge each active tenant using jq
-for tenant_name in "${!TENANT_CORES[@]}"; do
+for tenant_name in "${TENANT_NAMES[@]}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" = "false" ] && continue
 
@@ -282,7 +293,7 @@ for tenant_name in "${!TENANT_CORES[@]}"; do
 done
 
 # Inactive tenants: add credential with random hash (blocks login, keeps user visible)
-for tenant_name in "${!TENANT_CORES[@]}"; do
+for tenant_name in "${TENANT_NAMES[@]}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" != "false" ] && continue
 
@@ -320,7 +331,7 @@ _log "  security.json written ($(jq '.authorization.permissions | length' "${DAT
 # ---------------------------------------------------------------------------
 _log "Step 4: Pre-creating core directories"
 
-for tenant_name in "${!TENANT_CORES[@]}"; do
+for tenant_name in "${TENANT_NAMES[@]}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
   [ "$active" = "false" ] && continue
 
