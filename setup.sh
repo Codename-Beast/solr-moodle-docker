@@ -124,8 +124,19 @@ fi
 _log "Step 3: Log directory"
 
 mkdir -p "$LOG_DIR"
-chmod 755 "$LOG_DIR"
+# docker group can read logs; 750 = root:docker readable
+chown root:docker "$LOG_DIR" 2>/dev/null || chmod 755 "$LOG_DIR"
+[ "$(stat -c '%G' "$LOG_DIR" 2>/dev/null)" = "docker" ] && chmod 750 "$LOG_DIR" || chmod 755 "$LOG_DIR"
 _log "  Log directory: $LOG_DIR"
+
+# Add the user who triggered the install to docker group so they can read logs without sudo
+INSTALLING_USER="${SUDO_USER:-}"
+if [ -n "$INSTALLING_USER" ] && [ "$INSTALLING_USER" != "root" ]; then
+  if id "$INSTALLING_USER" >/dev/null 2>&1; then
+    usermod -aG docker "$INSTALLING_USER" 2>/dev/null && \
+      _log "  Added '$INSTALLING_USER' to docker group (logout/login to apply)" || true
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Step 4: Logrotate
