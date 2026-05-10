@@ -14,17 +14,26 @@ set -euo pipefail
 LOG_DIR="/var/log/solr"
 LOG_FILE="${LOG_DIR}/setup.log"
 
+# _log: Write a timestamped message to stdout and $LOG_FILE.
+# Args: $@ - message text
+# Returns: nothing
 _log() {
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
   printf '[%s] %s\n' "$ts" "$* " | tee -a "$LOG_FILE"
 }
 
+# _die: Log an error message and exit with code 1.
+# Args: $@ - error description
+# Returns: exits with code 1
 _die() {
   _log "ERROR: $*"
   exit 1
 }
 
+# _gen_password: Generate a random 32-character alphanumeric password.
+# Args: none
+# Returns: prints 32-character string to stdout
 _gen_password() {
   openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }

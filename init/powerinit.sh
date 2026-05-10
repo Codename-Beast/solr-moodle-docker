@@ -18,12 +18,18 @@ set -euo pipefail
 LOG_DIR="/var/log/solr"
 LOG_FILE="${LOG_DIR}/setup.log"
 
+# _log: Write a timestamped message to stdout and $LOG_FILE.
+# Args: $@ - message text
+# Returns: nothing
 _log() {
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
   printf '[%s] %s\n' "$ts" "$*" | tee -a "$LOG_FILE"
 }
 
+# _setup_logging: Create log directory and file, write start banner.
+# Args: none
+# Returns: nothing; exits cleanly if directory creation fails (non-fatal with || true)
 _setup_logging() {
   mkdir -p "$LOG_DIR" 2>/dev/null || true
   touch "$LOG_FILE" 2>/dev/null || true
@@ -44,6 +50,9 @@ ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 # ---------------------------------------------------------------------------
 # Load .env
 # ---------------------------------------------------------------------------
+# load_env: Source a .env file into the current shell environment with export (-a).
+# Args: $1 - absolute path to the env file
+# Returns: nothing; silently skips if the file does not exist
 load_env() {
   if [ -f "$1" ]; then
     _log "Loading environment from $1"
@@ -64,7 +73,9 @@ fi
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Validate names: only [a-z0-9_] allowed
+# _validate_name: Reject names that contain characters outside [a-zA-Z0-9_].
+# Args: $1 - name to validate, $2 - human-readable label for error messages
+# Returns: nothing on success; exits with code 4 on invalid input
 _validate_name() {
   local name="$1" label="$2"
   case "$name" in
@@ -82,8 +93,11 @@ else
   _BASE64="base64"
 fi
 
-# Solr BasicAuth double-SHA256 hash
-# Format: base64(SHA256(SHA256(salt || password))) base64(salt)
+# hash_solr_password: Produce a Solr BasicAuthPlugin-compatible credential string.
+# Algorithm: base64(SHA256(SHA256(random_salt || password))) + " " + base64(salt)
+# The credential string is stored verbatim in security.json under authentication.credentials.
+# Args: $1 - plaintext password
+# Returns: prints "<hash_b64> <salt_b64>" to stdout; exits non-zero on openssl failure
 hash_solr_password() {
   local pass="$1"
   local salt_file pass_file combined hash1 hash2
@@ -112,7 +126,9 @@ hash_solr_password() {
   printf '%s %s' "$hash_b64" "$salt_b64"
 }
 
-# Generate a random 32-char password
+# gen_password: Generate a random 32-character alphanumeric password via openssl.
+# Args: none
+# Returns: prints 32-character string to stdout (no newline from head -c)
 gen_password() {
   openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }
@@ -156,6 +172,11 @@ TENANT_NAMES=()
 TENANT_COUNT=0
 declare -A TENANT_CORES=() TENANT_USER=() TENANT_PASS=() TENANT_ACTIVE=()
 
+# _load_tenants: Parse tenants.env and populate the TENANT_* associative arrays.
+# Reads TENANT_<name>_CORES, TENANT_<name>_USER, TENANT_<name>_PASS, TENANT_<name>_ACTIVE.
+# Maintains TENANT_NAMES (ordered) and TENANT_COUNT.
+# Args: none (reads $TENANTS_ENV)
+# Returns: populates global arrays; no output
 _load_tenants() {
   local key value name field _dup _n
   while IFS='=' read -r key value; do
@@ -269,10 +290,21 @@ if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
   chmod 600 "$TMP2"
   jq --arg c "$LEGACY_CORE" \
     '.authorization.permissions += [{
-      "name": "moodle-core-access",
+      "name": "moodle-core-read",
       "role": ["admin","support","moodle"],
       "collection": [$c],
-      "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
+      "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+    }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg c "$LEGACY_CORE" \
+    '.authorization.permissions += [{
+      "name": "moodle-core-write",
+      "role": ["admin","moodle"],
+      "collection": [$c],
+      "path": ["/update","/update/extract"]
     }]' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 fi
@@ -296,7 +328,13 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
 
   _log "  Processing tenant: $tenant_name (user: $user, cores: $cores)"
   tenant_hash="$(hash_solr_password "$pass")"
-  role="tenant-${tenant_name}"
+  # Standalone: all tenants share role "tenant" (Caddy handles per-URL isolation).
+  # SolrCloud: unique role per tenant enables collection-level enforcement by Solr.
+  if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
+    role="tenant-${tenant_name}"
+  else
+    role="tenant"
+  fi
 
   # Add credential
   TMP2="$(mktemp)"
@@ -312,25 +350,59 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
     '.authorization["user-role"][$u] = $r' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 
-  # Add one permission entry per core
-  IFS=',' read -ra CORE_ARRAY <<< "$cores"
-  for core in "${CORE_ARRAY[@]}"; do
-    core="$(echo "$core" | tr -d ' ')"
-    [ -z "$core" ] && continue
-    perm_name="tenant-${tenant_name}-${core}"
+  # SolrCloud: per-tenant-per-collection permissions with collection field.
+  # Solr enforces the collection field server-side — true per-collection isolation.
+  if [ "$SOLR_MODE" = "solrcloud" ]; then
+    IFS=',' read -ra CORE_ARRAY <<< "$cores"
+    for core in "${CORE_ARRAY[@]}"; do
+      core="$(echo "$core" | tr -d ' ')"
+      [ -z "$core" ] && continue
 
-    TMP2="$(mktemp)"
-    chmod 600 "$TMP2"
-    jq --arg n "$perm_name" --arg r "$role" --arg c "$core" \
-      '.authorization.permissions += [{
-        "name": $n,
-        "role": ["admin","support",$r],
-        "collection": [$c],
-        "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-      }]' "$TMP_SEC" > "$TMP2"
-    mv "$TMP2" "$TMP_SEC"
-  done
+      TMP2="$(mktemp)"; chmod 600 "$TMP2"
+      jq --arg n "tenant-${tenant_name}-${core}-read" --arg r "$role" --arg c "$core" \
+        '.authorization.permissions += [{
+          "name": $n,
+          "role": ["admin","support",$r],
+          "collection": [$c],
+          "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+        }]' "$TMP_SEC" > "$TMP2"
+      mv "$TMP2" "$TMP_SEC"
+
+      TMP2="$(mktemp)"; chmod 600 "$TMP2"
+      jq --arg n "tenant-${tenant_name}-${core}-write" --arg r "$role" --arg c "$core" \
+        '.authorization.permissions += [{
+          "name": $n,
+          "role": ["admin",$r],
+          "collection": [$c],
+          "path": ["/update","/update/extract"]
+        }]' "$TMP_SEC" > "$TMP2"
+      mv "$TMP2" "$TMP_SEC"
+    done
+  fi
 done
+
+# Standalone: one shared tenant-read + tenant-write permission covers ALL tenant users.
+# No collection field → Solr evaluates path match only → blocks support from /update.
+# Per-URL tenant isolation (which core each Moodle instance can reach) is enforced by Caddy.
+if [ "${SOLR_MODE:-}" != "solrcloud" ] && [ "$TENANT_COUNT" -gt 0 ]; then
+  _log "  Adding standalone shared tenant-read and tenant-write permissions"
+
+  TMP2="$(mktemp)"; chmod 600 "$TMP2"
+  jq '.authorization.permissions += [{
+    "name": "tenant-read",
+    "role": ["admin","support","tenant"],
+    "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+  }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"; chmod 600 "$TMP2"
+  jq '.authorization.permissions += [{
+    "name": "tenant-write",
+    "role": ["admin","tenant"],
+    "path": ["/update","/update/extract"]
+  }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+fi
 
 # Inactive tenants: add credential with random hash (blocks login, keeps user visible)
 for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do

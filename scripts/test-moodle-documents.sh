@@ -32,7 +32,7 @@ NC='\033[0m' # No Color
 KEEP_DOCUMENTS=false
 WAIT_TIME=0
 SOLR_HOST="127.0.0.1"
-SOLR_PORT="8983"
+SOLR_PORT="${SOLR_PORT:-8983}"
 
 # Load SOLR_CORE_NAME from .env or use default
 if [ -f ".env" ]; then
@@ -469,6 +469,68 @@ if [ "$KEEP_DOCUMENTS" = true ] || [ "$WAIT_TIME" -gt 0 ]; then
     print_info "To manually cleanup, run:"
     print_info "  curl -u admin:password -X POST \"http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/update?commit=true\" -H \"Content-Type: text/xml\" --data-binary '<delete><query>*:*</query></delete>'"
   fi
+fi
+
+# PDF / Tika extraction test
+print_header "TIKA FILE INDEXING TEST"
+
+PDF_FILE="tests/test-moodle-document.pdf"
+if [ -f "$PDF_FILE" ]; then
+  # Step 1: verify Tika extracts text from the PDF
+  print_test "Tika extraction: upload test PDF to /update/extract (expect 200)"
+  TIKA_RESP=$(curl -s -o /tmp/_tika_resp -w '%{http_code}' \
+    -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    -F "file=@${PDF_FILE}" \
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/update/extract?extractOnly=true&wt=json" 2>/dev/null)
+  if [ "$TIKA_RESP" = "200" ]; then
+    print_pass "Tika extraction endpoint reachable (HTTP 200)"
+    # Verify extracted text contains known keyword
+    if grep -q "ELEDIA_TIKA_TEST_MARKER" /tmp/_tika_resp 2>/dev/null; then
+      print_pass "Tika extracted PDF text content correctly (marker found)"
+    else
+      print_fail "Tika returned 200 but extracted content missing expected marker"
+    fi
+  else
+    print_fail "Tika extraction failed (HTTP $TIKA_RESP) — check SOLR_MODULES=extraction"
+  fi
+
+  # Step 2: index the PDF with Tika into Solr
+  print_test "Tika indexing: index test PDF into Solr core"
+  TIKA_IDX=$(curl -s -o /dev/null -w '%{http_code}' \
+    -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    -F "file=@${PDF_FILE}" \
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/update/extract?commit=true&literal.id=tika_test_pdf&literal.title=Solr+Tika+PDF+Test&literal.areaid=test_files&literal.contextid=99999&literal.itemid=1&literal.courseid=1&literal.owneruserid=1&literal.modified=2026-01-01T00:00:00Z&literal.type=1&wt=json" 2>/dev/null)
+  if [ "$TIKA_IDX" = "200" ]; then
+    print_pass "PDF indexed via Tika (HTTP 200)"
+    ((DOCS_INDEXED++))
+
+    # Step 3: search for content that was inside the PDF
+    sleep 1
+    print_test "PDF content searchable: query for marker keyword"
+    SEARCH_RESP=$(solr_get "select?q=ELEDIA_TIKA_TEST_MARKER&wt=json")
+    FOUND=$(echo "$SEARCH_RESP" | jq -r '.response.numFound' 2>/dev/null || echo "0")
+    if [ "$FOUND" -ge 1 ]; then
+      print_pass "PDF content is searchable: found $FOUND document(s) containing marker"
+    else
+      print_fail "PDF content NOT findable in index after Tika extraction"
+    fi
+
+    # Step 4: search for other keywords from the PDF
+    print_test "PDF content: query for 'moodle solr tika'"
+    SEARCH_RESP=$(solr_get "select?q=moodle+solr+tika&wt=json")
+    FOUND=$(echo "$SEARCH_RESP" | jq -r '.response.numFound' 2>/dev/null || echo "0")
+    if [ "$FOUND" -ge 1 ]; then
+      print_pass "PDF textual content indexed and searchable"
+    else
+      print_fail "PDF textual content not found in index"
+    fi
+  else
+    print_fail "PDF indexing via Tika failed (HTTP $TIKA_IDX)"
+  fi
+  rm -f /tmp/_tika_resp
+else
+  print_skip "Test PDF not found at $PDF_FILE — skipping Tika tests"
+  print_info "Generate with: python3 tests/create-test-pdf.py (or see tests/README)"
 fi
 
 # Abort if no documents were indexed — cleanup would be misleading

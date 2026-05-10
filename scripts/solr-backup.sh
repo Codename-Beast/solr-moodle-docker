@@ -17,12 +17,19 @@ BACKUP_DIR="${BACKUP_DIR:-/var/solr/data/backup}"
 LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
 TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
 
+# _log: Write a timestamped [BACKUP] message to stdout and $LOG_FILE.
+# Args: $@ - message text
+# Returns: nothing
 _log() {
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
   printf '[%s] [BACKUP] %s\n' "$ts" "$*" | tee -a "$LOG_FILE"
 }
 
+# _load_admin_creds: Source admin credentials from /var/solr/data/.env or /.env.
+# Sets ADMIN_USER and ADMIN_PASS from SOLR_ADMIN_USER / SOLR_ADMIN_PASSWORD.
+# Args: none
+# Returns: nothing; exits with code 1 if SOLR_ADMIN_PASSWORD is not set
 _load_admin_creds() {
   local env_file="/var/solr/data/.env"
   if [ -f "$env_file" ]; then
@@ -42,6 +49,10 @@ _load_admin_creds() {
   fi
 }
 
+# backup_core: Trigger a Solr Replication API backup for a single core.
+# The backup is written to $BACKUP_DIR/<core>_<timestamp>/ inside the container.
+# Args: $1 - core name
+# Returns: 0 on success (HTTP 200 from Replication API), 1 on failure
 backup_core() {
   local core="$1"
   local backup_name="${core}_${TIMESTAMP}"

@@ -12,14 +12,14 @@
   "authorization": {
     "class": "solr.RuleBasedAuthorizationPlugin",
     "permissions": [
-      { "name": "health",          "role": null },
-      { "name": "all",             "role": "admin" },
-      { "name": "read",            "role": ["admin", "support"] },
-      { "name": "metrics-read",    "role": ["admin", "support"] },
-      { "name": "core-admin-read", "role": ["admin", "support"] },
-      { "name": "core-admin-edit", "role": "admin" },
-      { "name": "schema-read",     "role": ["admin", "support"] },
-      { "name": "config-read",     "role": ["admin", "support"] }
+      { "name": "health",                "role": null },
+      { "name": "security-edit",         "role": "admin" },
+      { "name": "security-read",         "role": ["admin", "support"] },
+      { "name": "metrics-read",          "role": ["admin", "support"] },
+      { "name": "core-admin-read",       "role": ["admin", "support"] },
+      { "name": "core-admin-edit",       "role": "admin" },
+      { "name": "collection-admin-read", "role": ["admin", "support"] },
+      { "name": "collection-admin-edit", "role": "admin" }
     ],
     "user-role": {
       "__ADMIN_USER__":   "admin",
