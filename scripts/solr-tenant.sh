@@ -184,34 +184,30 @@ _create_core() {
   _log "INFO" "Core '$core' created"
 }
 
-# Register user in Solr Security API
+# Register user in Solr Security API (plaintext — Solr hashes internally)
 _register_user() {
   local user="$1" pass="$2"
-  local hash
-  hash="$(_hash_password "$pass")"
   _log "INFO" "Registering user '$user' in Security API"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would register user: %s\n' "$user"
     return 0
   fi
   _solr_api POST "/admin/authentication" \
-    "{\"set-user\":{\"${user}\":\"${hash}\"}}" > /dev/null
+    "{\"set-user\":{\"${user}\":\"${pass}\"}}" > /dev/null
 }
 
-# Block user by setting random password hash
+# Block user by setting unknown random password (plaintext — Solr hashes internally)
 _block_user() {
   local user="$1"
   local block_pass
   block_pass="$(_gen_password)"
-  local hash
-  hash="$(_hash_password "$block_pass")"
   _log "INFO" "Blocking user '$user'"
   if [ "$DRY_RUN" = "1" ]; then
     printf '[DRY-RUN] Would block user: %s\n' "$user"
     return 0
   fi
   _solr_api POST "/admin/authentication" \
-    "{\"set-user\":{\"${user}\":\"${hash}\"}}" > /dev/null
+    "{\"set-user\":{\"${user}\":\"${block_pass}\"}}" > /dev/null
 }
 
 # Add permission rule for a core
