@@ -346,6 +346,26 @@ security_tests() {
         print_pass "Default password changed"
     fi
 
+    # Moodle PHP SolrClient: /admin/system/ must be accessible for moodle role
+    # PHP PECL SolrClient::system() hits /solr/{core}/admin/system/ to get version.
+    # Without core-system-read permission, is_server_ready() fails with 403.
+    print_test "Moodle user can access /admin/system/ (PHP SolrClient::system())"
+    local moodle_pass moodle_user system_code
+    moodle_user=$(grep "^SOLR_MOODLE_USER=" .env 2>/dev/null | cut -d= -f2 | tr -d '"')
+    moodle_pass=$(grep "^SOLR_MOODLE_PASSWORD=" .env 2>/dev/null | cut -d= -f2 | tr -d '"')
+    if [ -n "$moodle_user" ] && [ -n "$moodle_pass" ]; then
+        system_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -u "${moodle_user}:${moodle_pass}" \
+            "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/admin/system/")
+        if [ "$system_code" = "200" ]; then
+            print_pass "Moodle user can reach /admin/system/ (HTTP 200)"
+        else
+            print_fail "Moodle user blocked on /admin/system/ (HTTP $system_code) — Moodle is_server_ready() will fail"
+        fi
+    else
+        print_skip "SOLR_MOODLE_USER/PASSWORD not in .env — skipping"
+    fi
+
     # SSL warning check
     print_test "SSL configuration awareness"
     if docker compose logs solr 2>&1 | grep -q "SSL is off"; then
