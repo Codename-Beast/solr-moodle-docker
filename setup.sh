@@ -217,14 +217,12 @@ printf '║  Logs:      %-44s║\n' "$LOG_DIR/"
 printf '╠══════════════════════════════════════════════════════════╣\n'
 printf '║  Next steps:                                             ║\n'
 printf '║  1. Add tenants:                                         ║\n'
-printf '║     docker exec %s-solr \\' "$INSTANCE_NAME"
-printf '\n'
+printf '║     docker exec %s-solr \\\n' "$INSTANCE_NAME"
 printf '║       /opt/solr/scripts/solr-tenant.sh create <name> \\ ║\n'
 printf '║       --cores <core1>[,<core2>]                          ║\n'
 printf '║                                                          ║\n'
 printf '║  2. List tenants:                                        ║\n'
-printf '║     docker exec %s-solr \\' "$INSTANCE_NAME"
-printf '\n'
+printf '║     docker exec %s-solr \\\n' "$INSTANCE_NAME"
 printf '║       /opt/solr/scripts/solr-tenant.sh list              ║\n'
 printf '╚══════════════════════════════════════════════════════════╝\n'
 printf '\n'

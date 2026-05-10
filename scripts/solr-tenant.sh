@@ -569,6 +569,7 @@ cmd_list() {
   printf '%-20s %-20s %-40s %-8s\n' "NAME" "USER" "CORES" "STATUS"
   printf '%s\n' "$(printf '%0.s-' {1..94})"
 
+  # shellcheck disable=SC2094
   while IFS='=' read -r key value; do
     case "$key" in
       TENANT_*_CORES)
@@ -710,6 +711,7 @@ cmd_apply() {
   fi
 
   local count=0
+  # shellcheck disable=SC2094
   while IFS='=' read -r key value; do
     case "$key" in
       TENANT_*_CORES)
@@ -762,6 +764,7 @@ cmd_export() {
   printf '# Add to host_vars and encrypt with ansible-vault\n'
   printf 'solr_tenants:\n'
 
+  # shellcheck disable=SC2094
   while IFS='=' read -r key value; do
     case "$key" in
       TENANT_*_CORES)
