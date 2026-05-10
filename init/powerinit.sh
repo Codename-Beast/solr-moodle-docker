@@ -271,15 +271,8 @@ if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
     '.authorization.permissions += [{
       "name": "moodle-core-access",
       "role": ["admin","support","moodle"],
-      "path": [
-        ("/"+$c+"/select"),
-        ("/"+$c+"/update"),
-        ("/"+$c+"/update/extract"),
-        ("/"+$c+"/admin/ping"),
-        ("/"+$c+"/schema"),
-        ("/"+$c+"/schema/*"),
-        ("/"+$c+"/replication")
-      ]
+      "collection": $c,
+      "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
     }]' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 fi
@@ -332,15 +325,8 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
       '.authorization.permissions += [{
         "name": $n,
         "role": ["admin","support",$r],
-        "path": [
-          ("/"+$c+"/select"),
-          ("/"+$c+"/update"),
-          ("/"+$c+"/update/extract"),
-          ("/"+$c+"/admin/ping"),
-          ("/"+$c+"/schema"),
-          ("/"+$c+"/schema/*"),
-          ("/"+$c+"/replication")
-        ]
+        "collection": $c,
+        "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
       }]' "$TMP_SEC" > "$TMP2"
     mv "$TMP2" "$TMP_SEC"
   done
