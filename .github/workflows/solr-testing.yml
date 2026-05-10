@@ -119,8 +119,8 @@ jobs:
           sudo mkdir -p /var/log/solr
           sudo chmod 777 /var/log/solr
 
-      - name: Build init container
-        run: docker compose build solr-init
+      - name: Build containers
+        run: docker compose build solr-init solr
 
       - name: Start Solr
         run: |
@@ -172,7 +172,7 @@ jobs:
             'SOLR_CPU_RESERVATION=0.5' \
             'SOLR_MEMORY_RESERVATION=2G' \
             > .env
-          docker compose build solr-init
+          docker compose build solr-init solr
           docker compose up -d
           for i in {1..30}; do
             if docker compose ps | grep -q healthy; then break; fi
@@ -202,7 +202,7 @@ jobs:
             > .env
           > tenants.env
           chmod 666 tenants.env
-          docker compose build solr-init
+          docker compose build solr-init solr
           docker compose up -d
           timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
 
