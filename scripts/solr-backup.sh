@@ -26,7 +26,10 @@ _log() {
 _load_admin_creds() {
   local env_file="/var/solr/data/.env"
   if [ -f "$env_file" ]; then
-    set -a; . "$env_file"; set +a
+    set -a
+    # shellcheck source=/dev/null
+    . "$env_file"
+    set +a
   fi
   if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] && [ -f "/.env" ]; then
     set -a; . "/.env"; set +a
@@ -77,7 +80,9 @@ while IFS='=' read -r key value; do
       for core in "${CORE_ARRAY[@]}"; do
         core="$(echo "$core" | tr -d ' ')"
         [ -z "$core" ] && continue
-        backup_core "$core" && ((CORES_BACKED_UP++)) || true
+        if backup_core "$core"; then
+          ((CORES_BACKED_UP++)) || true
+        fi
       done
       ;;
   esac
