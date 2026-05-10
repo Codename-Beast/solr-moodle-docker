@@ -279,3 +279,131 @@ jobs:
         run: |
           docker compose down -v || true
           rm -f .env tenants.env || true
+
+  solrcloud-test:
+    name: SolrCloud Mode Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: solr-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create .env for SolrCloud testing
+        run: |
+          printf '%s\n' \
+            'INSTANCE_NAME=solr' \
+            'SOLR_VERSION=9.10.1' \
+            'SOLR_PORT=8983' \
+            'SOLR_BIND=127.0.0.1' \
+            'SOLR_HEAP=2g' \
+            'SOLR_LOG_LEVEL=INFO' \
+            'SOLR_NETWORK_NAME=solr_network' \
+            'SOLR_ADMIN_USER=admin' \
+            'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \
+            'SOLR_SUPPORT_USER=support' \
+            'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890' \
+            'SOLR_CPU_LIMIT=2' \
+            'SOLR_MEMORY_LIMIT=4G' \
+            'SOLR_CPU_RESERVATION=0.5' \
+            'SOLR_MEMORY_RESERVATION=2G' \
+            'SOLR_MODE=solrcloud' \
+            > .env
+          touch tenants.env
+          chmod 666 tenants.env
+          sudo mkdir -p /var/log/solr
+          sudo chmod 777 /var/log/solr
+
+      - name: Build and start SolrCloud
+        run: |
+          docker compose build solr-init solr
+          docker compose up -d
+          timeout 150 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
+          echo "SolrCloud is healthy"
+          docker compose ps
+
+      - name: Verify SolrCloud mode active
+        run: |
+          CODE=$(curl -so /dev/null -w '%{http_code}' -u "admin:CI_AdminPass_1234567890" \
+            "http://127.0.0.1:8983/solr/admin/zookeeper?detail=true&path=%2F&wt=json")
+          [ "$CODE" = "200" ] || { echo "FAIL: ZooKeeper API not reachable (HTTP $CODE)"; exit 1; }
+          echo "PASS: Embedded ZooKeeper running (HTTP 200)"
+
+      - name: Create tenant via Collections API
+        run: |
+          docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_a --cores moodle_cloud_1
+          PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+          echo "CLOUD_A_PASS=$PASS_A" >> .env
+
+      - name: Verify collection exists and tenant can access it
+        run: |
+          PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+          CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+            "http://127.0.0.1:8983/solr/moodle_cloud_1/select?q=*:*&rows=0")
+          [ "$CODE" = "200" ] || { echo "FAIL: tenant cannot access collection (HTTP $CODE)"; exit 1; }
+          echo "PASS: tenant can access own collection (HTTP 200)"
+
+      - name: Test true collection isolation (SolrCloud enforces collection field)
+        run: |
+          docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_b --cores moodle_cloud_2
+          PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+          CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+            "http://127.0.0.1:8983/solr/moodle_cloud_2/select?q=*:*&rows=0")
+          [ "$CODE" = "403" ] || { echo "FAIL: isolation broken — cloud_a can access cloud_b collection (HTTP $CODE)"; exit 1; }
+          echo "PASS: True collection isolation enforced by SolrCloud (HTTP 403)"
+
+      - name: Index document and verify restart persistence
+        run: |
+          PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+          CODE=$(curl -so /dev/null -w '%{http_code}' \
+            -u "solr_cloud_a:$PASS_A" \
+            -X POST -H 'Content-Type: application/json' \
+            -d '[{"id":"ci-persist-1","title_s":"restart_test"}]' \
+            "http://127.0.0.1:8983/solr/moodle_cloud_1/update?commit=true")
+          [ "$CODE" = "200" ] || { echo "FAIL: indexing failed (HTTP $CODE)"; exit 1; }
+          echo "PASS: Document indexed"
+
+          echo "Restarting Solr container..."
+          docker compose restart solr
+          timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
+
+          RESP=$(curl -s -u "solr_cloud_a:$PASS_A" \
+            "http://127.0.0.1:8983/solr/moodle_cloud_1/select?q=id:ci-persist-1&wt=json")
+          echo "$RESP" | grep -q '"numFound":1' || { echo "FAIL: document lost after restart"; exit 1; }
+          echo "PASS: Document survives Solr restart (ZK + index persistence confirmed)"
+
+          RESP=$(curl -s -u "admin:CI_AdminPass_1234567890" \
+            "http://127.0.0.1:8983/solr/admin/collections?action=LIST&wt=json")
+          echo "$RESP" | grep -q '"moodle_cloud_1"' || { echo "FAIL: collection lost after restart"; exit 1; }
+          echo "PASS: Collection persists after restart"
+
+      - name: Generate Caddy config
+        run: |
+          docker exec solr-solr /opt/solr/scripts/solr-tenant.sh caddy-config \
+            --domain solr.example.com
+          echo "PASS: Caddy config generated"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          mkdir -p logs
+          docker compose logs > logs/docker-compose-cloud.log 2>&1 || true
+          docker compose ps > logs/container-status.log 2>&1 || true
+
+      - name: Upload logs as artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-test-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v || true
+          rm -f .env tenants.env || true
