@@ -31,6 +31,18 @@ ZK_HOST="${ZK_HOST:-localhost:9983}"
 
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 
+# Returns the role name for a given tenant.
+# Standalone: flat "tenant" role shared by all tenants (Caddy enforces URL isolation).
+# SolrCloud:  unique "tenant-<name>" role (Solr enforces collection-level isolation).
+_get_tenant_role() {
+  local name="$1"
+  if _is_cloud_mode; then
+    printf 'tenant-%s' "$name"
+  else
+    printf 'tenant'
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -49,6 +61,11 @@ _log_action() {
 # Helpers
 # ---------------------------------------------------------------------------
 
+# _load_admin_creds: Source Solr admin credentials from the .env file.
+# Tries ENV_FILE first, then /.env as fallback.
+# Sets ADMIN_USER (from SOLR_ADMIN_USER) and ADMIN_PASS (from SOLR_ADMIN_PASSWORD).
+# Args: none
+# Returns: nothing; exits with code 1 if SOLR_ADMIN_PASSWORD cannot be resolved
 _load_admin_creds() {
   local env_file="${ENV_FILE:-/var/solr/data/.env}"
   if [ -f "$env_file" ]; then
@@ -72,6 +89,10 @@ _load_admin_creds() {
   fi
 }
 
+# _solr_api: Send an authenticated HTTP request to the Solr REST API.
+# Stores the response body in /tmp/_solr_resp; logs errors to /tmp/_solr_err.
+# Args: $1 - HTTP method (GET, POST, etc.), $2 - path (e.g. /admin/cores), $3 - optional JSON body
+# Returns: 0 and prints response body on HTTP 200; returns 1 and logs error otherwise
 _solr_api() {
   local method="${1:-GET}"
   local path="$2"
@@ -103,10 +124,16 @@ _solr_api() {
   cat /tmp/_solr_resp 2>/dev/null || true
 }
 
+# _gen_password: Generate a random 32-character alphanumeric password.
+# Args: none
+# Returns: prints 32-character string to stdout
 _gen_password() {
   openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }
 
+# _validate_name: Enforce lowercase-alphanumeric-underscore naming convention.
+# Args: $1 - name to validate
+# Returns: nothing on success; exits with code 1 if the name is empty or contains invalid chars
 _validate_name() {
   local name="$1"
   case "$name" in
@@ -118,6 +145,9 @@ _validate_name() {
   esac
 }
 
+# _core_exists: Check whether a Solr core (standalone) or collection (SolrCloud) exists.
+# Args: $1 - core/collection name
+# Returns: 0 if it exists, 1 otherwise
 _core_exists() {
   local core="$1"
   if _is_cloud_mode; then
@@ -130,36 +160,60 @@ _core_exists() {
   fi
 }
 
+# _tenant_exists: Check whether a tenant entry exists in tenants.env.
+# Args: $1 - tenant name
+# Returns: 0 if TENANT_<name>_CORES line is present, 1 otherwise
 _tenant_exists() {
   local name="$1"
   grep -q "^TENANT_${name}_CORES=" "$TENANTS_ENV" 2>/dev/null
 }
 
-# Read tenants.env value: TENANT_<name>_<field>
+# _get_tenant_field: Read a single field value for a tenant from tenants.env.
+# Args: $1 - tenant name, $2 - field name (CORES, USER, PASS, ACTIVE)
+# Returns: prints the value to stdout; empty output if not found
 _get_tenant_field() {
   local name="$1" field="$2"
   grep "^TENANT_${name}_${field}=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-
 }
 
-# Write or update a single TENANT_<name>_<field>=<value> line
+# _set_tenant_field: Write or update a TENANT_<name>_<field>=<value> line in tenants.env.
+# Uses a /tmp tempfile + cat-over to avoid sed's in-place temp file in /opt/solr/ (read-only).
+# Creates tenants.env if it does not exist.
+# Args: $1 - tenant name, $2 - field name, $3 - value
+# Returns: nothing
 _set_tenant_field() {
   local name="$1" field="$2" value="$3"
   local key="TENANT_${name}_${field}"
   touch "$TENANTS_ENV"
   if grep -q "^${key}=" "$TENANTS_ENV"; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "$TENANTS_ENV"
+    local tmp
+    tmp="$(mktemp)"
+    sed "s|^${key}=.*|${key}=${value}|" "$TENANTS_ENV" > "$tmp"
+    cat "$tmp" > "$TENANTS_ENV"
+    rm -f "$tmp"
   else
     printf '%s=%s\n' "$key" "$value" >> "$TENANTS_ENV"
   fi
 }
 
-# Remove all TENANT_<name>_* lines
+# _remove_tenant_lines: Delete all TENANT_<name>_* entries from tenants.env.
+# Uses a /tmp tempfile + cat-over to avoid sed's in-place temp file in /opt/solr/ (read-only).
+# Args: $1 - tenant name
+# Returns: nothing
 _remove_tenant_lines() {
   local name="$1"
-  sed -i "/^TENANT_${name}_/d" "$TENANTS_ENV"
+  local tmp
+  tmp="$(mktemp)"
+  sed "/^TENANT_${name}_/d" "$TENANTS_ENV" > "$tmp"
+  cat "$tmp" > "$TENANTS_ENV"
+  rm -f "$tmp"
 }
 
-# Solr password hash (double SHA256, same as powerinit.sh)
+# _hash_password: Produce a Solr BasicAuthPlugin credential string (unused in current flow —
+# credentials are passed as plaintext to the Security API which hashes them server-side).
+# Kept for reference: base64(SHA256(SHA256(salt||pass))) + " " + base64(salt)
+# Args: $1 - plaintext password
+# Returns: prints "<hash_b64> <salt_b64>" to stdout
 _hash_password() {
   local pass="$1"
   if base64 --help 2>&1 | grep -q 'wrap'; then
@@ -184,7 +238,11 @@ _hash_password() {
   printf '%s %s' "$hb" "$sb"
 }
 
-# Create a Solr core (standalone) or collection (SolrCloud) via Admin/Collections API
+# _create_core: Create a Solr core (standalone) or collection (SolrCloud).
+# Standalone: uses the Core Admin API with configSet=moodle-tenant.
+# SolrCloud:  delegates to _create_collection which uses the Collections API.
+# Args: $1 - core/collection name
+# Returns: 0 on success or if already exists; 1 on API failure
 _create_core() {
   local core="$1"
   if _is_cloud_mode; then
@@ -377,6 +435,11 @@ _create_collection() {
 #   always rebuilt correctly, independent of live Security API state.
 # ---------------------------------------------------------------------------
 
+# _write_credential: Register or update a user's password via the Solr Security API.
+# Sends a set-user payload to /solr/admin/authentication; Solr hashes the password server-side.
+# In SolrCloud mode, also bootstraps security.json into ZooKeeper if not already active.
+# Args: $1 - Solr username, $2 - plaintext password
+# Returns: 0 on success, 1 on API failure
 _write_credential() {
   local user="$1" pass="$2"
   _log "INFO" "Writing credential for '$user'"
@@ -389,6 +452,10 @@ _write_credential() {
   _cloud_auth_api "$payload"
 }
 
+# _block_user: Invalidate a tenant user's password by resetting it to a random value.
+# The user record remains in security.json so the tenant can be re-enabled later.
+# Args: $1 - Solr username
+# Returns: 0 on success, 1 on API failure
 _block_user() {
   local user="$1"
   _log "INFO" "Blocking user '$user'"
@@ -399,46 +466,85 @@ _block_user() {
   _cloud_auth_api "$payload"
 }
 
+# _write_user_role: Assign a Solr authorization role to a user via the Security API.
+# Role must be a string (not array) — the Security API stores it as-is for role matching.
+# Args: $1 - Solr username, $2 - role name (e.g. "tenant" or "tenant-schule_a")
+# Returns: 0 on success, 1 on API failure
 _write_user_role() {
   local user="$1" role="$2"
   _log "INFO" "Writing user-role: '$user' -> '$role'"
   if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"; return 0; fi
   local payload
-  payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): [$r]}}')"
+  # Role must be a string, not an array — Solr Security API stores it as-is.
+  # Using [$r] (array) causes role-matching failures in authorization checks.
+  payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): $r}}')"
   _cloud_authz_api "$payload"
 }
 
-# Add a permission for a core/collection.
-# The collection field is always included — in Solr 9.x it maps to the core name
-# in standalone mode and prevents first-match cross-denial between tenants.
-# (Without collection, tenant_a's permission would deny tenant_b for the same paths.)
+# Add permissions for a core/collection.
+# SolrCloud: per-collection permissions (collection field enforced by Solr):
+#   <name>-read  — role: [admin, support, tenant-x], paths: read-only Moodle endpoints
+#   <name>-write — role: [admin, tenant-x],          paths: write endpoints (/update, /update/extract)
+# Standalone: shared permissions without collection field — "tenant-read" and "tenant-write"
+#   are idempotently upserted on every call (safe: Security API set-permission is a replace).
+#   All tenants share role "tenant"; Caddy reverse proxy handles per-URL core isolation.
 _add_permission() {
   local name="$1" role="$2" core="$3"
-  _log "INFO" "Adding permission '$name' for core '$core'"
-  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"; return 0; fi
-  local payload
-  payload="$(jq -n --arg n "$name" --arg r "$role" --arg c "$core" \
-    '{"set-permission": {
-      "name": $n,
-      "role": ["admin","support",$r],
-      "collection": [$c],
-      "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-    }}')"
-  _cloud_authz_api "$payload"
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would add permissions for core: %s\n' "$core"; return 0; fi
+
+  if _is_cloud_mode; then
+    _log "INFO" "Adding SolrCloud permissions '${name}-read' and '${name}-write' for collection '$core'"
+    local read_payload write_payload
+    read_payload="$(jq -n --arg n "${name}-read" --arg r "$role" --arg c "$core" \
+      '{"set-permission": {
+        "name": $n,
+        "role": ["admin","support",$r],
+        "collection": [$c],
+        "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+      }}')"
+    _cloud_authz_api "$read_payload"
+
+    write_payload="$(jq -n --arg n "${name}-write" --arg r "$role" --arg c "$core" \
+      '{"set-permission": {
+        "name": $n,
+        "role": ["admin",$r],
+        "collection": [$c],
+        "path": ["/update","/update/extract"]
+      }}')"
+    _cloud_authz_api "$write_payload"
+  else
+    _log "INFO" "Ensuring standalone shared tenant-read and tenant-write permissions"
+    local read_payload write_payload
+    read_payload='{"set-permission": {"name": "tenant-read", "role": ["admin","support","tenant"], "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]}}'
+    _cloud_authz_api "$read_payload"
+    write_payload='{"set-permission": {"name": "tenant-write", "role": ["admin","tenant"], "path": ["/update","/update/extract"]}}'
+    _cloud_authz_api "$write_payload"
+  fi
 }
 
+# Remove both read and write permissions for a core.
+# Expects the base name without -read/-write suffix.
+# Standalone: shared tenant-read/tenant-write are NOT removed (other tenants still need them).
 _remove_permission() {
   local perm_name="$1"
-  _log "INFO" "Removing permission '$perm_name'"
-  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would remove permission: %s\n' "$perm_name"; return 0; fi
-  local payload
-  payload="$(jq -n --arg n "$perm_name" '{"delete-permission": $n}')"
-  _cloud_authz_api "$payload"
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would remove permissions: %s-read, %s-write\n' "$perm_name" "$perm_name"; return 0; fi
+  if _is_cloud_mode; then
+    _log "INFO" "Removing SolrCloud permissions '${perm_name}-read' and '${perm_name}-write'"
+    local payload
+    payload="$(jq -n --arg n "${perm_name}-read" '{"delete-permission": $n}')"
+    _cloud_authz_api "$payload" || true
+    payload="$(jq -n --arg n "${perm_name}-write" '{"delete-permission": $n}')"
+    _cloud_authz_api "$payload" || true
+  else
+    _log "INFO" "Standalone: shared tenant-read/tenant-write are preserved when removing core '$perm_name'"
+  fi
 }
 
-# Poll until the given user can authenticate successfully.
-# Security API updates in-memory state immediately — short poll to confirm.
-# Args: user pass [core] [max_secs]
+# _wait_for_security_reload: Poll Solr until the given user authenticates successfully.
+# The Security API updates in-memory state immediately; this confirms propagation.
+# Args: $1 - username, $2 - password, $3 - optional core for /admin/ping (default: system info),
+#        $4 - max wait seconds (default: 10)
+# Returns: 0 when auth succeeds within timeout; 0 with WARN log if timeout is exceeded
 _wait_for_security_reload() {
   local user="$1" pass="$2" core="${3:-}" max_secs="${4:-10}"
   local url
@@ -593,7 +699,8 @@ cmd_create() {
   local user="solr_${name}"
   local pass
   pass="$(_gen_password)"
-  local role="tenant-${name}"
+  local role
+  role="$(_get_tenant_role "$name")"
 
   # Create cores via Admin API
   IFS=',' read -ra CORE_ARRAY <<< "$cores"
@@ -707,7 +814,8 @@ cmd_enable() {
   user="$(_get_tenant_field "$name" "USER")"
   user="${user:-solr_${name}}"
   cores="$(_get_tenant_field "$name" "CORES")"
-  local role="tenant-${name}"
+  local role
+  role="$(_get_tenant_role "$name")"
 
   local new_pass
   new_pass="$(_gen_password)"
@@ -857,7 +965,7 @@ cmd_core_add() {
   local user role existing_cores
   user="$(_get_tenant_field "$name" "USER")"
   user="${user:-solr_${name}}"
-  role="tenant-${name}"
+  role="$(_get_tenant_role "$name")"
   existing_cores="$(_get_tenant_field "$name" "CORES")"
 
   _create_core "$core"
@@ -941,7 +1049,7 @@ cmd_apply() {
         user="$(grep "^TENANT_${name}_USER=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
         pass="$(grep "^TENANT_${name}_PASS=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
         cores="$value"
-        role="tenant-${name}"
+        role="$(_get_tenant_role "$name")"
         user="${user:-solr_${name}}"
 
         if [ "${active:-true}" = "false" ]; then

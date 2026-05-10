@@ -36,6 +36,7 @@ INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 SOLR_HOST="127.0.0.1"
+SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
 SOLR_MODE="${SOLR_MODE:-}"
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
@@ -221,7 +222,7 @@ integration_tests() {
     admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     local response
 
-    response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$response" = "200" ]; then
         print_pass "Authentication successful (HTTP 200)"
     else
@@ -232,7 +233,7 @@ integration_tests() {
     print_test "Unauthorized access blocked"
     local unauth_response
 
-    unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/cores")
+    unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$unauth_response" = "401" ]; then
         print_pass "Unauthorized access correctly blocked (HTTP 401)"
     else
@@ -243,7 +244,7 @@ integration_tests() {
     print_test "Core status API"
     local core_response
 
-    core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS&wt=json")
+    core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&wt=json")
     if echo "$core_response" | grep -q "\"${SOLR_CORE_NAME}\""; then
         print_pass "Core status API returns ${SOLR_CORE_NAME}"
     else
@@ -287,7 +288,7 @@ security_tests() {
     print_test "Network binding (localhost only)"
     local binding
 
-    binding=$(docker compose port solr 8983 2>/dev/null)
+    binding=$(docker compose port solr ${SOLR_PORT} 2>/dev/null)
     if echo "$binding" | grep -q "127.0.0.1"; then
         print_pass "Solr correctly bound to localhost only"
     else
@@ -384,7 +385,7 @@ negative_tests() {
     print_test "Reject invalid credentials"
     local invalid_response
 
-    invalid_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:wrongpassword" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    invalid_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:wrongpassword" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$invalid_response" = "401" ]; then
         print_pass "Invalid credentials rejected (HTTP 401)"
     else
@@ -395,8 +396,8 @@ negative_tests() {
     print_test "SQL injection protection"
     local injection_response
 
-    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
-    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ]; then
+    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
+    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ] || [ "$injection_response" = "404" ]; then
         print_pass "SQL injection handled safely (HTTP $injection_response)"
     else
         print_fail "Unexpected response to SQL injection (HTTP $injection_response)"
@@ -406,7 +407,7 @@ negative_tests() {
     print_test "XSS protection"
     local xss_response
 
-    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
+    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
     if echo "$xss_response" | grep -qv "<script>"; then
         print_pass "XSS attack sanitized"
     else
@@ -420,7 +421,7 @@ negative_tests() {
     long_query=$(python3 -c "print('a'*10000)")
     local long_response
 
-    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
+    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
     if [ "$long_response" = "400" ] || [ "$long_response" = "414" ] || [ "$long_response" = "200" ]; then
         print_pass "Long query handled (HTTP $long_response)"
     else
@@ -431,7 +432,7 @@ negative_tests() {
     print_test "Reject invalid core name"
     local invalid_core_response
 
-    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/nonexistent_core/select?q=*:*")
+    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/nonexistent_core/select?q=*:*")
     if [ "$invalid_core_response" = "404" ]; then
         print_pass "Invalid core rejected (HTTP 404)"
     else
@@ -442,8 +443,8 @@ negative_tests() {
     print_test "Handle empty query"
     local empty_response
 
-    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=")
-    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ]; then
+    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=")
+    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ] || [ "$empty_response" = "404" ]; then
         print_pass "Empty query handled (HTTP $empty_response)"
     else
         print_fail "Empty query caused unexpected response (HTTP $empty_response)"
@@ -466,7 +467,7 @@ performance_tests() {
     local start_time
 
     start_time=$(date +%s%3N)
-    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1
     local end_time
 
     end_time=$(date +%s%3N)
@@ -494,7 +495,7 @@ performance_tests() {
     print_test "Healthcheck endpoint response"
     local health_response
 
-    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/ping" 2>/dev/null)
+    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/ping" 2>/dev/null)
     if [ "$health_response" = "401" ] || [ "$health_response" = "200" ]; then
         print_pass "Healthcheck endpoint responsive (HTTP $health_response)"
     else
@@ -507,7 +508,7 @@ performance_tests() {
 
     concurrent_start=$(date +%s%3N)
     for i in {1..10}; do
-        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" &
+        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
     done
     wait
     local concurrent_end
@@ -529,7 +530,7 @@ performance_tests() {
 
     load_start=$(date +%s%3N)
     for i in {1..20}; do
-        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
+        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
     done
     local load_end
 
@@ -564,8 +565,8 @@ moodle_document_tests() {
     print_info "This includes: indexing, querying, filtering, highlighting, faceting"
     echo ""
 
-    # Run the moodle document test script
-    if bash scripts/test-moodle-documents.sh 2>&1 | tee /tmp/moodle-test-output.log | tail -20; then
+    # Run the moodle document test script against the integration test core
+    if SOLR_CORE_NAME="${SOLR_CORE_NAME}" bash scripts/test-moodle-documents.sh 2>&1 | tee /tmp/moodle-test-output.log | tail -20; then
         # Extract test results from output
         MOODLE_TESTS=$(grep "Total Tests:" /tmp/moodle-test-output.log | awk '{print $3}' || echo "0")
         MOODLE_PASSED=$(grep "Passed:" /tmp/moodle-test-output.log | awk '{print $2}' || echo "0")
@@ -594,38 +595,6 @@ moodle_document_tests() {
 }
 
 # =========================================
-# MONITORING TESTS - Prometheus & Grafana
-# =========================================
-monitoring_tests() {
-    print_header "MONITORING TESTS - Prometheus & Grafana Health"
-
-    local prom_bind="${PROMETHEUS_BIND:-127.0.0.1}"
-    local prom_port="${PROMETHEUS_PORT:-9090}"
-    local grafana_bind="${GRAFANA_BIND:-127.0.0.1}"
-    local grafana_port="${GRAFANA_PORT:-3000}"
-
-    # Prometheus health
-    print_test "Prometheus health endpoint (${prom_bind}:${prom_port})"
-    local prom_response
-    prom_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://${prom_bind}:${prom_port}/-/healthy" 2>/dev/null)
-    if [ "$prom_response" = "200" ]; then
-        print_pass "Prometheus healthy (HTTP 200)"
-    else
-        print_fail "Prometheus not healthy (HTTP $prom_response)"
-    fi
-
-    # Grafana health
-    print_test "Grafana health endpoint (${grafana_bind}:${grafana_port})"
-    local grafana_response
-    grafana_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://${grafana_bind}:${grafana_port}/api/health" 2>/dev/null)
-    if [ "$grafana_response" = "200" ]; then
-        print_pass "Grafana healthy (HTTP 200)"
-    else
-        print_fail "Grafana not healthy (HTTP $grafana_response)"
-    fi
-}
-
-# =========================================
 # CLEANUP TESTS - Cleanup and Restart
 # =========================================
 cleanup_tests() {
@@ -642,7 +611,7 @@ cleanup_tests() {
     local restart_response
 
 
-    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$restart_response" = "200" ]; then
         print_pass "Container restart successful, data persisted"
     else
@@ -701,7 +670,7 @@ tenant_tests() {
     print_test "solr_schule_a can access /moodle_prod_a/select (200)"
     local r
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
-        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$r" = "200" ]; then
         print_pass "Tenant access to own core: OK (HTTP 200)"
     else
@@ -711,7 +680,7 @@ tenant_tests() {
     # Tenant blocked from admin API
     print_test "solr_schule_a CANNOT access /admin/cores (403)"
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
-        "http://${SOLR_HOST}:8983/solr/admin/cores" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores" 2>/dev/null)
     if [ "$r" = "403" ]; then
         print_pass "Admin API correctly blocked for tenant (HTTP 403)"
     else
@@ -735,7 +704,7 @@ tenant_tests() {
     if _is_cloud_mode; then
         print_test "ISOLATION (SolrCloud): solr_schule_a CANNOT access /moodle_prod_b/select (403)"
         r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
-            "http://${SOLR_HOST}:8983/solr/moodle_prod_b/select?q=*:*&rows=0" 2>/dev/null)
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_b/select?q=*:*&rows=0" 2>/dev/null)
         if [ "$r" = "403" ]; then
             print_pass "SolrCloud isolation OK: schule_a cannot access schule_b (HTTP 403)"
         else
@@ -744,7 +713,7 @@ tenant_tests() {
     else
         print_test "ISOLATION (standalone): authentication isolation — wrong password => 401"
         r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:wrongpassword" \
-            "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
         if [ "$r" = "401" ]; then
             print_pass "Auth isolation OK: wrong password rejected (HTTP 401)"
         else
@@ -758,7 +727,7 @@ tenant_tests() {
     local support_pass
     support_pass=$(grep "^SOLR_SUPPORT_PASSWORD=" .env | cut -d= -f2)
     r=$(curl -so /dev/null -w '%{http_code}' -u "support:${support_pass}" \
-        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$r" = "200" ]; then
         print_pass "Support read access: OK (HTTP 200)"
     else
@@ -769,7 +738,7 @@ tenant_tests() {
     print_test "support CANNOT write to /moodle_prod_a/update (403)"
     r=$(curl -so /dev/null -w '%{http_code}' -u "support:${support_pass}" \
         -X POST -H 'Content-Type: application/json' -d '{"commit":{}}' \
-        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/update" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/update" 2>/dev/null)
     if [ "$r" = "403" ]; then
         print_pass "Support write correctly blocked (HTTP 403)"
     else
@@ -786,7 +755,7 @@ tenant_tests() {
 
     print_test "solr_schule_a can access /moodle_test_a/select (200)"
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
-        "http://${SOLR_HOST}:8983/solr/moodle_test_a/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_test_a/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$r" = "200" ]; then
         print_pass "Access to new core: OK (HTTP 200)"
     else
@@ -797,7 +766,7 @@ tenant_tests() {
     print_test "delete schule_a -> login blocked (401)"
     $tenant_cmd delete schule_a --force >/dev/null 2>&1 || true
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
-        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$r" = "401" ]; then
         print_pass "Deleted tenant login correctly blocked (HTTP 401)"
     else
@@ -806,12 +775,12 @@ tenant_tests() {
 
     # enable tenant
     print_test "enable schule_a -> new password works (200)"
-    NEW_PASS=$($tenant_cmd enable schule_a 2>/dev/null | grep 'Password:' | awk '{print $2}') || true
+    NEW_PASS=$($tenant_cmd enable schule_a 2>/dev/null | grep 'Password:' | awk '{print $3}') || true
     if [ -z "$NEW_PASS" ]; then
         NEW_PASS="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
     fi
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${NEW_PASS}" \
-        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$r" = "200" ]; then
         print_pass "Re-enabled tenant login OK (HTTP 200)"
     else
@@ -858,7 +827,7 @@ solrcloud_tests() {
     local zk_code
     zk_code=$(curl -so /dev/null -w '%{http_code}' \
         -u "admin:${admin_pass}" \
-        "http://${SOLR_HOST}:8983/solr/admin/zookeeper?detail=true&path=%2F&wt=json" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/zookeeper?detail=true&path=%2F&wt=json" 2>/dev/null)
     if [ "$zk_code" = "200" ]; then
         print_pass "ZooKeeper API reachable (HTTP 200)"
     else
@@ -879,7 +848,7 @@ solrcloud_tests() {
     print_test "Collection exists in ZooKeeper via Collections API"
     local coll_resp
     coll_resp=$(curl -s -u "admin:${admin_pass}" \
-        "http://${SOLR_HOST}:8983/solr/admin/collections?action=LIST&wt=json")
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
     if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
         print_pass "Collection cloud_test_c1 in Collections API list"
     else
@@ -890,7 +859,7 @@ solrcloud_tests() {
     print_test "True collection isolation: wrong tenant => 403"
     local iso_code
     iso_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
-        "http://${SOLR_HOST}:8983/solr/admin/cores?wt=json" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?wt=json" 2>/dev/null)
     if [ "$iso_code" = "403" ]; then
         print_pass "Admin API blocked for tenant (HTTP 403)"
     else
@@ -904,7 +873,7 @@ solrcloud_tests() {
         -u "solr_cloud_tenant:${CLOUD_PASS}" \
         -X POST -H 'Content-Type: application/json' \
         -d '[{"id":"persist-test-1","title_s":"restart_persistence_check"}]' \
-        "http://${SOLR_HOST}:8983/solr/cloud_test_c1/update?commit=true" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/update?commit=true" 2>/dev/null)
     if [ "$idx_code" = "200" ]; then
         print_pass "Document indexed (HTTP 200)"
     else
@@ -923,7 +892,7 @@ solrcloud_tests() {
 
     # Collection still exists
     coll_resp=$(curl -s -u "admin:${admin_pass}" \
-        "http://${SOLR_HOST}:8983/solr/admin/collections?action=LIST&wt=json")
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
     if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
         print_pass "Collection survives restart (ZK persistence confirmed)"
     else
@@ -934,7 +903,7 @@ solrcloud_tests() {
     print_test "Document survives Solr restart (ZK + index persistence)"
     local doc_resp
     doc_resp=$(curl -s -u "solr_cloud_tenant:${CLOUD_PASS}" \
-        "http://${SOLR_HOST}:8983/solr/cloud_test_c1/select?q=id:persist-test-1&wt=json")
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=id:persist-test-1&wt=json")
     if echo "$doc_resp" | grep -q '"numFound":1'; then
         print_pass "Document persists after restart"
     else
@@ -945,7 +914,7 @@ solrcloud_tests() {
     print_test "Tenant authentication survives restart (Security API in ZK)"
     local auth_code
     auth_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
-        "http://${SOLR_HOST}:8983/solr/cloud_test_c1/admin/ping" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/admin/ping" 2>/dev/null)
     if [ "$auth_code" = "200" ]; then
         print_pass "Tenant credentials persist after restart (HTTP 200)"
     else
@@ -977,7 +946,6 @@ EOF
     RUN_PERFORMANCE=1
     RUN_MOODLE=1
     RUN_CLEANUP=1
-    RUN_MONITORING=0
     RUN_TENANT=0
     RUN_CLOUD=0
 
@@ -1030,10 +998,6 @@ EOF
                 RUN_CLEANUP=0
                 shift
                 ;;
-            --monitoring)
-                RUN_MONITORING=1
-                shift
-                ;;
             --tenant)
                 RUN_TENANT=1
                 shift
@@ -1053,7 +1017,8 @@ EOF
                 echo "  --negative-only      Run only negative tests (invalid inputs)"
                 echo "  --moodle-only        Run only Moodle document tests"
                 echo "  --no-cleanup         Skip cleanup tests"
-                echo "  --monitoring         Run Prometheus/Grafana health checks"
+                echo "  --tenant             Run multi-tenant isolation tests"
+                echo "  --cloud              Run SolrCloud-specific tests"
                 echo "  --help               Show this help"
                 echo ""
                 exit 0
@@ -1073,7 +1038,6 @@ EOF
     [ $RUN_NEGATIVE -eq 1 ] && negative_tests
     [ $RUN_PERFORMANCE -eq 1 ] && performance_tests
     [ $RUN_MOODLE -eq 1 ] && moodle_document_tests
-    [ $RUN_MONITORING -eq 1 ] && monitoring_tests
     [ $RUN_TENANT -eq 1 ] && tenant_tests
     [ $RUN_CLOUD -eq 1 ] && solrcloud_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests

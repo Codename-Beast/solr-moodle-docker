@@ -50,6 +50,14 @@ services:
       # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
       # External access goes through the reverse proxy (nginx/apache) with TLS.
       - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
+    # SolrCloud mode: start with -c (cloud) and -DzkRun (embedded ZooKeeper).
+    # Standalone (default): solr-foreground without flags.
+    # Use list form — string form is split naively by spaces and breaks quoted shell logic.
+    # $$SOLR_MODE: docker-compose converts $$ → $ so the container bash evaluates $SOLR_MODE.
+    command:
+      - bash
+      - -c
+      - "if [ \"$$SOLR_MODE\" = \"solrcloud\" ]; then exec solr-foreground -c -DzkRun; else exec solr-foreground; fi"
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
