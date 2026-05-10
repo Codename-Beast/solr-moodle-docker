@@ -76,26 +76,28 @@ _solr_api() {
   local method="${1:-GET}"
   local path="$2"
   local data="${3:-}"
-  local http_code response
+  local http_code
 
+  # Do NOT use -f: it causes curl to exit with code 22 on HTTP>=400, which
+  # propagates through $() and triggers set -e before we can log the error.
   if [ -n "$data" ]; then
-    response="$(curl -sf -o /tmp/_solr_resp -w '%{http_code}' \
+    http_code="$(curl -s -o /tmp/_solr_resp -w '%{http_code}' \
       -u "${ADMIN_USER}:${ADMIN_PASS}" \
       -X "$method" \
       -H 'Content-Type: application/json' \
       -d "$data" \
-      "${SOLR_BASE}${path}" 2>&1)"
+      "${SOLR_BASE}${path}" 2>/tmp/_solr_err)" || true
   else
-    response="$(curl -sf -o /tmp/_solr_resp -w '%{http_code}' \
+    http_code="$(curl -s -o /tmp/_solr_resp -w '%{http_code}' \
       -u "${ADMIN_USER}:${ADMIN_PASS}" \
       -X "$method" \
-      "${SOLR_BASE}${path}" 2>&1)"
+      "${SOLR_BASE}${path}" 2>/tmp/_solr_err)" || true
   fi
 
-  http_code="$response"
   if [ "$http_code" != "200" ]; then
-    _log "ERROR" "Solr API $method $path returned HTTP $http_code"
-    cat /tmp/_solr_resp 2>/dev/null || true
+    _log "ERROR" "Solr API $method $path returned HTTP ${http_code:-<no response>}"
+    _log "ERROR" "Response body: $(cat /tmp/_solr_resp 2>/dev/null | head -5 || true)"
+    _log "ERROR" "Curl error: $(cat /tmp/_solr_err 2>/dev/null || true)"
     return 1
   fi
   cat /tmp/_solr_resp 2>/dev/null || true
