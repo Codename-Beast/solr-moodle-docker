@@ -212,7 +212,9 @@ _block_user() {
     "{\"set-user\":{\"${user}\":\"${block_pass}\"}}" > /dev/null
 }
 
-# Add permission rule for a core
+# Add permission rule for a core.
+# Uses core-prefixed paths (e.g. /core_a/select) instead of the "collection" field
+# because the collection filter is SolrCloud-only and is silently ignored in standalone mode.
 _add_permission() {
   local name="$1" role="$2" core="$3"
   _log "INFO" "Adding permission '$name' for core '$core'"
@@ -220,9 +222,9 @@ _add_permission() {
     printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"
     return 0
   fi
-  local payload
-  payload="$(printf '{"set-permission":{"name":"%s","role":["admin","support","%s"],"collection":"%s","path":["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]}}' \
-    "$name" "$role" "$core")"
+  local p="/${core}" payload
+  payload="$(printf '{"set-permission":{"name":"%s","role":["admin","support","%s"],"path":["%s/select","%s/update","%s/update/extract","%s/admin/ping","%s/schema","%s/schema/*","%s/replication"]}}' \
+    "$name" "$role" "$p" "$p" "$p" "$p" "$p" "$p" "$p")"
   _solr_api POST "/admin/authorization" "$payload" > /dev/null
 }
 
