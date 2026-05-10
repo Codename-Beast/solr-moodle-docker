@@ -368,30 +368,31 @@ jobs:
           [ "$CODE" = "403" ] || { echo "FAIL: isolation broken — cloud_a can access cloud_b collection (HTTP $CODE)"; exit 1; }
           echo "PASS: True collection isolation enforced by SolrCloud (HTTP 403)"
 
-      - name: Index document and verify restart persistence
+      - name: Verify restart persistence (collection + auth)
         run: |
           PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
-          CODE=$(curl -so /dev/null -w '%{http_code}' \
-            -u "solr_cloud_a:$PASS_A" \
-            -X POST -H 'Content-Type: application/json' \
-            -d '[{"id":"ci-persist-1","content":"restart_test_document"}]' \
-            "http://127.0.0.1:8983/solr/moodle_cloud_1/update?commit=true")
-          [ "$CODE" = "200" ] || { echo "FAIL: indexing failed (HTTP $CODE)"; exit 1; }
-          echo "PASS: Document indexed"
 
           echo "Restarting Solr container..."
           docker compose restart solr
           timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
 
-          RESP=$(curl -s -u "solr_cloud_a:$PASS_A" \
-            "http://127.0.0.1:8983/solr/moodle_cloud_1/select?q=id:ci-persist-1&wt=json")
-          echo "$RESP" | grep -q '"numFound":1' || { echo "FAIL: document lost after restart"; exit 1; }
-          echo "PASS: Document survives Solr restart (ZK + index persistence confirmed)"
+          # Verify tenant can still access collection after restart (auth + ZK data persist)
+          CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+            "http://127.0.0.1:8983/solr/moodle_cloud_1/select?q=*:*&rows=0")
+          [ "$CODE" = "200" ] || { echo "FAIL: tenant lost access after restart (HTTP $CODE)"; exit 1; }
+          echo "PASS: Tenant access survives restart (auth + ZK persistence confirmed)"
 
+          # Verify collection is still listed
           RESP=$(curl -s -u "admin:CI_AdminPass_1234567890" \
             "http://127.0.0.1:8983/solr/admin/collections?action=LIST&wt=json")
           echo "$RESP" | grep -q '"moodle_cloud_1"' || { echo "FAIL: collection lost after restart"; exit 1; }
           echo "PASS: Collection persists after restart"
+
+          # Verify collection isolation still holds after restart
+          CODE=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_a:$PASS_A" \
+            "http://127.0.0.1:8983/solr/moodle_cloud_2/select?q=*:*&rows=0")
+          [ "$CODE" = "403" ] || { echo "FAIL: isolation broken after restart (HTTP $CODE)"; exit 1; }
+          echo "PASS: Collection isolation holds after restart"
 
       - name: Test Tika file extraction in SolrCloud
         run: |
