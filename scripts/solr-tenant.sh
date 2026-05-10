@@ -221,7 +221,7 @@ _add_permission() {
     return 0
   fi
   local payload
-  payload="$(printf '{"set-permission":{"name":"%s","role":"%s","collection":"%s","path":["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]}}' \
+  payload="$(printf '{"set-permission":{"name":"%s","role":["admin","support","%s"],"collection":"%s","path":["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]}}' \
     "$name" "$role" "$core")"
   _solr_api POST "/admin/authorization" "$payload" > /dev/null
 }

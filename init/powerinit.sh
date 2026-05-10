@@ -270,7 +270,7 @@ if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
   jq --arg c "$LEGACY_CORE" \
     '.authorization.permissions += [{
       "name": "moodle-core-access",
-      "role": "moodle",
+      "role": ["admin","support","moodle"],
       "collection": $c,
       "path": ["/select", "/update", "/update/extract", "/admin/ping", "/schema", "/schema/*", "/replication"]
     }]' "$TMP_SEC" > "$TMP2"
@@ -324,7 +324,7 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
     jq --arg n "$perm_name" --arg r "$role" --arg c "$core" \
       '.authorization.permissions += [{
         "name": $n,
-        "role": $r,
+        "role": ["admin","support",$r],
         "collection": $c,
         "path": ["/select", "/update", "/update/extract", "/admin/ping", "/schema", "/schema/*", "/replication"]
       }]' "$TMP_SEC" > "$TMP2"
