@@ -35,6 +35,9 @@
     <str name="managedSchemaResourceName">managed-schema</str>
   </schemaFactory>
 
+  <!-- Tika extraction library — required for /update/extract (Moodle file indexing) -->
+  <lib dir="${solr.install.dir:../../../..}/modules/extraction/lib" regex=".*\.jar" />
+
   <!-- Index Configuration -->
   <indexConfig>
     <!-- RAM Buffer Size: Single-Core default -->
@@ -158,6 +161,17 @@
   <requestHandler name="/schema" class="solr.SchemaHandler">
     <lst name="defaults">
       <str name="df">content</str>
+    </lst>
+  </requestHandler>
+
+  <!-- Tika file extraction for Moodle file indexing (Moodle calls /update/extract) -->
+  <requestHandler name="/update/extract" class="solr.extraction.ExtractingRequestHandler" startup="lazy">
+    <lst name="defaults">
+      <str name="lowernames">true</str>
+      <str name="uprefix">ignored_</str>
+      <str name="captureAttr">true</str>
+      <str name="fmap.a">links</str>
+      <str name="fmap.div">ignored_</str>
     </lst>
   </requestHandler>
 
