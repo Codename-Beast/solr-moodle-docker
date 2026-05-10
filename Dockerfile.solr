@@ -1,0 +1,13 @@
+# =========================================
+# Custom Solr image for Eledia multi-tenant deployment
+# Developer: BSC Bernd Schreistetter
+# Company: Eledia.de
+# Extends the official Solr image and adds jq for tenant management scripts.
+# =========================================
+ARG SOLR_VERSION=9.10.1
+FROM solr:${SOLR_VERSION}
+USER root
+RUN apt-get update -qq \
+    && apt-get install -y --no-install-recommends jq \
+    && rm -rf /var/lib/apt/lists/*
+USER solr

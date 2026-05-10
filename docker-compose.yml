@@ -35,7 +35,12 @@ services:
   # Main service
   # =================================
   solr:
-    image: solr:${SOLR_VERSION:-9.10.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.solr
+      args:
+        SOLR_VERSION: ${SOLR_VERSION:-9.10.1}
+    image: solr-eledia:${SOLR_VERSION:-9.10.1}
     container_name: ${INSTANCE_NAME:-solr}-solr
     depends_on:
       solr-init:
