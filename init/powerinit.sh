@@ -271,7 +271,7 @@ if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
     '.authorization.permissions += [{
       "name": "moodle-core-access",
       "role": ["admin","support","moodle"],
-      "collection": $c,
+      "collection": [$c],
       "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
     }]' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
@@ -325,7 +325,7 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
       '.authorization.permissions += [{
         "name": $n,
         "role": ["admin","support",$r],
-        "collection": $c,
+        "collection": [$c],
         "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
       }]' "$TMP_SEC" > "$TMP2"
     mv "$TMP2" "$TMP_SEC"
