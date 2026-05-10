@@ -227,18 +227,24 @@ _add_permission() {
   local tmp
   tmp="$(mktemp)"
   chmod 600 "$tmp"
-  jq --arg n "$name" \
+  if ! jq --arg n "$name" \
     'del(.authorization.permissions[] | select(.name == $n))' \
-    "$sec_file" > "$tmp" && mv "$tmp" "$sec_file" || { rm -f "$tmp"; return 1; }
+    "$sec_file" > "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  mv "$tmp" "$sec_file"
   tmp="$(mktemp)"
   chmod 600 "$tmp"
-  jq --arg n "$name" --arg r "$role" --arg c "$core" \
+  if ! jq --arg n "$name" --arg r "$role" --arg c "$core" \
     '.authorization.permissions += [{
       "name": $n,
       "role": ["admin","support",$r],
       "collection": $c,
       "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-    }]' "$sec_file" > "$tmp" && mv "$tmp" "$sec_file" || { rm -f "$tmp"; return 1; }
+    }]' "$sec_file" > "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  mv "$tmp" "$sec_file"
   chmod 600 "$sec_file"
   chown 8983:8983 "$sec_file" 2>/dev/null || true
 }
@@ -268,9 +274,12 @@ _remove_permission() {
   local tmp
   tmp="$(mktemp)"
   chmod 600 "$tmp"
-  jq --arg n "$perm_name" \
+  if ! jq --arg n "$perm_name" \
     'del(.authorization.permissions[] | select(.name == $n))' \
-    "$sec_file" > "$tmp" && mv "$tmp" "$sec_file" || { rm -f "$tmp"; return 1; }
+    "$sec_file" > "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  mv "$tmp" "$sec_file"
   chmod 600 "$sec_file"
   chown 8983:8983 "$sec_file" 2>/dev/null || true
   # Trigger Solr to reload the updated security.json
