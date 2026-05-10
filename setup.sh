@@ -135,7 +135,11 @@ _log "Step 3: Log directory"
 mkdir -p "$LOG_DIR"
 # docker group can read logs; 750 = root:docker readable
 chown root:docker "$LOG_DIR" 2>/dev/null || chmod 755 "$LOG_DIR"
-[ "$(stat -c '%G' "$LOG_DIR" 2>/dev/null)" = "docker" ] && chmod 750 "$LOG_DIR" || chmod 755 "$LOG_DIR"
+if [ "$(stat -c '%G' "$LOG_DIR" 2>/dev/null)" = "docker" ]; then
+  chmod 750 "$LOG_DIR"
+else
+  chmod 755 "$LOG_DIR"
+fi
 _log "  Log directory: $LOG_DIR"
 
 # Add the user who triggered the install to docker group so they can read logs without sudo

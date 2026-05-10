@@ -288,7 +288,7 @@ security_tests() {
     print_test "Network binding (localhost only)"
     local binding
 
-    binding=$(docker compose port solr ${SOLR_PORT} 2>/dev/null)
+    binding=$(docker compose port solr "${SOLR_PORT}" 2>/dev/null)
     if echo "$binding" | grep -q "127.0.0.1"; then
         print_pass "Solr correctly bound to localhost only"
     else
