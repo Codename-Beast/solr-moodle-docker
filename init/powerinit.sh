@@ -240,6 +240,43 @@ sed \
   -e "s|__SUPPORT_HASH__|${SUPPORT_HASH}|g" \
   "$TEMPLATE" > "$TMP_SEC"
 
+# Legacy moodle user (backward compatibility — used when system_type=moodle)
+# If SOLR_MOODLE_USER + SOLR_MOODLE_PASSWORD are both set in .env, create a
+# dedicated moodle user with full access to SOLR_CORE_NAME.
+# In multi-tenant deployments these vars are still present for compat; having
+# the moodle user in Solr with access only to SOLR_CORE_NAME is harmless.
+MOODLE_USER="${SOLR_MOODLE_USER:-}"
+MOODLE_PASS="${SOLR_MOODLE_PASSWORD:-}"
+LEGACY_CORE="${SOLR_CORE_NAME:-moodle_core}"
+
+if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
+  _log "  Adding legacy moodle user: $MOODLE_USER (core: $LEGACY_CORE)"
+  MOODLE_HASH="$(hash_solr_password "$MOODLE_PASS")"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$MOODLE_USER" --arg h "$MOODLE_HASH" \
+    '.authentication.credentials[$u] = $h' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$MOODLE_USER" \
+    '.authorization["user-role"][$u] = "moodle"' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg c "$LEGACY_CORE" \
+    '.authorization.permissions += [{
+      "name": "moodle-core-access",
+      "role": "moodle",
+      "collection": $c,
+      "path": ["/select", "/update", "/update/extract", "/admin/ping", "/schema", "/schema/*", "/replication"]
+    }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+fi
+
 # Merge each active tenant using jq
 for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
   active="${TENANT_ACTIVE[$tenant_name]:-true}"
@@ -361,6 +398,24 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
     _log "  Core '$core' directory created"
   done
 done
+
+# Legacy core pre-creation (backward compat — when SOLR_MOODLE_USER/PASSWORD are set)
+if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ] && [ -n "$LEGACY_CORE" ]; then
+  core_dir="${DATA_DIR}/${LEGACY_CORE}"
+  if [ -f "${core_dir}/core.properties" ]; then
+    _log "  Legacy core '$LEGACY_CORE' already exists — skipping"
+  else
+    _log "  Pre-creating legacy core directory: $LEGACY_CORE"
+    mkdir -p "${core_dir}/conf"
+    if ! cp -a "${CONFIGSET_SRC}/." "${core_dir}/conf/"; then
+      _log "ERROR: Failed to copy config for legacy core $LEGACY_CORE"
+      exit 2
+    fi
+    printf 'name=%s\n' "$LEGACY_CORE" > "${core_dir}/core.properties"
+    chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
+    _log "  Legacy core '$LEGACY_CORE' directory created"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Step 5: Fix permissions
