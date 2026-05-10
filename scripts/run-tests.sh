@@ -78,7 +78,7 @@ fi
 
 # Check .env exists
 if [ ! -f ".env" ]; then
-    echo -e "${RED}ERROR: .env not found. Run setup first: docker compose --profile setup up moodle_setup${NC}"
+    echo -e "${RED}ERROR: .env not found. Run setup first: ./setup.sh${NC}"
     exit 1
 fi
 
@@ -101,10 +101,11 @@ unit_tests() {
     local required_files=(
         "docker-compose.yml"
         "init/powerinit.sh"
-        "init/generate_env.sh"
         "config/managed-schema"
         "config/solrconfig.xml"
         "init/security.json.template"
+        "scripts/solr-tenant.sh"
+        "tenants.env.example"
     )
     local missing=0
     for file in "${required_files[@]}"; do
@@ -169,7 +170,7 @@ integration_tests() {
     # Generate .env if not exists
     if [ ! -f ".env" ]; then
         print_info "Generating .env for tests..."
-        docker compose --profile setup up moodle_setup >/dev/null 2>&1 || true
+        ./setup.sh >/dev/null 2>&1 || true
     fi
 
     docker compose up -d >/dev/null 2>&1
@@ -669,6 +670,161 @@ cleanup_tests() {
 }
 
 # =========================================
+# MULTI-TENANT TESTS
+# =========================================
+tenant_tests() {
+    print_header "MULTI-TENANT TESTS - Isolation & Management"
+
+    local admin_pass
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    local container="${INSTANCE_NAME:-solr}-solr"
+    local tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
+
+    # Create tenant schule_a
+    print_test "Create tenant schule_a (core: moodle_prod_a)"
+    if $tenant_cmd create schule_a --cores moodle_prod_a >/dev/null 2>&1; then
+        print_pass "Tenant schule_a created"
+    else
+        print_fail "Failed to create tenant schule_a"
+    fi
+
+    # Verify user in security.json
+    print_test "User solr_schule_a in security.json"
+    if docker exec "$container" jq '.authentication.credentials | has("solr_schule_a")' \
+        /var/solr/data/security.json 2>/dev/null | grep -q true; then
+        print_pass "User solr_schule_a present in security.json"
+    else
+        print_skip "security.json check (may need restart to reflect)"
+    fi
+
+    PASS_A="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+
+    # Tenant can access own core
+    print_test "solr_schule_a can access /moodle_prod_a/select (200)"
+    local r
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Tenant access to own core: OK (HTTP 200)"
+    else
+        print_fail "Tenant access to own core failed (HTTP $r)"
+    fi
+
+    # Tenant blocked from admin API
+    print_test "solr_schule_a CANNOT access /admin/cores (403)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:8983/solr/admin/cores" 2>/dev/null)
+    if [ "$r" = "403" ]; then
+        print_pass "Admin API correctly blocked for tenant (HTTP 403)"
+    else
+        print_fail "Admin API NOT blocked for tenant (HTTP $r — expected 403)"
+    fi
+
+    # Create tenant schule_b
+    print_test "Create tenant schule_b (core: moodle_prod_b)"
+    if $tenant_cmd create schule_b --cores moodle_prod_b >/dev/null 2>&1; then
+        print_pass "Tenant schule_b created"
+    else
+        print_fail "Failed to create tenant schule_b"
+    fi
+
+    PASS_B="$(docker exec "$container" grep 'TENANT_schule_b_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+
+    # Isolation: schule_a cannot access schule_b core
+    print_test "ISOLATION: solr_schule_a CANNOT access /moodle_prod_b/select (403)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:8983/solr/moodle_prod_b/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "403" ]; then
+        print_pass "Isolation OK: schule_a cannot access schule_b (HTTP 403)"
+    else
+        print_fail "ISOLATION FAILURE: schule_a accessed schule_b core (HTTP $r)"
+    fi
+
+    # Support can read both cores
+    print_test "support can read /moodle_prod_a/select (200)"
+    local support_pass
+    support_pass=$(grep "^SOLR_SUPPORT_PASSWORD=" .env | cut -d= -f2)
+    r=$(curl -so /dev/null -w '%{http_code}' -u "support:${support_pass}" \
+        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Support read access: OK (HTTP 200)"
+    else
+        print_fail "Support read access failed (HTTP $r)"
+    fi
+
+    # Support cannot write
+    print_test "support CANNOT write to /moodle_prod_a/update (403)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "support:${support_pass}" \
+        -X POST -H 'Content-Type: application/json' -d '{"commit":{}}' \
+        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/update" 2>/dev/null)
+    if [ "$r" = "403" ]; then
+        print_pass "Support write correctly blocked (HTTP 403)"
+    else
+        print_fail "Support write NOT blocked (HTTP $r — expected 403)"
+    fi
+
+    # core-add
+    print_test "core-add: add moodle_test_a to schule_a"
+    if $tenant_cmd core-add schule_a --core moodle_test_a >/dev/null 2>&1; then
+        print_pass "core-add successful"
+    else
+        print_fail "core-add failed"
+    fi
+
+    print_test "solr_schule_a can access /moodle_test_a/select (200)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:8983/solr/moodle_test_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Access to new core: OK (HTTP 200)"
+    else
+        print_fail "Access to new core failed (HTTP $r)"
+    fi
+
+    # delete tenant
+    print_test "delete schule_a -> login blocked (401)"
+    $tenant_cmd delete schule_a --force >/dev/null 2>&1 || true
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "401" ]; then
+        print_pass "Deleted tenant login correctly blocked (HTTP 401)"
+    else
+        print_fail "Deleted tenant can still login (HTTP $r — expected 401)"
+    fi
+
+    # enable tenant
+    print_test "enable schule_a -> new password works (200)"
+    NEW_PASS=$($tenant_cmd enable schule_a 2>/dev/null | grep 'Password:' | awk '{print $2}') || true
+    if [ -z "$NEW_PASS" ]; then
+        NEW_PASS="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+    fi
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${NEW_PASS}" \
+        "http://${SOLR_HOST}:8983/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Re-enabled tenant login OK (HTTP 200)"
+    else
+        print_fail "Re-enabled tenant login failed (HTTP $r)"
+    fi
+
+    # apply (idempotent)
+    print_test "apply is idempotent (no errors)"
+    if $tenant_cmd apply >/dev/null 2>&1; then
+        print_pass "apply completed without errors"
+    else
+        print_fail "apply returned errors"
+    fi
+
+    # Restart persistence
+    print_test "Restart persistence: tenants survive docker compose restart"
+    docker compose restart solr >/dev/null 2>&1 || true
+    sleep 30
+    if $tenant_cmd list 2>/dev/null | grep -q "schule_b"; then
+        print_pass "Tenants persisted after restart"
+    else
+        print_fail "Tenants lost after restart"
+    fi
+}
+
+# =========================================
 # MAIN TEST EXECUTION
 # =========================================
 main() {
@@ -690,6 +846,7 @@ EOF
     RUN_MOODLE=1
     RUN_CLEANUP=1
     RUN_MONITORING=0
+    RUN_TENANT=0
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -744,6 +901,10 @@ EOF
                 RUN_MONITORING=1
                 shift
                 ;;
+            --tenant)
+                RUN_TENANT=1
+                shift
+                ;;
             --help)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
@@ -775,6 +936,7 @@ EOF
     [ $RUN_PERFORMANCE -eq 1 ] && performance_tests
     [ $RUN_MOODLE -eq 1 ] && moodle_document_tests
     [ $RUN_MONITORING -eq 1 ] && monitoring_tests
+    [ $RUN_TENANT -eq 1 ] && tenant_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests
 
     # Print summary

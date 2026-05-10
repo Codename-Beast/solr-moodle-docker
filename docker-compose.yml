@@ -1,42 +1,28 @@
 # =========================================
-# Solr for Moodle
+# Solr for Moodle — Multi-Tenant
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.3.2
+# Version: v3.0.0
 # =========================================
 
 services:
   # =================================
-  # [SETUP] Generate .env
-  # =================================
-  moodle_setup:
-    image: alpine:3.20
-    profiles: ["setup"]
-    container_name: ${INSTANCE_NAME:-solr}-setup
-    working_dir: /app
-    volumes:
-      - ./init:/init:ro,z
-      - ./:/app:z
-      - /var/run/docker.sock:/var/run/docker.sock:ro,z
-    entrypoint: ["/bin/sh", "/init/generate_env.sh"]
-    environment:
-      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
-      SOLR_CORE_NAME: ${SOLR_CORE_NAME:-}
-    restart: "no"
-
-  # =================================
-  # [BOOTSTRAP]
+  # [BOOTSTRAP] Init container
+  # Builds security.json from .env + tenants.env
+  # Exits 0 on success, Solr only starts if init succeeds
   # =================================
   solr-init:
     build:
       context: .
       dockerfile: Dockerfile
-    image: solr-init:v2.3.2
+    image: solr-init:v3.0.0
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:
       - solr_data:/var/solr/data:z
       - ./.env:/.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:ro,z
+      - /var/log/solr:/var/log/solr:z
     env_file:
       - .env
     environment:
@@ -44,6 +30,7 @@ services:
     networks:
       - solr_network
     restart: "no"
+
   # =================================
   # Main service
   # =================================
@@ -60,6 +47,9 @@ services:
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
+      - ./scripts:/opt/solr/scripts:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:ro,z
+      - /var/log/solr:/var/log/solr:z
     env_file:
       - .env
     environment:
