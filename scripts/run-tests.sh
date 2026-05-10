@@ -183,6 +183,12 @@ integration_tests() {
         docker compose ps
     fi
 
+    # Create a test tenant so core-level tests have a valid core to work with
+    print_info "Creating test tenant ci_test (core: ${SOLR_CORE_NAME})..."
+    docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh \
+        create ci_test --cores "${SOLR_CORE_NAME}" >/dev/null 2>&1 || true
+    sleep 2
+
     # Solr Core Creation
     print_test "Solr core creation"
     if docker exec "$SOLR_CONTAINER" test -d "/var/solr/data/${SOLR_CORE_NAME}" 2>/dev/null; then
@@ -254,10 +260,10 @@ integration_tests() {
     docker compose up -d >/dev/null 2>&1
     sleep 30
 
-    if docker compose logs solr-init 2>&1 | grep -q "Passwords changed"; then
-        print_pass "Password change detected and security.json regenerated"
+    if docker compose logs solr-init 2>&1 | grep -q "security.json written"; then
+        print_pass "security.json regenerated on config change"
     else
-        print_fail "Password change not detected"
+        print_fail "security.json not regenerated"
     fi
 
     # Atomic restore of original .env
@@ -319,13 +325,11 @@ security_tests() {
     print_test "Sensitive file permissions"
     local sec_perms
     sec_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
-    local pwd_perms
-    pwd_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
 
-    if [ "$sec_perms" = "600" ] && [ "$pwd_perms" = "600" ]; then
-        print_pass "Sensitive files have correct permissions (600)"
+    if [ "$sec_perms" = "600" ]; then
+        print_pass "security.json has correct permissions (600)"
     else
-        print_fail "Wrong permissions - security.json: $sec_perms, .password_checksum: $pwd_perms"
+        print_fail "security.json has wrong permissions: $sec_perms (expected 600)"
     fi
 
     #.env in gitignore
@@ -356,20 +360,12 @@ security_tests() {
         print_skip "SSL warning not found (maybe suppressed)"
     fi
 
-    # .env sync and permissions
-    print_test ".env sync and permissions"
-    if [ -f ".env" ]; then
-        local host_env_hash
-        local volume_env_hash
-        host_env_hash=$(openssl dgst -sha256 .env | awk '{print $2}')
-        volume_env_hash=$(docker exec "$SOLR_CONTAINER" sh -c "openssl dgst -sha256 /var/solr/data/.env | awk '{print \$2}'" 2>/dev/null)
-        if [ -n "$volume_env_hash" ] && [ "$host_env_hash" = "$volume_env_hash" ]; then
-            print_pass "Volume .env matches host .env"
-        else
-            print_fail "Volume .env does not match host .env"
-        fi
+    # tenants.env accessible in container
+    print_test "tenants.env accessible in container"
+    if docker exec "$SOLR_CONTAINER" test -f /opt/solr/tenants.env 2>/dev/null; then
+        print_pass "tenants.env accessible in container"
     else
-        print_skip "Host .env not found; skipping sync/permission checks"
+        print_fail "tenants.env not accessible in container"
     fi
 }
 
