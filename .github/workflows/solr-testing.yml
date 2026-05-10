@@ -147,6 +147,18 @@ jobs:
           echo "SOLR_CORE_NAME=moodle_core" >> .env
           echo "CI_TENANT_PASS=$PASS" >> .env
 
+      - name: Test Tika file extraction (/update/extract)
+        run: |
+          PASS=$(docker exec solr-solr grep 'TENANT_ci_test_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+          printf 'Moodle Tika extraction test — this line must be indexed.\n' > /tmp/tika_test.txt
+          CODE=$(curl -so /dev/null -w '%{http_code}' \
+            -u "solr_ci_test:$PASS" \
+            -F "file=@/tmp/tika_test.txt" \
+            "http://127.0.0.1:8983/solr/moodle_core/update/extract?extractOnly=true&wt=json")
+          rm -f /tmp/tika_test.txt
+          [ "$CODE" = "200" ] || { echo "FAIL: /update/extract returned HTTP $CODE (Tika not working)"; exit 1; }
+          echo "PASS: Tika /update/extract (HTTP 200)"
+
       - name: Run Moodle document tests
         run: |
           chmod +x scripts/test-moodle-documents.sh
@@ -380,6 +392,18 @@ jobs:
             "http://127.0.0.1:8983/solr/admin/collections?action=LIST&wt=json")
           echo "$RESP" | grep -q '"moodle_cloud_1"' || { echo "FAIL: collection lost after restart"; exit 1; }
           echo "PASS: Collection persists after restart"
+
+      - name: Test Tika file extraction in SolrCloud
+        run: |
+          PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+          printf 'Moodle Tika extraction test in SolrCloud mode.\n' > /tmp/tika_cloud_test.txt
+          CODE=$(curl -so /dev/null -w '%{http_code}' \
+            -u "solr_cloud_a:$PASS_A" \
+            -F "file=@/tmp/tika_cloud_test.txt" \
+            "http://127.0.0.1:8983/solr/moodle_cloud_1/update/extract?extractOnly=true&wt=json")
+          rm -f /tmp/tika_cloud_test.txt
+          [ "$CODE" = "200" ] || { echo "FAIL: /update/extract HTTP $CODE in SolrCloud"; exit 1; }
+          echo "PASS: Tika /update/extract in SolrCloud (HTTP 200)"
 
       - name: Generate Caddy config
         run: |

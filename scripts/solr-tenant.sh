@@ -310,137 +310,96 @@ _create_collection() {
 # Write credential — dispatches to Security API (cloud) or file (standalone)
 # ---------------------------------------------------------------------------
 
-# Write a hashed credential for user directly to security.json.
+# ---------------------------------------------------------------------------
+# Live security updates — Security API for both standalone and SolrCloud.
+#
+# Rationale for using Security API instead of direct file writes in standalone:
+#   Direct file writes (cat > security.json) rely on Solr's PathWatcher via
+#   inotify. This is unreliable in containerised CI environments (Docker
+#   overlayfs blocks inotify MODIFY events). The Security API updates
+#   Solr's in-memory auth state immediately, regardless of filesystem.
+#
+# Standalone vs SolrCloud differences:
+#   Credentials/roles: identical payload in both modes.
+#   Permissions: SolrCloud includes "collection" field (enforced by Solr).
+#                Standalone omits it (not enforced; Caddy handles URL isolation).
+#
+# Restart persistence: powerinit.sh reads tenants.env and writes security.json
+#   with collection fields on every container start — the on-disk file is
+#   always rebuilt correctly, independent of live Security API state.
+# ---------------------------------------------------------------------------
+
 _write_credential() {
   local user="$1" pass="$2"
   _log "INFO" "Writing credential for '$user'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would write credential for: %s\n' "$user"
-    return 0
-  fi
-  if _is_cloud_mode; then
-    # Security API: plaintext — Solr hashes server-side (ZK-safe)
-    local payload
-    payload="$(jq -n --arg u "$user" --arg p "$pass" '{"set-user": {($u): $p}}')"
-    _cloud_auth_api "$payload"
-  else
-    local hash
-    hash="$(_hash_password "$pass")"
-    # shellcheck disable=SC2016
-    _write_security --arg u "$user" --arg h "$hash" \
-      '.authentication.credentials[$u] = $h'
-  fi
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would write credential for: %s\n' "$user"; return 0; fi
+  local payload
+  payload="$(jq -n --arg u "$user" --arg p "$pass" '{"set-user": {($u): $p}}')"
+  _cloud_auth_api "$payload"
 }
 
-# Write a random (blocking) credential — user cannot log in.
 _block_user() {
   local user="$1"
   _log "INFO" "Blocking user '$user'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would block user: %s\n' "$user"
-    return 0
-  fi
-  local rand_pass
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would block user: %s\n' "$user"; return 0; fi
+  local rand_pass payload
   rand_pass="$(_gen_password)"
-  if _is_cloud_mode; then
-    local payload
-    payload="$(jq -n --arg u "$user" --arg p "$rand_pass" '{"set-user": {($u): $p}}')"
-    _cloud_auth_api "$payload"
-  else
-    local hash
-    hash="$(_hash_password "$rand_pass")"
-    # shellcheck disable=SC2016
-    _write_security --arg u "$user" --arg h "$hash" \
-      '.authentication.credentials[$u] = $h'
-  fi
+  payload="$(jq -n --arg u "$user" --arg p "$rand_pass" '{"set-user": {($u): $p}}')"
+  _cloud_auth_api "$payload"
 }
 
-# Write user-role mapping.
 _write_user_role() {
   local user="$1" role="$2"
   _log "INFO" "Writing user-role: '$user' -> '$role'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"
-    return 0
-  fi
-  if _is_cloud_mode; then
-    local payload
-    payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): [$r]}}')"
-    _cloud_authz_api "$payload"
-  else
-    # shellcheck disable=SC2016
-    _write_security --arg u "$user" --arg r "$role" \
-      '.authorization["user-role"][$u] = $r'
-  fi
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"; return 0; fi
+  local payload
+  payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): [$r]}}')"
+  _cloud_authz_api "$payload"
 }
 
-# Add a collection-scoped permission.
-# In standalone mode: collection field written but NOT enforced by Solr
-#   (collection field is SolrCloud-only — use a reverse proxy for URL isolation).
-# In SolrCloud mode: collection field IS enforced — true tenant isolation.
+# Add a permission for a core/collection.
+# SolrCloud: includes "collection" field — enforced by Solr (true isolation).
+# Standalone: omits "collection" — not enforced; URL isolation via Caddy proxy.
+# In both cases: powerinit.sh writes the collection field to security.json on
+# disk so it is available after restart or SolrCloud migration.
 _add_permission() {
   local name="$1" role="$2" core="$3"
   _log "INFO" "Adding permission '$name' for core '$core'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"
-    return 0
-  fi
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would add permission: %s -> %s\n' "$name" "$core"; return 0; fi
+  local payload
   if _is_cloud_mode; then
-    local payload
-    payload="$(jq -n \
-      --arg n "$name" --arg r "$role" --arg c "$core" \
+    payload="$(jq -n --arg n "$name" --arg r "$role" --arg c "$core" \
       '{"set-permission": {
         "name": $n,
         "role": ["admin","support",$r],
         "collection": [$c],
         "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
       }}')"
-    _cloud_authz_api "$payload"
   else
-    # Remove any stale entry with the same name first
-    # shellcheck disable=SC2016
-    _write_security --arg n "$name" \
-      'del(.authorization.permissions[] | select(.name == $n))' || return 1
-    # Append; collection as array so Solr parses it as List<String>
-    # shellcheck disable=SC2016
-    _write_security --arg n "$name" --arg r "$role" --arg c "$core" \
-      '.authorization.permissions += [{
+    payload="$(jq -n --arg n "$name" --arg r "$role" \
+      '{"set-permission": {
         "name": $n,
         "role": ["admin","support",$r],
-        "collection": [$c],
         "path": ["/select","/update","/update/extract","/admin/ping","/schema","/schema/*","/replication"]
-      }]'
+      }}')"
   fi
+  _cloud_authz_api "$payload"
 }
 
-# Remove a permission.
 _remove_permission() {
   local perm_name="$1"
   _log "INFO" "Removing permission '$perm_name'"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf '[DRY-RUN] Would remove permission: %s\n' "$perm_name"
-    return 0
-  fi
-  if _is_cloud_mode; then
-    local payload
-    payload="$(jq -n --arg n "$perm_name" '{"delete-permission": $n}')"
-    _cloud_authz_api "$payload"
-  else
-    # shellcheck disable=SC2016
-    _write_security --arg n "$perm_name" \
-      'del(.authorization.permissions[] | select(.name == $n))'
-  fi
+  if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would remove permission: %s\n' "$perm_name"; return 0; fi
+  local payload
+  payload="$(jq -n --arg n "$perm_name" '{"delete-permission": $n}')"
+  _cloud_authz_api "$payload"
 }
 
 # Poll until the given user can authenticate successfully.
-# Standalone: Solr's PathWatcher reloads security.json within 1-5s after file write.
-# SolrCloud: Security API writes are applied via ZK — poll with shorter timeout.
+# Security API updates in-memory state immediately — short poll to confirm.
 # Args: user pass [core] [max_secs]
 _wait_for_security_reload() {
-  local user="$1" pass="$2" core="${3:-}" max_secs="${4:-20}"
-  if _is_cloud_mode; then
-    max_secs="${4:-10}"  # ZK propagation is faster
-  fi
+  local user="$1" pass="$2" core="${3:-}" max_secs="${4:-10}"
   local url
   if [ -n "$core" ]; then
     url="${SOLR_BASE}/${core}/admin/ping"
@@ -508,7 +467,8 @@ _test_endpoints() {
   if [ "$code" = "200" ]; then
     _log "OK" "[$core] /update/extract Tika (HTTP $code)"
   else
-    _log "WARN" "[$core] /update/extract HTTP $code (Tika may need configuration)"
+    _log "ERROR" "[$core] /update/extract failed (HTTP $code) — Moodle file indexing requires this"
+    ok=false
   fi
 
   code="$(curl -so /dev/null -w '%{http_code}' -u "${user}:${pass}" "${base}/schema" 2>/dev/null)"
