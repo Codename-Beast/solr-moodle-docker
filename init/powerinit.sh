@@ -176,7 +176,7 @@ _load_tenants() {
 }
 
 _load_tenants
-_log "  Found ${#TENANT_CORES[@]} tenant(s): ${!TENANT_CORES[*]}"
+_log "  Found ${#TENANT_CORES[@]} tenant(s)"
 
 # ---------------------------------------------------------------------------
 # Step 2: Create configset (idempotent)
