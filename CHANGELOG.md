@@ -2,6 +2,35 @@
 
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) | [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [2.4.1] — 2026-05-11
+
+### Behoben
+
+- **`core-system-read` Permission fuer PHP PECL SolrClient:** `init/security.json.template`
+  bekommt eine neue custom Permission `core-system-read`, die den moodle-User auf
+  `/admin/system`, `/admin/system/`, `/solr/*/admin/system` und `/solr/*/admin/system/` zulaesst.
+
+  **Root cause:** Moodles `search/engine/solr/classes/engine.php::is_server_ready()` ruft
+  `SolrClient::system()` auf, was eine HTTP-Anfrage an `/solr/<core>/admin/system/` abschickt.
+  Solrs `SystemInfoHandler` ist intern als `CORE_ADMIN_READ` deklariert — Standard-Path-Permissions
+  greifen hier nicht. Ohne explizite Permission antwortete Solr mit 403, und Moodle zeigte
+  "Suchmaschine nicht verfügbar" obwohl Solr laeuft und `/admin/ping` 200 zurueckgibt.
+
+  **Betrifft:** Alle Instanzen, bei denen Moodle den PHP PECL SolrClient nutzt (Standard).
+
+  **Fix:** Custom Permission `core-system-read` mit `role: ["admin", "support", "moodle"]` und
+  den betroffenen Pfaden — eingefuegt vor der `all`-Permission in `security.json.template`.
+
+- **`init/powerinit.sh` — Fallback-Permissions:** Analoger Fix in den hardcodierten Fallback-
+  Permissions in `powerinit.sh` (greift wenn kein Template vorhanden ist).
+
+### Tests
+
+- `scripts/run-tests.sh`: Neuer Test `security_tests()` — prueft, dass der moodle-User
+  `/solr/<core>/admin/system/` mit HTTP 200 erreicht (nicht 403).
+
+---
+
 ## [2.4.0] — 2026-04-18
 
 ### Geaendert
@@ -197,6 +226,8 @@
 - Volume persistence
 - Docker Compose profiles for monitoring
 
+[2.4.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.2...v2.4.0
 [2.3.2]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.2.0...v2.3.0

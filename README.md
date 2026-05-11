@@ -1,18 +1,18 @@
 # Solr fuer Moodle
 
-[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=feature%2Fv2.3.2)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
-![Version](https://img.shields.io/badge/version-2.3.2-blue)
+[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=main)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
+![Version](https://img.shields.io/badge/version-2.4.1-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
 
-**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.3.2
+**Autor:** Bernd Schreistetter | **Organisation:** Eledia GmbH | **Version:** v2.4.1
 
 **Solr 9.10.1** | **Moodle 4.1–5.x** | **Debian 12/13**
 
 Docker-Stack fuer Solr + Moodle Global Search. Setup generiert `.env` mit sicheren Passwoertern, Init-Container erledigt den Rest (Cores, security.json, Permissions).
 
-> v2.3.2 | config-read Fix fuer Moodle, Resource Limits aus .env, chmod 600
+> v2.4.1 | core-system-read Fix fuer PHP PECL SolrClient, CI-Tests fuer Admin-System-Endpoint
 
 ---
 See [CHANGELOG.md](CHANGELOG.md) for full details.
@@ -22,21 +22,21 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 ## Quick Installation
 
 ```bash
-# 1. Setup (.env mit sicheren Passwoertern)
-docker compose --profile setup up moodle_setup
+# 1. Konfiguration (.env anlegen)
+cp .env.example .env
+nano .env          # ADMIN_PASSWORD, SUPPORT_PASSWORD, MOODLE_PASSWORD setzen
 
-# Optional: Mit custom Core-Namen
-SOLR_CORE_NAME=my_custom_core docker compose --profile setup up moodle_setup
-
-# 2. Start
+# 2. Init-Image bauen + Stack starten
+docker compose build solr-init
 docker compose up -d
 
 # 3. Fertig
 ```
 
-> Nach Aenderungen an `init/powerinit.sh` oder `init/security.json.template` muss das Init-Image neu gebaut werden:
+> Nach Aenderungen an `init/powerinit.sh` oder `init/security.json.template`:
 > ```bash
 > docker compose build --no-cache solr-init
+> docker compose restart
 > ```
 
 Solr: `http://localhost:8983/solr`
