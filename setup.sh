@@ -146,8 +146,9 @@ _log "  Log directory: $LOG_DIR"
 INSTALLING_USER="${SUDO_USER:-}"
 if [ -n "$INSTALLING_USER" ] && [ "$INSTALLING_USER" != "root" ]; then
   if id "$INSTALLING_USER" >/dev/null 2>&1; then
-    usermod -aG docker "$INSTALLING_USER" 2>/dev/null && \
-      _log "  Added '$INSTALLING_USER' to docker group (logout/login to apply)" || true
+    if usermod -aG docker "$INSTALLING_USER" 2>/dev/null; then
+      _log "  Added '$INSTALLING_USER' to docker group (logout/login to apply)"
+    fi
   fi
 fi
 
