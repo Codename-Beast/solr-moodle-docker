@@ -1,458 +1,534 @@
 #!/bin/bash
-# /init/powerinit.sh
-#   - Initialize Solr data directory (security.json, Moodle core)
-#   - Keep passwords stable across restarts
-#   - Load from external .env if provided
+# =========================================
+# Solr Init Container — Multi-Tenant
+# Developer: BSC Bernd Schreistetter
+# Company: Eledia.de
+# Version: v3.0.0
+# =========================================
+# Runs as init container (exit 0 = Solr starts, exit != 0 = Solr blocked)
+# Rebuilds security.json COMPLETELY on every start from:
+#   - .env (admin + support credentials)
+#   - /opt/solr/tenants.env (all tenant configurations)
 
 set -euo pipefail
 
-DATA_DIR="/var/solr/data"
-CORE_NAME="${SOLR_CORE_NAME:-moodle_core}"
+# ---------------------------------------------------------------------------
+# Logging — stdout + /var/log/solr/setup.log
+# ---------------------------------------------------------------------------
+LOG_DIR="/var/log/solr"
+LOG_FILE="${LOG_DIR}/setup.log"
 
-# Validate core name (alphanumeric, dash, underscore only - prevent directory traversal)
-case "$CORE_NAME" in
-  *[!A-Za-z0-9_-]*)
-    echo "ERROR: Invalid CORE_NAME '$CORE_NAME'. Only alphanumeric, dash, and underscore allowed." >&2
-    exit 4
-    ;;
-  */*)
-    echo "ERROR: CORE_NAME '$CORE_NAME' cannot contain path separators." >&2
-    exit 4
-    ;;
-esac
-
-CONF_SRC="/config"
-CORE_DIR="${DATA_DIR}/${CORE_NAME}"
-CORE_CONF="${CORE_DIR}/conf"
-ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
-ENV_FILE_VOLUME="${DATA_DIR}/.env"
-
-# Validate that config source directory exists
-if [ ! -d "$CONF_SRC" ]; then
-  echo "ERROR: Config source directory $CONF_SRC not found" >&2
-  exit 2
-fi
-
-sync_env_files() {
-  local source_file="$1"
-  local target_file="$2"
-
-  if [ ! -f "$source_file" ]; then
-    return 0
-  fi
-
-  if [ ! -f "$target_file" ]; then
-    cp "$source_file" "$target_file"
-  else
-    local source_hash
-    local target_hash
-    source_hash="$(openssl dgst -sha256 "$source_file" | awk '{print $2}')"
-    target_hash="$(openssl dgst -sha256 "$target_file" | awk '{print $2}')"
-    if [ "$source_hash" != "$target_hash" ]; then
-      cp "$source_file" "$target_file"
-    fi
-  fi
-
-  chmod 600 "$target_file" 2>/dev/null || true
+# _log: Write a timestamped message to stdout and $LOG_FILE.
+# Args: $@ - message text
+# Returns: nothing
+_log() {
+  local ts
+  ts="$(date '+%Y-%m-%d %H:%M:%S')"
+  printf '[%s] %s\n' "$ts" "$*" | tee -a "$LOG_FILE"
 }
 
+# _setup_logging: Create log directory and file, write start banner.
+# Args: none
+# Returns: nothing; exits cleanly if directory creation fails (non-fatal with || true)
+_setup_logging() {
+  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  touch "$LOG_FILE" 2>/dev/null || true
+  _log "=== powerinit.sh started ==="
+}
+
+_setup_logging
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+DATA_DIR="/var/solr/data"
+CONFIGSET_SRC="/config"
+CONFIGSET_DST="${DATA_DIR}/configsets/moodle-tenant/conf"
+TENANTS_ENV="/opt/solr/tenants.env"
+ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
+
+# ---------------------------------------------------------------------------
+# Load .env
+# ---------------------------------------------------------------------------
+# load_env: Source a .env file into the current shell environment with export (-a).
+# Args: $1 - absolute path to the env file
+# Returns: nothing; silently skips if the file does not exist
 load_env() {
-  local env_file="$1"
-  if [ -f "$env_file" ]; then
-    echo "→ Loading environment from $env_file"
+  if [ -f "$1" ]; then
+    _log "Loading environment from $1"
     set -a
     # shellcheck disable=SC1090
-    . "$env_file"
+    . "$1"
     set +a
-    return 0
   fi
-  return 1
 }
 
-# .env if provided, fallback to volume copy
 if [ -f "$ENV_FILE_PATH" ]; then
-  sync_env_files "$ENV_FILE_PATH" "$ENV_FILE_VOLUME"
   load_env "$ENV_FILE_PATH"
 else
-  echo "⚠ No external .env found — trying volume copy"
-  if ! load_env "$ENV_FILE_VOLUME"; then
-    echo "⚠ No volume .env found — using defaults"
-  fi
+  _log "WARNING: No .env found at $ENV_FILE_PATH"
 fi
 
-#Helper: detect pre-hashed password (32+ hex chars or contains space salt)
-is_hashed() {
-  echo "$1" | grep -Eq '^[0-9a-f]{32,}$|[A-Za-z0-9+/=]+\s+[A-Za-z0-9+/=]+'
-}
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-# Helper: create Solr-compatible BasicAuth hash
-# IMPORTANT: Solr uses DOUBLE SHA256: SHA256(SHA256(salt + password))
-hash_solr_basic_auth() {
-  _pass="$1"
-  _salt_bytes=32
-
-  # Detect base64 command
-  if base64 --help 2>&1 | grep -q 'wrap'; then
-    _base64_cmd="base64 -w0"
-  else
-    _base64_cmd="base64"
-  fi
-
-  # Use secure temp files with mktemp
-  _salt_file="$(mktemp)"
-  _pass_file="$(mktemp)"
-  _combined_file="$(mktemp)"
-  _hash1_file="$(mktemp)"
-  _hash2_file="$(mktemp)"
-  chmod 600 "$_salt_file" "$_pass_file" "$_combined_file" "$_hash1_file" "$_hash2_file"
-
-  # Generate random salt (32 bytes BINARY)
-  openssl rand $_salt_bytes > "$_salt_file"
-
-  # Write password (no newline!)
-  printf '%s' "${_pass}" > "$_pass_file"
-
-  # Binary concatenation: salt + password
-  cat "$_salt_file" "$_pass_file" > "$_combined_file"
-
-  # Double SHA256
-  openssl dgst -sha256 -binary "$_combined_file" > "$_hash1_file"
-  openssl dgst -sha256 -binary "$_hash1_file" > "$_hash2_file"
-
-  # Base64 encode
-  _hash_b64="$($_base64_cmd < "$_hash2_file" | tr -d '\n\r')"
-  _salt_b64="$($_base64_cmd < "$_salt_file" | tr -d '\n\r')"
-
-  # Cleanup (overwrite before delete)
-  dd if=/dev/zero of="$_salt_file" bs=1 count="$(wc -c < "$_salt_file")" 2>/dev/null || true
-  dd if=/dev/zero of="$_pass_file" bs=1 count="$(wc -c < "$_pass_file")" 2>/dev/null || true
-  dd if=/dev/zero of="$_combined_file" bs=1 count="$(wc -c < "$_combined_file")" 2>/dev/null || true
-  dd if=/dev/zero of="$_hash1_file" bs=1 count="$(wc -c < "$_hash1_file")" 2>/dev/null || true
-  dd if=/dev/zero of="$_hash2_file" bs=1 count="$(wc -c < "$_hash2_file")" 2>/dev/null || true
-  rm -f "$_salt_file" "$_pass_file" "$_combined_file" "$_hash1_file" "$_hash2_file"
-
-  # Output: "HASH SALT"
-  printf '%s %s' "${_hash_b64}" "${_salt_b64}"
-}
-
-#Helper: generate secure password ---
-generate_secure_password() {
-  openssl rand -base64 36 | tr -d '/+=' | head -c 32
-}
-
-#Load or generate defaults ---
-load_or_generate() {
-  var="$1"
-  def="$2"
-
-  # Validate variable name (only alphanumeric and underscore)
-  case "$var" in
-    *[!A-Za-z0-9_]*)
-      echo "ERROR: Invalid variable name: $var" >&2
-      exit 1
-      ;;
-  esac
-
-  # Safely get variable value
-  # shellcheck disable=SC1083,SC2086
-  val="$(eval echo \"\${$var:-}\")"
-
-  # Generate secure password if empty or contains CHANGE_ME
-  if [ -z "$val" ] || echo "$val" | grep -qi "CHANGE_ME"; then
-    val="$(generate_secure_password)"
-    echo "→ Generated secure password for $var"
-  fi
-
-  eval "$var=\$val"
-}
-
-load_or_generate SOLR_ADMIN_PASSWORD ""
-load_or_generate SOLR_SUPPORT_PASSWORD ""
-load_or_generate SOLR_MOODLE_PASSWORD ""
-
-#credentials
-ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
-SUPPORT_USER="${SOLR_SUPPORT_USER:-support}"
-MOODLE_USER="${SOLR_MOODLE_USER:-moodle}"
-
-# Validate usernames (alphanumeric and underscore only)
-for _user_var in ADMIN_USER SUPPORT_USER MOODLE_USER; do
-  _user_val="$(eval echo \"\$$_user_var\")"
-  case "$_user_val" in
-    *[!A-Za-z0-9_]*)
-      echo "ERROR: Invalid username in $_user_var: '$_user_val'. Only alphanumeric and underscore allowed." >&2
+# _validate_name: Reject names that contain characters outside [a-zA-Z0-9_].
+# Args: $1 - name to validate, $2 - human-readable label for error messages
+# Returns: nothing on success; exits with code 4 on invalid input
+_validate_name() {
+  local name="$1" label="$2"
+  case "$name" in
+    *[!a-zA-Z0-9_]*)
+      _log "ERROR: Invalid $label '$name' — only alphanumeric and underscore allowed"
       exit 4
       ;;
   esac
+}
+
+# base64 command (portable)
+if base64 --help 2>&1 | grep -q 'wrap'; then
+  _BASE64="base64 -w0"
+else
+  _BASE64="base64"
+fi
+
+# hash_solr_password: Produce a Solr BasicAuthPlugin-compatible credential string.
+# Algorithm: base64(SHA256(SHA256(random_salt || password))) + " " + base64(salt)
+# The credential string is stored verbatim in security.json under authentication.credentials.
+# Args: $1 - plaintext password
+# Returns: prints "<hash_b64> <salt_b64>" to stdout; exits non-zero on openssl failure
+hash_solr_password() {
+  local pass="$1"
+  local salt_file pass_file combined hash1 hash2
+  salt_file="$(mktemp)"
+  pass_file="$(mktemp)"
+  combined="$(mktemp)"
+  hash1="$(mktemp)"
+  hash2="$(mktemp)"
+  chmod 600 "$salt_file" "$pass_file" "$combined" "$hash1" "$hash2"
+
+  openssl rand 32 > "$salt_file"
+  printf '%s' "$pass" > "$pass_file"
+  cat "$salt_file" "$pass_file" > "$combined"
+  openssl dgst -sha256 -binary "$combined" > "$hash1"
+  openssl dgst -sha256 -binary "$hash1" > "$hash2"
+
+  local hash_b64 salt_b64
+  hash_b64="$($_BASE64 < "$hash2" | tr -d '\n\r')"
+  salt_b64="$($_BASE64 < "$salt_file" | tr -d '\n\r')"
+
+  # Zero out before delete
+  dd if=/dev/zero of="$pass_file" bs=1 count="$(wc -c < "$pass_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$combined" bs=1 count="$(wc -c < "$combined")" 2>/dev/null || true
+  rm -f "$salt_file" "$pass_file" "$combined" "$hash1" "$hash2"
+
+  printf '%s %s' "$hash_b64" "$salt_b64"
+}
+
+# gen_password: Generate a random 32-character alphanumeric password via openssl.
+# Args: none
+# Returns: prints 32-character string to stdout (no newline from head -c)
+gen_password() {
+  openssl rand -base64 36 | tr -d '/+=' | head -c 32
+}
+
+# ---------------------------------------------------------------------------
+# Step 0: Validate required env vars
+# ---------------------------------------------------------------------------
+_log "Step 0: Validating environment"
+
+ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
+SUPPORT_USER="${SOLR_SUPPORT_USER:-support}"
+
+if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] || echo "${SOLR_ADMIN_PASSWORD:-}" | grep -qi "CHANGE_ME"; then
+  SOLR_ADMIN_PASSWORD="$(gen_password)"
+  _log "  Generated SOLR_ADMIN_PASSWORD"
+fi
+
+if [ -z "${SOLR_SUPPORT_PASSWORD:-}" ] || echo "${SOLR_SUPPORT_PASSWORD:-}" | grep -qi "CHANGE_ME"; then
+  SOLR_SUPPORT_PASSWORD="$(gen_password)"
+  _log "  Generated SOLR_SUPPORT_PASSWORD"
+fi
+
+_validate_name "$ADMIN_USER" "SOLR_ADMIN_USER"
+_validate_name "$SUPPORT_USER" "SOLR_SUPPORT_USER"
+_log "  Admin user: $ADMIN_USER, Support user: $SUPPORT_USER"
+
+# ---------------------------------------------------------------------------
+# Step 1: Load tenants.env
+# ---------------------------------------------------------------------------
+_log "Step 1: Loading tenants.env"
+
+if [ ! -f "$TENANTS_ENV" ]; then
+  _log "  No tenants.env found at $TENANTS_ENV — creating empty file"
+  touch "$TENANTS_ENV" 2>/dev/null || true
+fi
+
+# Parse tenants into arrays.
+# Explicit =() initialization is required — in bash 5.2 on Alpine, declare-only
+# (without assignment) does not mark a variable as "set" for set -u purposes.
+TENANT_NAMES=()
+TENANT_COUNT=0
+declare -A TENANT_CORES=() TENANT_USER=() TENANT_PASS=() TENANT_ACTIVE=()
+
+# _load_tenants: Parse tenants.env and populate the TENANT_* associative arrays.
+# Reads TENANT_<name>_CORES, TENANT_<name>_USER, TENANT_<name>_PASS, TENANT_<name>_ACTIVE.
+# Maintains TENANT_NAMES (ordered) and TENANT_COUNT.
+# Args: none (reads $TENANTS_ENV)
+# Returns: populates global arrays; no output
+_load_tenants() {
+  local key value name field _dup _n
+  while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    case "$key" in
+      '#'*|'') continue ;;
+    esac
+    # Match TENANT_<name>_<FIELD>
+    if echo "$key" | grep -qE '^TENANT_[A-Za-z0-9_]+_(CORES|USER|PASS|ACTIVE)$'; then
+      # Extract name and field
+      name="${key#TENANT_}"
+      field="${name##*_}"
+      name="${name%_*}"
+      case "$field" in
+        CORES)
+          TENANT_CORES["$name"]="$value"
+          _dup=0
+          for _n in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
+            [ "$_n" = "$name" ] && { _dup=1; break; }
+          done
+          if [ "$_dup" -eq 0 ]; then
+            TENANT_NAMES+=("$name")
+            ((TENANT_COUNT++)) || true
+          fi
+          ;;
+        USER)   TENANT_USER["$name"]="$value" ;;
+        PASS)   TENANT_PASS["$name"]="$value" ;;
+        ACTIVE) TENANT_ACTIVE["$name"]="$value" ;;
+      esac
+    fi
+  done < "$TENANTS_ENV"
+}
+
+_load_tenants
+_log "  Found $TENANT_COUNT tenant(s)"
+
+# ---------------------------------------------------------------------------
+# Step 2: Create configset (idempotent)
+# ---------------------------------------------------------------------------
+_log "Step 2: Configset moodle-tenant"
+
+if [ -d "$CONFIGSET_DST" ]; then
+  _log "  Configset already exists — skipping"
+else
+  _log "  Creating configset from $CONFIGSET_SRC"
+  mkdir -p "$CONFIGSET_DST"
+  if ! cp -a "${CONFIGSET_SRC}/." "${CONFIGSET_DST}/"; then
+    _log "ERROR: Failed to copy config files to configset"
+    exit 2
+  fi
+  _log "  Configset created at $CONFIGSET_DST"
+fi
+
+chown -R 8983:8983 "${DATA_DIR}/configsets" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Step 3: Regenerate security.json completely
+# ---------------------------------------------------------------------------
+_log "Step 3: Generating security.json"
+
+mkdir -p "$DATA_DIR"
+
+# Hash admin + support
+_log "  Hashing admin credentials..."
+ADMIN_HASH="$(hash_solr_password "${SOLR_ADMIN_PASSWORD}")"
+SUPPORT_HASH="$(hash_solr_password "${SOLR_SUPPORT_PASSWORD}")"
+
+# Start building security.json from template
+TEMPLATE="/init/security.json.template"
+if [ ! -f "$TEMPLATE" ]; then
+  _log "ERROR: security.json.template not found at $TEMPLATE"
+  exit 2
+fi
+
+# Replace admin/support placeholders
+TMP_SEC="$(mktemp)"
+chmod 600 "$TMP_SEC"
+sed \
+  -e "s|__ADMIN_USER__|${ADMIN_USER}|g" \
+  -e "s|__SUPPORT_USER__|${SUPPORT_USER}|g" \
+  -e "s|__ADMIN_HASH__|${ADMIN_HASH}|g" \
+  -e "s|__SUPPORT_HASH__|${SUPPORT_HASH}|g" \
+  "$TEMPLATE" > "$TMP_SEC"
+
+# Legacy moodle user (backward compatibility — used when system_type=moodle)
+# If SOLR_MOODLE_USER + SOLR_MOODLE_PASSWORD are both set in .env, create a
+# dedicated moodle user with full access to SOLR_CORE_NAME.
+# In multi-tenant deployments these vars are still present for compat; having
+# the moodle user in Solr with access only to SOLR_CORE_NAME is harmless.
+MOODLE_USER="${SOLR_MOODLE_USER:-}"
+MOODLE_PASS="${SOLR_MOODLE_PASSWORD:-}"
+LEGACY_CORE="${SOLR_CORE_NAME:-moodle_core}"
+
+if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
+  _log "  Adding legacy moodle user: $MOODLE_USER (core: $LEGACY_CORE)"
+  MOODLE_HASH="$(hash_solr_password "$MOODLE_PASS")"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$MOODLE_USER" --arg h "$MOODLE_HASH" \
+    '.authentication.credentials[$u] = $h' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$MOODLE_USER" \
+    '.authorization["user-role"][$u] = "moodle"' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg c "$LEGACY_CORE" \
+    '.authorization.permissions += [{
+      "name": "moodle-core-read",
+      "role": ["admin","support","moodle"],
+      "collection": [$c],
+      "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+    }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg c "$LEGACY_CORE" \
+    '.authorization.permissions += [{
+      "name": "moodle-core-write",
+      "role": ["admin","moodle"],
+      "collection": [$c],
+      "path": ["/update","/update/extract"]
+    }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+fi
+
+# Merge each active tenant using jq
+for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
+  active="${TENANT_ACTIVE[$tenant_name]:-true}"
+  [ "$active" = "false" ] && continue
+
+  user="${TENANT_USER[$tenant_name]:-solr_${tenant_name}}"
+  pass="${TENANT_PASS[$tenant_name]:-}"
+  cores="${TENANT_CORES[$tenant_name]:-}"
+
+  if [ -z "$pass" ]; then
+    _log "  WARNING: No password for tenant $tenant_name — skipping"
+    continue
+  fi
+
+  _validate_name "$tenant_name" "tenant name"
+  _validate_name "$user" "tenant user"
+
+  _log "  Processing tenant: $tenant_name (user: $user, cores: $cores)"
+  tenant_hash="$(hash_solr_password "$pass")"
+  # Standalone: all tenants share role "tenant" (Caddy handles per-URL isolation).
+  # SolrCloud: unique role per tenant enables collection-level enforcement by Solr.
+  if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
+    role="tenant-${tenant_name}"
+  else
+    role="tenant"
+  fi
+
+  # Add credential
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$user" --arg h "$tenant_hash" \
+    '.authentication.credentials[$u] = $h' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  # Add user-role mapping
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$user" --arg r "$role" \
+    '.authorization["user-role"][$u] = $r' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  # SolrCloud: per-tenant-per-collection permissions with collection field.
+  # Solr enforces the collection field server-side — true per-collection isolation.
+  if [ "$SOLR_MODE" = "solrcloud" ]; then
+    IFS=',' read -ra CORE_ARRAY <<< "$cores"
+    for core in "${CORE_ARRAY[@]}"; do
+      core="$(echo "$core" | tr -d ' ')"
+      [ -z "$core" ] && continue
+
+      TMP2="$(mktemp)"; chmod 600 "$TMP2"
+      jq --arg n "tenant-${tenant_name}-${core}-read" --arg r "$role" --arg c "$core" \
+        '.authorization.permissions += [{
+          "name": $n,
+          "role": ["admin","support",$r],
+          "collection": [$c],
+          "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+        }]' "$TMP_SEC" > "$TMP2"
+      mv "$TMP2" "$TMP_SEC"
+
+      TMP2="$(mktemp)"; chmod 600 "$TMP2"
+      jq --arg n "tenant-${tenant_name}-${core}-write" --arg r "$role" --arg c "$core" \
+        '.authorization.permissions += [{
+          "name": $n,
+          "role": ["admin",$r],
+          "collection": [$c],
+          "path": ["/update","/update/extract"]
+        }]' "$TMP_SEC" > "$TMP2"
+      mv "$TMP2" "$TMP_SEC"
+    done
+  fi
 done
 
-# Keep plain passwords for Prometheus and other services that need plain auth
-ADMIN_PASS_PLAIN="${SOLR_ADMIN_PASSWORD}"
-SUPPORT_PASS_PLAIN="${SOLR_SUPPORT_PASSWORD}"
-MOODLE_PASS_PLAIN="${SOLR_MOODLE_PASSWORD}"
+# Standalone: one shared tenant-read + tenant-write permission covers ALL tenant users.
+# No collection field → Solr evaluates path match only → blocks support from /update.
+# Per-URL tenant isolation (which core each Moodle instance can reach) is enforced by Caddy.
+if [ "${SOLR_MODE:-}" != "solrcloud" ] && [ "$TENANT_COUNT" -gt 0 ]; then
+  _log "  Adding standalone shared tenant-read and tenant-write permissions"
 
-# -------------------------------------------------------------------
-# Detect password changes and regenerate security.json if needed
-# -------------------------------------------------------------------
-PASS_HASH_FILE="${DATA_DIR}/.password_checksum"
+  TMP2="$(mktemp)"; chmod 600 "$TMP2"
+  jq '.authorization.permissions += [{
+    "name": "tenant-read",
+    "role": ["admin","support","tenant"],
+    "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+  }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
 
-# Compute checksum of current passwords
-CURRENT_PASS_HASH="$(printf '%s\n%s\n%s\n%s\n%s\n%s' \
-  "${ADMIN_USER}" "${ADMIN_PASS_PLAIN}" \
-  "${SUPPORT_USER}" "${SUPPORT_PASS_PLAIN}" \
-  "${MOODLE_USER}" "${MOODLE_PASS_PLAIN}" \
-  | openssl dgst -sha256 | awk '{print $2}')"
-
-# Check if passwords have changed
-REGENERATE_SECURITY=0
-if [ ! -f "${DATA_DIR}/security.json" ]; then
-  echo "→ Creating new security.json (first run)"
-  REGENERATE_SECURITY=1
-elif [ ! -f "$PASS_HASH_FILE" ]; then
-  echo "→ Password checksum missing, regenerating security.json"
-  REGENERATE_SECURITY=1
-else
-  STORED_PASS_HASH="$(cat "$PASS_HASH_FILE" 2>/dev/null || echo '')"
-  if [ "$CURRENT_PASS_HASH" != "$STORED_PASS_HASH" ]; then
-    echo "→ Passwords changed, regenerating security.json"
-    REGENERATE_SECURITY=1
-  else
-    echo "✓ Passwords unchanged, preserving security.json"
-  fi
+  TMP2="$(mktemp)"; chmod 600 "$TMP2"
+  jq '.authorization.permissions += [{
+    "name": "tenant-write",
+    "role": ["admin","tenant"],
+    "path": ["/update","/update/extract"]
+  }]' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
 fi
 
-if [ "$REGENERATE_SECURITY" = "1" ]; then
-  mkdir -p "${DATA_DIR}"
+# Inactive tenants: add credential with random hash (blocks login, keeps user visible)
+for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
+  active="${TENANT_ACTIVE[$tenant_name]:-true}"
+  [ "$active" != "false" ] && continue
 
-  # Hash plain passwords once for security.json
-  ADMIN_CRED="$(hash_solr_basic_auth "${ADMIN_PASS_PLAIN}")"
-  SUPPORT_CRED="$(hash_solr_basic_auth "${SUPPORT_PASS_PLAIN}")"
-  MOODLE_CRED="$(hash_solr_basic_auth "${MOODLE_PASS_PLAIN}")"
-
-  # Replace template if present (from /init, not /config)
-  if [ -f "/init/security.json.template" ]; then
-    if ! sed -e "s#__ADMIN_USER__#${ADMIN_USER}#g" \
-        -e "s#__SUPPORT_USER__#${SUPPORT_USER}#g" \
-        -e "s#__MOODLE_USER__#${MOODLE_USER}#g" \
-        -e "s#__ADMIN_HASH__#${ADMIN_CRED}#g" \
-        -e "s#__SUPPORT_HASH__#${SUPPORT_CRED}#g" \
-        -e "s#__MOODLE_HASH__#${MOODLE_CRED}#g" \
-        "/init/security.json.template" > "${DATA_DIR}/security.json"; then
-      echo "ERROR: Failed to generate security.json from template" >&2
-      exit 1
-    fi
-  else
-    echo "No security.json.template found - generating minimal inline file"
-    cat > "${DATA_DIR}/security.json" <<EOF
-{
-  "authentication": {
-    "blockUnknown": true,
-    "class": "solr.BasicAuthPlugin",
-    "credentials": {
-      "${ADMIN_USER}": "${ADMIN_CRED}",
-      "${SUPPORT_USER}": "${SUPPORT_CRED}",
-      "${MOODLE_USER}": "${MOODLE_CRED}"
-    },
-    "realm": "Eledia",
-    "forwardCredentials": false
-  },
-  "authorization": {
-    "class": "solr.RuleBasedAuthorizationPlugin",
-    "permissions": [
-      { "name": "health",          "role": ["admin", "support", "moodle"] },
-      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
-      { "name": "schema-edit",     "role": ["admin", "moodle"] },
-      { "name": "read",            "role": ["admin", "support", "moodle"] },
-      { "name": "update",          "role": ["admin", "moodle"] },
-      { "name": "config-read",     "role": ["admin", "support", "moodle"] },
-      { "name": "metrics-read",    "role": ["admin", "support", "moodle"] },
-      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
-      { "name": "core-admin-edit", "role": ["admin"] },
-      { "name": "all",             "role": "admin" }
-    ],
-    "user-role": {
-      "${ADMIN_USER}": ["admin"],
-      "${SUPPORT_USER}": ["support"],
-      "${MOODLE_USER}": ["moodle"]
-    }
-  }
-}
-EOF
-  fi
-  chmod 600 "${DATA_DIR}/security.json"
-
-  # Save password checksum for future comparisons (secure permissions!)
-  echo "$CURRENT_PASS_HASH" > "$PASS_HASH_FILE"
-  chmod 600 "$PASS_HASH_FILE"
-  chown 8983:8983 "$PASS_HASH_FILE" 2>/dev/null || true
-
-  echo "✓ security.json created/updated"
-fi
-
-# -------------------------------------------------------------------
-# Dynamic Core Management
-# -------------------------------------------------------------------
-CORE_STATE_FILE="${DATA_DIR}/.core_state"
-CURRENT_CORES="${SOLR_CORE_NAME}"
-
-# Handle multi-core setup
-if [ -n "${SOLR_CORES:-}" ]; then
-  CURRENT_CORES="${SOLR_CORES}"
-fi
-
-# Read previous core state
-if [ -f "$CORE_STATE_FILE" ]; then
-  PREVIOUS_CORES="$(cat "$CORE_STATE_FILE" 2>/dev/null || echo '')"
-else
-  PREVIOUS_CORES=""
-fi
-
-# Function: create core
-create_core() {
-  local core_name="$1"
-  local core_dir="${DATA_DIR}/${core_name}"
-  local core_conf="${core_dir}/conf"
-
-  if [ -f "${core_dir}/core.properties" ]; then
-    echo "→ Core '${core_name}' already exists"
-    return 0
-  fi
-
-  echo "→ Creating core '${core_name}'"
-  mkdir -p "${core_conf}" || {
-    echo "ERROR: Failed to create core directory for ${core_name}" >&2
-    return 1
-  }
-
-  if ! cp -a "${CONF_SRC}/." "${core_conf}/"; then
-    echo "ERROR: Failed to copy config files for ${core_name}" >&2
-    return 1
-  fi
-
-  cat > "${core_dir}/core.properties" <<EOF
-name=${core_name}
-EOF
-
-  chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
-  echo "✓ Core created: ${core_name}"
-}
-
-# Function: rename core
-rename_core() {
-  local old_name="$1"
-  local new_name="$2"
-  local old_dir="${DATA_DIR}/${old_name}"
-  local new_dir="${DATA_DIR}/${new_name}"
-
-  if [ ! -d "$old_dir" ]; then
-    echo "→ Old core '${old_name}' not found, creating new core '${new_name}'"
-    create_core "$new_name"
-    return 0
-  fi
-
-  if [ -d "$new_dir" ]; then
-    echo "→ Target core '${new_name}' already exists, skipping rename"
-    return 0
-  fi
-
-  echo "→ Renaming core '${old_name}' to '${new_name}'"
-  mv "$old_dir" "$new_dir"
-
-  # Update core.properties
-  sed -i "s/^name=.*/name=${new_name}/" "${new_dir}/core.properties"
-
-  chown -R 8983:8983 "${new_dir}" 2>/dev/null || true
-  echo "✓ Core renamed: ${old_name} → ${new_name}"
-}
-
-# Function: delete core
-delete_core() {
-  local core_name="$1"
-  local core_dir="${DATA_DIR}/${core_name}"
-
-  if [ ! -d "$core_dir" ]; then
-    echo "→ Core '${core_name}' does not exist"
-    return 0
-  fi
-
-  echo "→ Deleting core '${core_name}'"
-
-  # Create backup
-  local backup_dir="${DATA_DIR}/backup/deleted_cores"
-  mkdir -p "$backup_dir"
-  local timestamp
-  timestamp="$(date +%Y%m%d_%H%M%S)"
-  mv "$core_dir" "${backup_dir}/${core_name}_${timestamp}"
-
-  echo "✓ Core deleted (backed up to backup/deleted_cores)"
-}
-
-# Parse cores (comma-separated)
-IFS=',' read -ra CURRENT_CORE_ARRAY <<< "$CURRENT_CORES"
-IFS=',' read -ra PREVIOUS_CORE_ARRAY <<< "$PREVIOUS_CORES"
-
-# Detect changes
-echo "→ Current cores: ${CURRENT_CORES}"
-echo "→ Previous cores: ${PREVIOUS_CORES}"
-
-# Create new cores
-for core in "${CURRENT_CORE_ARRAY[@]}"; do
-  core="$(echo "$core" | tr -d ' ')"  # Trim whitespace
-  if [ -z "$core" ]; then continue; fi
-
-  # Check if core is new
-  if ! echo ",$PREVIOUS_CORES," | grep -q ",${core},"; then
-    create_core "$core"
-  else
-    echo "→ Core '${core}' unchanged"
-  fi
+  user="${TENANT_USER[$tenant_name]:-solr_${tenant_name}}"
+  _log "  Inactive tenant $tenant_name (user: $user) — adding blocked credential"
+  blocked_pass="$(gen_password)"
+  blocked_hash="$(hash_solr_password "$blocked_pass")"
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$user" --arg h "$blocked_hash" \
+    '.authentication.credentials[$u] = $h' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
 done
 
-# Delete removed cores
-if [ -n "$PREVIOUS_CORES" ]; then
-  for core in "${PREVIOUS_CORE_ARRAY[@]}"; do
-    core="$(echo "$core" | tr -d ' ')"  # Trim whitespace
-    if [ -z "$core" ]; then continue; fi
+# Validate JSON
+if ! jq . "$TMP_SEC" > /dev/null 2>&1; then
+  _log "ERROR: Generated security.json is not valid JSON"
+  rm -f "$TMP_SEC"
+  exit 1
+fi
 
-    # Check if core was removed
-    if ! echo ",$CURRENT_CORES," | grep -q ",${core},"; then
-      delete_core "$core"
+# Write final file
+mv "$TMP_SEC" "${DATA_DIR}/security.json"
+chmod 600 "${DATA_DIR}/security.json"
+chown 8983:8983 "${DATA_DIR}/security.json" 2>/dev/null || true
+
+# Save sanitized backup (credential values replaced for safety)
+jq 'del(.authentication.credentials) | . + {"note": "credentials removed from backup"}' \
+  "${DATA_DIR}/security.json" > "${LOG_DIR}/security.json.bak" 2>/dev/null || true
+
+_log "  security.json written ($(jq '.authorization.permissions | length' "${DATA_DIR}/security.json") permissions)"
+
+# ---------------------------------------------------------------------------
+# Step 4: Pre-create core directories for active tenants (standalone only)
+# In SolrCloud mode, cores/collections are created via Collections API after
+# Solr starts (inside solr-tenant.sh create / apply). No directories needed.
+# ---------------------------------------------------------------------------
+SOLR_MODE="${SOLR_MODE:-}"
+if [ "$SOLR_MODE" = "solrcloud" ]; then
+  _log "Step 4: SolrCloud mode — skipping core directory pre-creation (Collections API handles this)"
+fi
+_log "Step 4: Pre-creating core directories"
+
+if [ "$SOLR_MODE" != "solrcloud" ]; then
+for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
+  active="${TENANT_ACTIVE[$tenant_name]:-true}"
+  [ "$active" = "false" ] && continue
+
+  cores="${TENANT_CORES[$tenant_name]:-}"
+  IFS=',' read -ra CORE_ARRAY <<< "$cores"
+  for core in "${CORE_ARRAY[@]}"; do
+    core="$(echo "$core" | tr -d ' ')"
+    [ -z "$core" ] && continue
+    core_dir="${DATA_DIR}/${core}"
+
+    if [ -f "${core_dir}/core.properties" ]; then
+      _log "  Core '$core' already exists — skipping"
+      continue
     fi
+
+    _log "  Pre-creating core directory: $core"
+    mkdir -p "${core_dir}/conf"
+    if ! cp -a "${CONFIGSET_SRC}/." "${core_dir}/conf/"; then
+      _log "ERROR: Failed to copy config for core $core"
+      exit 2
+    fi
+    printf 'name=%s\n' "$core" > "${core_dir}/core.properties"
+    chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
+    _log "  Core '$core' directory created"
   done
+done
 fi
 
-# Save current state
-echo "$CURRENT_CORES" > "$CORE_STATE_FILE"
-chmod 600 "$CORE_STATE_FILE"
-chown 8983:8983 "$CORE_STATE_FILE" 2>/dev/null || true
+# Legacy core pre-creation (backward compat — standalone only)
+if [ "$SOLR_MODE" != "solrcloud" ] && [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ] && [ -n "$LEGACY_CORE" ]; then
+  core_dir="${DATA_DIR}/${LEGACY_CORE}"
+  if [ -f "${core_dir}/core.properties" ]; then
+    _log "  Legacy core '$LEGACY_CORE' already exists — skipping"
+  else
+    _log "  Pre-creating legacy core directory: $LEGACY_CORE"
+    mkdir -p "${core_dir}/conf"
+    if ! cp -a "${CONFIGSET_SRC}/." "${core_dir}/conf/"; then
+      _log "ERROR: Failed to copy config for legacy core $LEGACY_CORE"
+      exit 2
+    fi
+    printf 'name=%s\n' "$LEGACY_CORE" > "${core_dir}/core.properties"
+    chown -R 8983:8983 "${core_dir}" 2>/dev/null || true
+    _log "  Legacy core '$LEGACY_CORE' directory created"
+  fi
+fi
 
-#Fix file permissions
-echo "→ Fixing permissions..."
-chown -R 8983:8983 "${DATA_DIR}" || true
-chmod -R 750 "${DATA_DIR}" || true
+# ---------------------------------------------------------------------------
+# Step 5: Fix permissions
+# ---------------------------------------------------------------------------
+_log "Step 5: Fixing permissions"
+
+chown -R 8983:8983 "${DATA_DIR}" 2>/dev/null || true
+chmod -R 750 "${DATA_DIR}" 2>/dev/null || true
 find "${DATA_DIR}" -type f -exec chmod 640 {} \; 2>/dev/null || true
 
-# Secure sensitive files AFTER recursive chmod (600 = owner read/write only)
-# These must be set explicitly to override the recursive permissions above
-if [ -f "${DATA_DIR}/security.json" ]; then
-    chmod 600 "${DATA_DIR}/security.json"
-    echo "  → security.json: 600"
-fi
-if [ -f "${DATA_DIR}/.password_checksum" ]; then
-    chmod 600 "${DATA_DIR}/.password_checksum"
-    echo "  → .password_checksum: 600"
-fi
-if [ -f "${CORE_STATE_FILE}" ]; then
-    chmod 600 "${CORE_STATE_FILE}"
-    echo "  → .core_state: 600"
-fi
-if [ -f "${ENV_FILE_PATH}" ]; then
-    chmod 600 "${ENV_FILE_PATH}" 2>/dev/null || true
-    echo "  → host .env: 600"
+# Sensitive files need 600 (override recursive chmod above)
+chmod 600 "${DATA_DIR}/security.json" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Step 6: Final validation
+# ---------------------------------------------------------------------------
+_log "Step 6: Validation"
+
+if [ ! -s "${DATA_DIR}/security.json" ]; then
+  _log "ERROR: security.json is missing or empty"
+  exit 1
 fi
 
-# Ensure all filesystem changes are written to disk before exiting
+if ! jq . "${DATA_DIR}/security.json" > /dev/null 2>&1; then
+  _log "ERROR: security.json is not valid JSON"
+  exit 1
+fi
+
+perm_count="$(jq '.authorization.permissions | length' "${DATA_DIR}/security.json")"
+cred_count="$(jq '.authentication.credentials | length' "${DATA_DIR}/security.json")"
+_log "  Permissions: $perm_count, Credentials: $cred_count"
+
 sync
 sleep 1
 
-echo "✓ Initialization completed successfully"
+_log "=== powerinit.sh completed successfully ==="

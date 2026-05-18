@@ -3,8 +3,8 @@ FROM alpine:3.20@sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e
 # Solr Init Container
 # Developer: BSC Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.3.2
-# Fix CVE-2025-26519
+# Version: v3.0.0
+# Multi-Tenant Support
 # =========================================
 # Update musl to fix CVE-2025-26519
 RUN apk upgrade --no-cache musl musl-utils
@@ -23,9 +23,11 @@ RUN apk add --no-cache \
 COPY config/ /config/
 COPY init/security.json.template /init/security.json.template
 COPY init/powerinit.sh /init/powerinit.sh
+COPY scripts/ /opt/solr/scripts/
 
 # Make init script executable and set permissions
-RUN chmod +x /init/powerinit.sh
+RUN chmod +x /init/powerinit.sh && \
+    chmod +x /opt/solr/scripts/*.sh
 
 # Set working directory
 WORKDIR /

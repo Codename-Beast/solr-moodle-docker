@@ -1,54 +1,47 @@
 # =========================================
-# Solr for Moodle
+# Solr for Moodle — Multi-Tenant
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v2.3.2
+# Version: v3.0.0
 # =========================================
 
 services:
   # =================================
-  # [SETUP] Generate .env
-  # =================================
-  moodle_setup:
-    image: alpine:3.20
-    profiles: ["setup"]
-    container_name: ${INSTANCE_NAME:-solr}-setup
-    working_dir: /app
-    volumes:
-      - ./init:/init:ro,z
-      - ./:/app:z
-      - /var/run/docker.sock:/var/run/docker.sock:ro,z
-    entrypoint: ["/bin/sh", "/init/generate_env.sh"]
-    environment:
-      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
-      SOLR_CORE_NAME: ${SOLR_CORE_NAME:-}
-    restart: "no"
-
-  # =================================
-  # [BOOTSTRAP]
+  # [BOOTSTRAP] Init container
+  # Builds security.json from .env + tenants.env
+  # Exits 0 on success, Solr only starts if init succeeds
   # =================================
   solr-init:
     build:
       context: .
       dockerfile: Dockerfile
-    image: solr-init:v2.3.2
+    image: solr-init:v3.0.0
     container_name: ${INSTANCE_NAME:-solr}-init
     user: "0:0"
     volumes:
       - solr_data:/var/solr/data:z
       - ./.env:/.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:ro,z
+      - /var/log/solr:/var/log/solr:z
     env_file:
       - .env
     environment:
       ENV_FILE_PATH: /.env
+      SOLR_MODE: ${SOLR_MODE:-}
     networks:
       - solr_network
     restart: "no"
+
   # =================================
   # Main service
   # =================================
   solr:
-    image: solr:${SOLR_VERSION:-9.10.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.solr
+      args:
+        SOLR_VERSION: ${SOLR_VERSION:-9.10.1}
+    image: solr-eledia:${SOLR_VERSION:-9.10.1}
     container_name: ${INSTANCE_NAME:-solr}-solr
     depends_on:
       solr-init:
@@ -57,14 +50,32 @@ services:
       # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
       # External access goes through the reverse proxy (nginx/apache) with TLS.
       - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
+    # SolrCloud mode: start with -c (cloud) and -DzkRun (embedded ZooKeeper).
+    # Standalone (default): solr-foreground without flags.
+    # Use list form — string form is split naively by spaces and breaks quoted shell logic.
+    # $$SOLR_MODE: docker-compose converts $$ → $ so the container bash evaluates $SOLR_MODE.
+    command:
+      - bash
+      - -c
+      - "if [ \"$$SOLR_MODE\" = \"solrcloud\" ]; then exec solr-foreground -c -DzkRun; else exec solr-foreground; fi"
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
+      - ./scripts:/opt/solr/scripts:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:z
+      - /var/log/solr:/var/log/solr:z
     env_file:
       - .env
     environment:
       SOLR_HEAP: ${SOLR_HEAP:-2g}
       SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
+      # SolrCloud: set SOLR_MODE=solrcloud in .env — enables embedded ZooKeeper.
+      # Leave empty (default) for standalone mode.
+      SOLR_MODE: ${SOLR_MODE:-}
+      # Enable Tika extraction module (Moodle file indexing via /update/extract)
+      SOLR_MODULES: extraction
+      # Disable usage analytics — no data sent to Solr vendor.
+      SOLR_OPTS: "-Dsolr.usage.analytics.enabled=false ${SOLR_JAVA_OPTS:-}"
     ulimits:
       nofile:
         soft: 65536

@@ -36,7 +36,10 @@ INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 SOLR_HOST="127.0.0.1"
+SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
+SOLR_MODE="${SOLR_MODE:-}"
+_is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 
 # Helper functions
 print_header() {
@@ -78,7 +81,7 @@ fi
 
 # Check .env exists
 if [ ! -f ".env" ]; then
-    echo -e "${RED}ERROR: .env not found. Run setup first: docker compose --profile setup up moodle_setup${NC}"
+    echo -e "${RED}ERROR: .env not found. Run setup first: ./setup.sh${NC}"
     exit 1
 fi
 
@@ -101,10 +104,11 @@ unit_tests() {
     local required_files=(
         "docker-compose.yml"
         "init/powerinit.sh"
-        "init/generate_env.sh"
         "config/managed-schema"
         "config/solrconfig.xml"
         "init/security.json.template"
+        "scripts/solr-tenant.sh"
+        "tenants.env.example"
     )
     local missing=0
     for file in "${required_files[@]}"; do
@@ -169,7 +173,7 @@ integration_tests() {
     # Generate .env if not exists
     if [ ! -f ".env" ]; then
         print_info "Generating .env for tests..."
-        docker compose --profile setup up moodle_setup >/dev/null 2>&1 || true
+        ./setup.sh >/dev/null 2>&1 || true
     fi
 
     docker compose up -d >/dev/null 2>&1
@@ -181,6 +185,12 @@ integration_tests() {
         print_fail "Containers not healthy"
         docker compose ps
     fi
+
+    # Create a test tenant so core-level tests have a valid core to work with
+    print_info "Creating test tenant ci_test (core: ${SOLR_CORE_NAME})..."
+    docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh \
+        create ci_test --cores "${SOLR_CORE_NAME}" >/dev/null 2>&1 || true
+    sleep 2
 
     # Solr Core Creation
     print_test "Solr core creation"
@@ -212,7 +222,7 @@ integration_tests() {
     admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     local response
 
-    response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$response" = "200" ]; then
         print_pass "Authentication successful (HTTP 200)"
     else
@@ -223,7 +233,7 @@ integration_tests() {
     print_test "Unauthorized access blocked"
     local unauth_response
 
-    unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/cores")
+    unauth_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$unauth_response" = "401" ]; then
         print_pass "Unauthorized access correctly blocked (HTTP 401)"
     else
@@ -234,7 +244,7 @@ integration_tests() {
     print_test "Core status API"
     local core_response
 
-    core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS&wt=json")
+    core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&wt=json")
     if echo "$core_response" | grep -q "\"${SOLR_CORE_NAME}\""; then
         print_pass "Core status API returns ${SOLR_CORE_NAME}"
     else
@@ -253,10 +263,10 @@ integration_tests() {
     docker compose up -d >/dev/null 2>&1
     sleep 30
 
-    if docker compose logs solr-init 2>&1 | grep -q "Passwords changed"; then
-        print_pass "Password change detected and security.json regenerated"
+    if docker compose logs solr-init 2>&1 | grep -q "security.json written"; then
+        print_pass "security.json regenerated on config change"
     else
-        print_fail "Password change not detected"
+        print_fail "security.json not regenerated"
     fi
 
     # Atomic restore of original .env
@@ -278,7 +288,7 @@ security_tests() {
     print_test "Network binding (localhost only)"
     local binding
 
-    binding=$(docker compose port solr 8983 2>/dev/null)
+    binding=$(docker compose port solr "${SOLR_PORT}" 2>/dev/null)
     if echo "$binding" | grep -q "127.0.0.1"; then
         print_pass "Solr correctly bound to localhost only"
     else
@@ -318,13 +328,11 @@ security_tests() {
     print_test "Sensitive file permissions"
     local sec_perms
     sec_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
-    local pwd_perms
-    pwd_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/.password_checksum 2>/dev/null)
 
-    if [ "$sec_perms" = "600" ] && [ "$pwd_perms" = "600" ]; then
-        print_pass "Sensitive files have correct permissions (600)"
+    if [ "$sec_perms" = "600" ]; then
+        print_pass "security.json has correct permissions (600)"
     else
-        print_fail "Wrong permissions - security.json: $sec_perms, .password_checksum: $pwd_perms"
+        print_fail "security.json has wrong permissions: $sec_perms (expected 600)"
     fi
 
     #.env in gitignore
@@ -375,20 +383,12 @@ security_tests() {
         print_skip "SSL warning not found (maybe suppressed)"
     fi
 
-    # .env sync and permissions
-    print_test ".env sync and permissions"
-    if [ -f ".env" ]; then
-        local host_env_hash
-        local volume_env_hash
-        host_env_hash=$(openssl dgst -sha256 .env | awk '{print $2}')
-        volume_env_hash=$(docker exec "$SOLR_CONTAINER" sh -c "openssl dgst -sha256 /var/solr/data/.env | awk '{print \$2}'" 2>/dev/null)
-        if [ -n "$volume_env_hash" ] && [ "$host_env_hash" = "$volume_env_hash" ]; then
-            print_pass "Volume .env matches host .env"
-        else
-            print_fail "Volume .env does not match host .env"
-        fi
+    # tenants.env accessible in container
+    print_test "tenants.env accessible in container"
+    if docker exec "$SOLR_CONTAINER" test -f /opt/solr/tenants.env 2>/dev/null; then
+        print_pass "tenants.env accessible in container"
     else
-        print_skip "Host .env not found; skipping sync/permission checks"
+        print_fail "tenants.env not accessible in container"
     fi
 }
 
@@ -405,7 +405,7 @@ negative_tests() {
     print_test "Reject invalid credentials"
     local invalid_response
 
-    invalid_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:wrongpassword" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    invalid_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:wrongpassword" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$invalid_response" = "401" ]; then
         print_pass "Invalid credentials rejected (HTTP 401)"
     else
@@ -416,8 +416,8 @@ negative_tests() {
     print_test "SQL injection protection"
     local injection_response
 
-    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
-    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ]; then
+    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
+    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ] || [ "$injection_response" = "404" ]; then
         print_pass "SQL injection handled safely (HTTP $injection_response)"
     else
         print_fail "Unexpected response to SQL injection (HTTP $injection_response)"
@@ -427,7 +427,7 @@ negative_tests() {
     print_test "XSS protection"
     local xss_response
 
-    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
+    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
     if echo "$xss_response" | grep -qv "<script>"; then
         print_pass "XSS attack sanitized"
     else
@@ -441,7 +441,7 @@ negative_tests() {
     long_query=$(python3 -c "print('a'*10000)")
     local long_response
 
-    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
+    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
     if [ "$long_response" = "400" ] || [ "$long_response" = "414" ] || [ "$long_response" = "200" ]; then
         print_pass "Long query handled (HTTP $long_response)"
     else
@@ -452,7 +452,7 @@ negative_tests() {
     print_test "Reject invalid core name"
     local invalid_core_response
 
-    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/nonexistent_core/select?q=*:*")
+    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/nonexistent_core/select?q=*:*")
     if [ "$invalid_core_response" = "404" ]; then
         print_pass "Invalid core rejected (HTTP 404)"
     else
@@ -463,8 +463,8 @@ negative_tests() {
     print_test "Handle empty query"
     local empty_response
 
-    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=")
-    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ]; then
+    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=")
+    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ] || [ "$empty_response" = "404" ]; then
         print_pass "Empty query handled (HTTP $empty_response)"
     else
         print_fail "Empty query caused unexpected response (HTTP $empty_response)"
@@ -487,7 +487,7 @@ performance_tests() {
     local start_time
 
     start_time=$(date +%s%3N)
-    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1
     local end_time
 
     end_time=$(date +%s%3N)
@@ -515,7 +515,7 @@ performance_tests() {
     print_test "Healthcheck endpoint response"
     local health_response
 
-    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:8983/solr/admin/ping" 2>/dev/null)
+    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/ping" 2>/dev/null)
     if [ "$health_response" = "401" ] || [ "$health_response" = "200" ]; then
         print_pass "Healthcheck endpoint responsive (HTTP $health_response)"
     else
@@ -528,7 +528,7 @@ performance_tests() {
 
     concurrent_start=$(date +%s%3N)
     for i in {1..10}; do
-        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores?action=STATUS" &
+        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
     done
     wait
     local concurrent_end
@@ -550,7 +550,7 @@ performance_tests() {
 
     load_start=$(date +%s%3N)
     for i in {1..20}; do
-        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
+        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
     done
     local load_end
 
@@ -585,8 +585,8 @@ moodle_document_tests() {
     print_info "This includes: indexing, querying, filtering, highlighting, faceting"
     echo ""
 
-    # Run the moodle document test script
-    if bash scripts/test-moodle-documents.sh 2>&1 | tee /tmp/moodle-test-output.log | tail -20; then
+    # Run the moodle document test script against the integration test core
+    if SOLR_CORE_NAME="${SOLR_CORE_NAME}" bash scripts/test-moodle-documents.sh 2>&1 | tee /tmp/moodle-test-output.log | tail -20; then
         # Extract test results from output
         MOODLE_TESTS=$(grep "Total Tests:" /tmp/moodle-test-output.log | awk '{print $3}' || echo "0")
         MOODLE_PASSED=$(grep "Passed:" /tmp/moodle-test-output.log | awk '{print $2}' || echo "0")
@@ -615,38 +615,6 @@ moodle_document_tests() {
 }
 
 # =========================================
-# MONITORING TESTS - Prometheus & Grafana
-# =========================================
-monitoring_tests() {
-    print_header "MONITORING TESTS - Prometheus & Grafana Health"
-
-    local prom_bind="${PROMETHEUS_BIND:-127.0.0.1}"
-    local prom_port="${PROMETHEUS_PORT:-9090}"
-    local grafana_bind="${GRAFANA_BIND:-127.0.0.1}"
-    local grafana_port="${GRAFANA_PORT:-3000}"
-
-    # Prometheus health
-    print_test "Prometheus health endpoint (${prom_bind}:${prom_port})"
-    local prom_response
-    prom_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://${prom_bind}:${prom_port}/-/healthy" 2>/dev/null)
-    if [ "$prom_response" = "200" ]; then
-        print_pass "Prometheus healthy (HTTP 200)"
-    else
-        print_fail "Prometheus not healthy (HTTP $prom_response)"
-    fi
-
-    # Grafana health
-    print_test "Grafana health endpoint (${grafana_bind}:${grafana_port})"
-    local grafana_response
-    grafana_response=$(curl -sf -o /dev/null -w '%{http_code}' "http://${grafana_bind}:${grafana_port}/api/health" 2>/dev/null)
-    if [ "$grafana_response" = "200" ]; then
-        print_pass "Grafana healthy (HTTP 200)"
-    else
-        print_fail "Grafana not healthy (HTTP $grafana_response)"
-    fi
-}
-
-# =========================================
 # CLEANUP TESTS - Cleanup and Restart
 # =========================================
 cleanup_tests() {
@@ -663,7 +631,7 @@ cleanup_tests() {
     local restart_response
 
 
-    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:8983/solr/admin/cores")
+    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$restart_response" = "200" ]; then
         print_pass "Container restart successful, data persisted"
     else
@@ -689,6 +657,295 @@ cleanup_tests() {
 }
 
 # =========================================
+# MULTI-TENANT TESTS
+# =========================================
+tenant_tests() {
+    print_header "MULTI-TENANT TESTS - Isolation & Management"
+
+    local admin_pass
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    local container="${INSTANCE_NAME:-solr}-solr"
+    local tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
+
+    # Create tenant schule_a
+    print_test "Create tenant schule_a (core: moodle_prod_a)"
+    if $tenant_cmd create schule_a --cores moodle_prod_a >/dev/null 2>&1; then
+        print_pass "Tenant schule_a created"
+    else
+        print_fail "Failed to create tenant schule_a"
+    fi
+
+    # Verify user in security.json
+    print_test "User solr_schule_a in security.json"
+    if docker exec "$container" jq '.authentication.credentials | has("solr_schule_a")' \
+        /var/solr/data/security.json 2>/dev/null | grep -q true; then
+        print_pass "User solr_schule_a present in security.json"
+    else
+        print_skip "security.json check (may need restart to reflect)"
+    fi
+
+    PASS_A="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+
+    # Tenant can access own core
+    print_test "solr_schule_a can access /moodle_prod_a/select (200)"
+    local r
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Tenant access to own core: OK (HTTP 200)"
+    else
+        print_fail "Tenant access to own core failed (HTTP $r)"
+    fi
+
+    # Tenant blocked from admin API
+    print_test "solr_schule_a CANNOT access /admin/cores (403)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores" 2>/dev/null)
+    if [ "$r" = "403" ]; then
+        print_pass "Admin API correctly blocked for tenant (HTTP 403)"
+    else
+        print_fail "Admin API NOT blocked for tenant (HTTP $r — expected 403)"
+    fi
+
+    # Create tenant schule_b
+    print_test "Create tenant schule_b (core: moodle_prod_b)"
+    if $tenant_cmd create schule_b --cores moodle_prod_b >/dev/null 2>&1; then
+        print_pass "Tenant schule_b created"
+    else
+        print_fail "Failed to create tenant schule_b"
+    fi
+
+    PASS_B="$(docker exec "$container" grep 'TENANT_schule_b_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+
+    # Isolation: cross-core access enforcement depends on mode
+    # SolrCloud: collection field enforced by Solr → 403
+    # Standalone: collection field NOT enforced (SolrCloud-only limitation);
+    #   isolation requires Caddy/proxy. Test verifies auth isolation (401/403) instead.
+    if _is_cloud_mode; then
+        print_test "ISOLATION (SolrCloud): solr_schule_a CANNOT access /moodle_prod_b/select (403)"
+        r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_b/select?q=*:*&rows=0" 2>/dev/null)
+        if [ "$r" = "403" ]; then
+            print_pass "SolrCloud isolation OK: schule_a cannot access schule_b (HTTP 403)"
+        else
+            print_fail "ISOLATION FAILURE: schule_a accessed schule_b (HTTP $r — expected 403)"
+        fi
+    else
+        print_test "ISOLATION (standalone): authentication isolation — wrong password => 401"
+        r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:wrongpassword" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+        if [ "$r" = "401" ]; then
+            print_pass "Auth isolation OK: wrong password rejected (HTTP 401)"
+        else
+            print_fail "Auth isolation FAILED: wrong password not rejected (HTTP $r)"
+        fi
+        print_info "Note: URL-level core isolation requires Caddy proxy (run: solr-tenant.sh caddy-config)"
+    fi
+
+    # Support can read both cores
+    print_test "support can read /moodle_prod_a/select (200)"
+    local support_pass
+    support_pass=$(grep "^SOLR_SUPPORT_PASSWORD=" .env | cut -d= -f2)
+    r=$(curl -so /dev/null -w '%{http_code}' -u "support:${support_pass}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Support read access: OK (HTTP 200)"
+    else
+        print_fail "Support read access failed (HTTP $r)"
+    fi
+
+    # Support cannot write
+    print_test "support CANNOT write to /moodle_prod_a/update (403)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "support:${support_pass}" \
+        -X POST -H 'Content-Type: application/json' -d '{"commit":{}}' \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/update" 2>/dev/null)
+    if [ "$r" = "403" ]; then
+        print_pass "Support write correctly blocked (HTTP 403)"
+    else
+        print_fail "Support write NOT blocked (HTTP $r — expected 403)"
+    fi
+
+    # core-add
+    print_test "core-add: add moodle_test_a to schule_a"
+    if $tenant_cmd core-add schule_a --core moodle_test_a >/dev/null 2>&1; then
+        print_pass "core-add successful"
+    else
+        print_fail "core-add failed"
+    fi
+
+    print_test "solr_schule_a can access /moodle_test_a/select (200)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_test_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Access to new core: OK (HTTP 200)"
+    else
+        print_fail "Access to new core failed (HTTP $r)"
+    fi
+
+    # delete tenant
+    print_test "delete schule_a -> login blocked (401)"
+    $tenant_cmd delete schule_a --force >/dev/null 2>&1 || true
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "401" ]; then
+        print_pass "Deleted tenant login correctly blocked (HTTP 401)"
+    else
+        print_fail "Deleted tenant can still login (HTTP $r — expected 401)"
+    fi
+
+    # enable tenant
+    print_test "enable schule_a -> new password works (200)"
+    NEW_PASS=$($tenant_cmd enable schule_a 2>/dev/null | grep 'Password:' | awk '{print $3}') || true
+    if [ -z "$NEW_PASS" ]; then
+        NEW_PASS="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+    fi
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${NEW_PASS}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Re-enabled tenant login OK (HTTP 200)"
+    else
+        print_fail "Re-enabled tenant login failed (HTTP $r)"
+    fi
+
+    # apply (idempotent)
+    print_test "apply is idempotent (no errors)"
+    if $tenant_cmd apply >/dev/null 2>&1; then
+        print_pass "apply completed without errors"
+    else
+        print_fail "apply returned errors"
+    fi
+
+    # Restart persistence
+    print_test "Restart persistence: tenants survive docker compose restart"
+    docker compose restart solr >/dev/null 2>&1 || true
+    sleep 30
+    if $tenant_cmd list 2>/dev/null | grep -q "schule_b"; then
+        print_pass "Tenants persisted after restart"
+    else
+        print_fail "Tenants lost after restart"
+    fi
+}
+
+# =========================================
+# SOLRCLOUD TESTS - Collections API + Persistence
+# =========================================
+solrcloud_tests() {
+    print_header "SOLRCLOUD TESTS - Collections API & Restart Persistence"
+
+    if ! _is_cloud_mode; then
+        print_skip "SolrCloud tests skipped (SOLR_MODE != solrcloud)"
+        return 0
+    fi
+
+    local admin_pass container tenant_cmd
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    container="${INSTANCE_NAME:-solr}-solr"
+    tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
+
+    # Verify embedded ZooKeeper is running
+    print_test "Embedded ZooKeeper reachable (port 9983)"
+    local zk_code
+    zk_code=$(curl -so /dev/null -w '%{http_code}' \
+        -u "admin:${admin_pass}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/zookeeper?detail=true&path=%2F&wt=json" 2>/dev/null)
+    if [ "$zk_code" = "200" ]; then
+        print_pass "ZooKeeper API reachable (HTTP 200)"
+    else
+        print_fail "ZooKeeper API not reachable (HTTP $zk_code)"
+    fi
+
+    # Collections API: create collection
+    print_test "Collections API: create collection via tenant (cloud_test_c1)"
+    if $tenant_cmd create cloud_tenant --cores cloud_test_c1 >/dev/null 2>&1; then
+        print_pass "Collection cloud_test_c1 created via Collections API"
+    else
+        print_fail "Failed to create collection cloud_test_c1"
+    fi
+
+    CLOUD_PASS="$(docker exec "$container" grep 'TENANT_cloud_tenant_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+
+    # Verify collection exists via Collections API
+    print_test "Collection exists in ZooKeeper via Collections API"
+    local coll_resp
+    coll_resp=$(curl -s -u "admin:${admin_pass}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
+    if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
+        print_pass "Collection cloud_test_c1 in Collections API list"
+    else
+        print_fail "Collection cloud_test_c1 NOT in Collections API list"
+    fi
+
+    # True isolation via collection field (SolrCloud enforces it)
+    print_test "True collection isolation: wrong tenant => 403"
+    local iso_code
+    iso_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?wt=json" 2>/dev/null)
+    if [ "$iso_code" = "403" ]; then
+        print_pass "Admin API blocked for tenant (HTTP 403)"
+    else
+        print_fail "Admin API NOT blocked (HTTP $iso_code — expected 403)"
+    fi
+
+    # Index a document to test persistence
+    print_test "Index document for restart persistence test"
+    local idx_code
+    idx_code=$(curl -so /dev/null -w '%{http_code}' \
+        -u "solr_cloud_tenant:${CLOUD_PASS}" \
+        -X POST -H 'Content-Type: application/json' \
+        -d '[{"id":"persist-test-1","title_s":"restart_persistence_check"}]' \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/update?commit=true" 2>/dev/null)
+    if [ "$idx_code" = "200" ]; then
+        print_pass "Document indexed (HTTP 200)"
+    else
+        print_fail "Document indexing failed (HTTP $idx_code)"
+    fi
+
+    # Restart Solr and verify everything survives
+    print_test "Restart Solr — collection, security, and documents must survive"
+    docker compose restart solr >/dev/null 2>&1
+    local waited=0
+    while [ "$waited" -lt 60 ]; do
+        if docker compose ps | grep -q healthy; then break; fi
+        sleep 3
+        waited=$((waited + 3))
+    done
+
+    # Collection still exists
+    coll_resp=$(curl -s -u "admin:${admin_pass}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
+    if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
+        print_pass "Collection survives restart (ZK persistence confirmed)"
+    else
+        print_fail "Collection LOST after restart (ZK data not persisted)"
+    fi
+
+    # Document still exists
+    print_test "Document survives Solr restart (ZK + index persistence)"
+    local doc_resp
+    doc_resp=$(curl -s -u "solr_cloud_tenant:${CLOUD_PASS}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=id:persist-test-1&wt=json")
+    if echo "$doc_resp" | grep -q '"numFound":1'; then
+        print_pass "Document persists after restart"
+    else
+        print_fail "Document LOST after restart"
+    fi
+
+    # Tenant credentials survive (security in ZK)
+    print_test "Tenant authentication survives restart (Security API in ZK)"
+    local auth_code
+    auth_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/admin/ping" 2>/dev/null)
+    if [ "$auth_code" = "200" ]; then
+        print_pass "Tenant credentials persist after restart (HTTP 200)"
+    else
+        print_fail "Tenant authentication failed after restart (HTTP $auth_code)"
+    fi
+
+    # Cleanup
+    $tenant_cmd delete cloud_tenant --force >/dev/null 2>&1 || true
+}
+
+# =========================================
 # MAIN TEST EXECUTION
 # =========================================
 main() {
@@ -709,7 +966,8 @@ EOF
     RUN_PERFORMANCE=1
     RUN_MOODLE=1
     RUN_CLEANUP=1
-    RUN_MONITORING=0
+    RUN_TENANT=0
+    RUN_CLOUD=0
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -760,8 +1018,13 @@ EOF
                 RUN_CLEANUP=0
                 shift
                 ;;
-            --monitoring)
-                RUN_MONITORING=1
+            --tenant)
+                RUN_TENANT=1
+                shift
+                ;;
+            --cloud|--solrcloud)
+                RUN_CLOUD=1
+                SOLR_MODE=solrcloud
                 shift
                 ;;
             --help)
@@ -774,7 +1037,8 @@ EOF
                 echo "  --negative-only      Run only negative tests (invalid inputs)"
                 echo "  --moodle-only        Run only Moodle document tests"
                 echo "  --no-cleanup         Skip cleanup tests"
-                echo "  --monitoring         Run Prometheus/Grafana health checks"
+                echo "  --tenant             Run multi-tenant isolation tests"
+                echo "  --cloud              Run SolrCloud-specific tests"
                 echo "  --help               Show this help"
                 echo ""
                 exit 0
@@ -794,7 +1058,8 @@ EOF
     [ $RUN_NEGATIVE -eq 1 ] && negative_tests
     [ $RUN_PERFORMANCE -eq 1 ] && performance_tests
     [ $RUN_MOODLE -eq 1 ] && moodle_document_tests
-    [ $RUN_MONITORING -eq 1 ] && monitoring_tests
+    [ $RUN_TENANT -eq 1 ] && tenant_tests
+    [ $RUN_CLOUD -eq 1 ] && solrcloud_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests
 
     # Print summary

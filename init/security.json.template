@@ -4,8 +4,7 @@
     "class": "solr.BasicAuthPlugin",
     "credentials": {
       "__ADMIN_USER__": "__ADMIN_HASH__",
-      "__SUPPORT_USER__": "__SUPPORT_HASH__",
-      "__MOODLE_USER__": "__MOODLE_HASH__"
+      "__SUPPORT_USER__": "__SUPPORT_HASH__"
     },
     "realm": "Eledia",
     "forwardCredentials": false
@@ -27,9 +26,8 @@
       { "name": "all",             "role": "admin" }
     ],
     "user-role": {
-      "__ADMIN_USER__": ["admin"],
-      "__SUPPORT_USER__": ["support"],
-      "__MOODLE_USER__": ["moodle"]
+      "__ADMIN_USER__":   "admin",
+      "__SUPPORT_USER__": "support"
     }
   }
 }

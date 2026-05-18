@@ -2,32 +2,58 @@
 
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) | [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
-## [2.4.1] — 2026-05-11
+## [3.0.0] — 2026-05-10
 
-### Behoben
+### Hinzugefuegt
+- **Multi-Tenant Support:** `scripts/solr-tenant.sh` — zentrales CLI fuer Tenant-Verwaltung
+  - Subcommands: `create`, `delete`, `enable`, `list`, `info`, `passwd`, `core-add`, `core-remove`, `apply`, `export`, `caddy-config`
+  - Alle Schreiboperationen aktualisieren `tenants.env` sofort via Solr Security API
+  - `--dry-run` fuer alle Subcommands
+  - Endpoint-Verifikation nach `create` / `core-add` (inkl. Tika `/update/extract`)
+- **`tenants.env`:** Single Source of Truth fuer alle Tenant-Konfigurationen
+  - Bei jedem Container-Start von `powerinit.sh` komplett neu aus `.env` + `tenants.env` generiert
+  - `tenants.env.example` als Vorlage
+- **SolrCloud-Modus:** `SOLR_MODE=solrcloud` aktiviert eingebetteten ZooKeeper
+  - Wahre Collection-Level-Isolation (403 ohne Proxy)
+  - `_cloud_bootstrap_security()` behebt ZK-Initialisierungsproblem (leeres `security.json` in ZK)
+  - Core Admin API → Collections API im SolrCloud-Modus
+- **Caddy-Proxy-Integration:** `caddy-config --domain <d>` generiert Caddyfile-Snippets mit
+  pro-Tenant-Subdomains fuer URL-Level-Isolation im Standalone-Modus
+- **Vollstaendige CI-Abdeckung:**
+  - Standalone-Tests (Multi-Tenant-Isolation, Tika, Permissions)
+  - SolrCloud-Tests (Collections API, echte Isolation, Moodle-Dokument-Indexierung,
+    Neustart-Persistenz, Tika)
+  - Tika (`/update/extract`) als harter Fehler getestet
 
-- **`core-system-read` Permission fuer PHP PECL SolrClient:** `init/security.json.template`
-  bekommt eine neue custom Permission `core-system-read`, die den moodle-User auf
-  `/admin/system`, `/admin/system/`, `/solr/*/admin/system` und `/solr/*/admin/system/` zulaesst.
+### Geaendert
+- `init/powerinit.sh`: liest `tenants.env`, generiert `security.json` mit Tenant-Credentials
+  und Core-spezifischen Permissions (RuleBasedAuthorizationPlugin mit `collection`-Feld)
+- `init/security.json.template`: nur noch Admin + Support-Skelett — Tenants via `powerinit.sh`
+- `config/managed-schema`: `_text_`-Feld und alle `copyField → _text_` entfernt (~50% kleinerer Index)
+- `scripts/solr-backup.sh`: liest Cores automatisch aus `tenants.env`
+- `docker-compose.yml`: `setup`-Service und Monitoring-Exporter entfernt; Mounts fuer
+  `scripts/`, `tenants.env`, `/var/log/solr/`
+- `.env.example`: `SOLR_MODE`, `SOLR_ADMIN_USER/PASSWORD`, `SOLR_SUPPORT_USER/PASSWORD`
+  statt `SOLR_MOODLE_USER/PASSWORD`
+- `.gitignore`: `tenants.env` hinzugefuegt (enthaelt Tenant-Passwoerter)
 
-  **Root cause:** Moodles `search/engine/solr/classes/engine.php::is_server_ready()` ruft
-  `SolrClient::system()` auf, was eine HTTP-Anfrage an `/solr/<core>/admin/system/` abschickt.
-  Solrs `SystemInfoHandler` ist intern als `CORE_ADMIN_READ` deklariert — Standard-Path-Permissions
-  greifen hier nicht. Ohne explizite Permission antwortete Solr mit 403, und Moodle zeigte
-  "Suchmaschine nicht verfügbar" obwohl Solr laeuft und `/admin/ping` 200 zurueckgibt.
+### Entfernt
+- `setup`-Docker-Service (Alpine + generate_env.sh)
+- `init/generate_env.sh`
+- `SOLR_MOODLE_USER` / `SOLR_MOODLE_PASSWORD` aus `.env` (Ersatz: `solr_tenants` + `solr-tenant.sh`)
+- `SOLR_CORE_NAME` / `SOLR_CORES` aus `.env` (Ersatz: `tenants.env`)
+- Prometheus-Exporter aus `docker-compose.yml`
 
-  **Betrifft:** Alle Instanzen, bei denen Moodle den PHP PECL SolrClient nutzt (Standard).
+### Sicherheit
+- Tenant-Permissions mit `collection`-Feld — verhindert Cross-Tenant-Zugriff via Solr-Permissions
+  (SolrCloud) bzw. via Proxy (Standalone)
+- `SOLR_ADMIN_PASSWORD` / `SOLR_SUPPORT_PASSWORD` als explizite ENV-Variablen statt generischer Passwortvariablen
+- Tika-Modul ueber `SOLR_MODULES=extraction` geladen (kein separater Container)
 
-  **Fix:** Custom Permission `core-system-read` mit `role: ["admin", "support", "moodle"]` und
-  den betroffenen Pfaden — eingefuegt vor der `all`-Permission in `security.json.template`.
-
-- **`init/powerinit.sh` — Fallback-Permissions:** Analoger Fix in den hardcodierten Fallback-
-  Permissions in `powerinit.sh` (greift wenn kein Template vorhanden ist).
-
-### Tests
-
-- `scripts/run-tests.sh`: Neuer Test `security_tests()` — prueft, dass der moodle-User
-  `/solr/<core>/admin/system/` mit HTTP 200 erreicht (nicht 403).
+### Breaking Changes
+- `SOLR_MOODLE_USER` / `SOLR_MOODLE_PASSWORD` entfernt → `solr-tenant.sh create` verwenden
+- `SOLR_CORE_NAME` / `SOLR_CORES` entfernt → `tenants.env` + `solr-tenant.sh`
+- `docker compose --profile setup up moodle_setup` entfernt → `.env` manuell anlegen
 
 ---
 
