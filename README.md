@@ -270,10 +270,24 @@ Setzt `SOLR_MODE=solrcloud` in `.env` — aktiviert eingebetteten ZooKeeper.
 SOLR_MODE=solrcloud
 ```
 
-Vorteile: echte Collection-Level-Isolation (403 ohne Proxy-Hilfe).
-Nachteile: hoehere Ressourcen, komplexeres Startup-Verhalten.
+Was sich gegenueber Standalone aendert:
 
-Standalone-Modus reicht fuer die meisten Deployments — Isolation erfolgt dort ueber den Proxy.
+- Container startet mit `solr-foreground -c -DzkRun` (eingebetteter ZK auf Port 9983) statt
+  reinem `solr-foreground`
+- Indexe sind **Collections** (Collections API) statt Cores (Core Admin API)
+- `security.json` liegt in ZooKeeper, nicht im Filesystem — Aenderungen via Security API werden
+  live wirksam, kein Restart noetig
+- Tenant-Rollen sind pro Collection (`tenant-<name>`) statt einer flachen `tenant`-Rolle —
+  Solr erzwingt Isolation server-side: Cross-Collection-Zugriff gibt HTTP 403 direkt vom Solr
+- Cluster-Erweiterung um weitere Solr-Knoten ist moeglich, falls Single-Node-Kapazitaet nicht reicht
+
+Standalone-Modus reicht fuer die meisten Deployments — Isolation erfolgt dort ueber den Proxy
+(Caddy-Subdomain pro Tenant). Cloud-Modus ist sinnvoll bei harten Compliance-Anforderungen,
+sehr vielen Tenants oder absehbarem Cluster-Bedarf.
+
+Die CI hat einen dedizierten `SolrCloud Mode Tests`-Job in `.github/workflows/solr-testing.yml`,
+der ZooKeeper-API, Collections-API, Tenant-Erstellung via Collections API, Cross-Collection-Block
+(403) und Restart-Persistenz pruet.
 
 ---
 
