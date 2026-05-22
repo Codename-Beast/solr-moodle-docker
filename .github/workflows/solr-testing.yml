@@ -187,7 +187,7 @@ jobs:
           : > tenants.env
           chmod 666 tenants.env
           docker compose build solr-init solr
-          if docker compose up solr-init; then
+          if docker compose up --abort-on-container-exit --exit-code-from solr-init solr-init; then
             echo "FAIL: solr-init accepted placeholder or empty passwords"
             exit 1
           fi
