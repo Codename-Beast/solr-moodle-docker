@@ -55,7 +55,7 @@ services:
     # ZK (/security.json), not only as /var/solr/data/security.json on disk.
     # The shell entrypoint uploads security.json to ZK before healthcheck turns
     # green. Standalone mode falls through to plain solr-foreground.
-    command: ["/opt/solr/scripts/solr-cloud-entrypoint.sh"]
+    command: ["/opt/solr/docker/scripts/solr-cloud-entrypoint.sh"]
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
