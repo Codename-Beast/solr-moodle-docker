@@ -164,7 +164,7 @@ jobs:
           chmod +x scripts/test-moodle-documents.sh
           ./scripts/test-moodle-documents.sh
 
-      - name: Test automatic password generation
+      - name: Test placeholder password rejection
         run: |
           docker compose down -v
           printf '%s\n' \
@@ -184,13 +184,15 @@ jobs:
             'SOLR_CPU_RESERVATION=0.5' \
             'SOLR_MEMORY_RESERVATION=2G' \
             > .env
+          : > tenants.env
+          chmod 666 tenants.env
           docker compose build solr-init solr
-          docker compose up -d
-          for i in {1..30}; do
-            if docker compose ps | grep -q healthy; then break; fi
-            sleep 2
-          done
-          docker compose logs solr-init | grep -q "Generated" && echo "Password auto-gen PASSED" || exit 1
+          if docker compose up solr-init; then
+            echo "FAIL: solr-init accepted placeholder or empty passwords"
+            exit 1
+          fi
+          docker compose logs solr-init | grep -q "SOLR_ADMIN_PASSWORD is missing or still contains CHANGE_ME"
+          echo "PASS: placeholder/empty passwords rejected before Solr starts"
           docker compose down -v
 
       - name: Multi-tenant isolation test
