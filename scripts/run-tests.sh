@@ -107,6 +107,7 @@ unit_tests() {
         "config/managed-schema"
         "config/solrconfig.xml"
         "init/security.json.template"
+        "scripts/solr-cloud-entrypoint.sh"
         "scripts/solr-tenant.sh"
         "tenants.env.example"
     )
@@ -886,13 +887,16 @@ solrcloud_tests() {
         print_fail "Admin API NOT blocked (HTTP $iso_code — expected 403)"
     fi
 
-    # Index a document to test persistence
+    # Index a minimal Moodle-compatible document to test persistence.
+    # The managed schema has required Moodle fields (contextid, courseid,
+    # owneruserid, modified, type, areaid, itemid); using only id/title would
+    # correctly fail with HTTP 400 and would test the schema, not persistence.
     print_test "Index document for restart persistence test"
     local idx_code
     idx_code=$(curl -so /dev/null -w '%{http_code}' \
         -u "solr_cloud_tenant:${CLOUD_PASS}" \
         -X POST -H 'Content-Type: application/json' \
-        -d '[{"id":"persist-test-1","title_s":"restart_persistence_check"}]' \
+        -d '[{"id":"persist-test-1","title":"restart_persistence_check","content":"SolrCloud restart persistence test document","contextid":1,"courseid":1,"owneruserid":1,"modified":"2026-01-01T00:00:00Z","type":1,"areaid":"test_area","itemid":1}]' \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/update?commit=true" 2>/dev/null)
     if [ "$idx_code" = "200" ]; then
         print_pass "Document indexed (HTTP 200)"

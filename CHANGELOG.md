@@ -2,6 +2,40 @@
 
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) | [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [3.0.1] — 2026-05-22
+
+### Behoben
+- **`setup.sh` Re-Run-Idempotenz:** Bestehende `.env` wird nicht mehr aus
+  `.env.example` überschrieben. Leere Passwort-Eingabe bei bestehender `.env`
+  behält jetzt vorhandene Admin-/Support-Passwörter; nur explizit eingegebene
+  Passwörter werden aktualisiert. Custom Settings wie `SOLR_MODE`, `SOLR_PORT`,
+  Heap-/Resource-Limits und `INSTANCE_NAME` bleiben erhalten.
+- **`tenants.env` Host-/Container-Rechte:** `setup.sh` setzt `tenants.env` jetzt,
+  wenn möglich, auf `8983:8983` mit `0600`, damit der Solr-Container als UID 8983
+  Tenant-Änderungen persistieren kann.
+- **`powerinit.sh` Credential-Validation:** Fehlende oder `CHANGE_ME` Admin-/Support-
+  Passwörter werden nicht mehr still zur Laufzeit generiert. Der Init bricht jetzt
+  fail-fast mit klarer Fehlermeldung ab, damit `.env`, `security.json` und Healthcheck
+  nicht auseinanderlaufen.
+- **Native Log-Rechte:** `setup.sh` legt `/var/log/solr` bevorzugt als `8983:docker`
+  an; logrotate erzeugt neue Logfiles mit `create 640 8983 docker`.
+- **Robusteres Logging:** `LOG_DIR` ist für Tests überschreibbar; nicht beschreibbare
+  Logdateien brechen `setup.sh`/`powerinit.sh` nicht mehr ab.
+- **SolrCloud Security-Bootstrap:** Neuer dokumentierter Shell-Entrypoint
+  `scripts/solr-cloud-entrypoint.sh` lädt `security.json` beim SolrCloud-Start
+  nach ZooKeeper, bevor der Container als healthy gilt. Dadurch startet SolrCloud
+  nicht mehr kurzzeitig oder dauerhaft mit deaktivierter Authentifizierung.
+- **SolrCloud ZooKeeper-Port:** `scripts/solr-tenant.sh` berechnet den Embedded-
+  ZooKeeper-Port aus `SOLR_PORT + 1000` (z. B. `8985 -> 9985`) und bleibt per
+  `ZK_HOST` überschreibbar.
+
+### Tests
+- Bestehende Shell-Test-Suite (`scripts/run-tests.sh`) gegen Setup-, Permission-
+  und Multi-Tenant-Szenarien geprüft; keine zusätzlichen Python-Testdateien im
+  Projekt hinterlegt.
+
+---
+
 ## [3.0.0] — 2026-05-10
 
 ### Hinzugefuegt

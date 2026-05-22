@@ -3,7 +3,7 @@
 # Solr Multi-Tenant CLI
 # Developer: BSC Bernd Schreistetter
 # Company: Eledia.de
-# Version: v3.0.0
+# Version: v3.0.1
 # =========================================
 # Manages Solr tenants (Moodle instances) via Solr Security API.
 # Must run inside the solr container:
@@ -17,17 +17,26 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-SOLR_BASE="http://localhost:${SOLR_PORT:-8983}/solr"
+# Solr listens on SOLR_PORT. In SolrCloud mode the official Solr startup script
+# starts embedded ZooKeeper on SOLR_PORT + 1000 (8983 -> 9983, 8985 -> 9985).
+# Keep ZK_HOST overrideable for external ZooKeeper or unusual deployments.
+SOLR_PORT="${SOLR_PORT:-8983}"
+SOLR_BASE="http://localhost:${SOLR_PORT}/solr"
+if [ -z "${ZK_HOST:-}" ]; then
+  case "$SOLR_PORT" in
+    ''|*[!0-9]*) ZK_HOST="localhost:9983" ;;
+    *) ZK_HOST="localhost:$((SOLR_PORT + 1000))" ;;
+  esac
+fi
 TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
 LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
 ENV_FILE="${ENV_FILE:-/var/solr/data/.env}"
 DRY_RUN=0
 
 # SolrCloud mode: set SOLR_MODE=solrcloud in .env
-# Standalone (default): direct file writes + Core Admin API
-# SolrCloud: Security API writes + Collections API + true collection isolation
+# Standalone (default): Security API + Core Admin API
+# SolrCloud: Security API + Collections API + true collection isolation
 SOLR_MODE="${SOLR_MODE:-}"
-ZK_HOST="${ZK_HOST:-localhost:9983}"
 
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 

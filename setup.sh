@@ -3,7 +3,7 @@
 # Solr Multi-Tenant — Interactive Setup
 # Developer: BSC Bernd Schreistetter
 # Company: Eledia.de
-# Version: v3.0.0
+# Version: v3.0.1
 # =========================================
 # Idempotent: safe to re-run.
 # First run: creates .env, tenants.env, /var/log/solr, logrotate, starts Solr.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-LOG_DIR="/var/log/solr"
+LOG_DIR="${LOG_DIR:-/var/log/solr}"
 LOG_FILE="${LOG_DIR}/setup.log"
 
 # _log: Write a timestamped message to stdout and $LOG_FILE.
@@ -20,7 +20,8 @@ LOG_FILE="${LOG_DIR}/setup.log"
 _log() {
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
-  printf '[%s] %s\n' "$ts" "$* " | tee -a "$LOG_FILE"
+  printf '[%s] %s\n' "$ts" "$* "
+  printf '[%s] %s\n' "$ts" "$* " >> "$LOG_FILE" 2>/dev/null || true
 }
 
 # _die: Log an error message and exit with code 1.
@@ -36,6 +37,29 @@ _die() {
 # Returns: prints 32-character string to stdout
 _gen_password() {
   openssl rand -base64 36 | tr -d '/+=' | head -c 32
+}
+
+# _env_get: Read a simple KEY=value from .env without evaluating shell code.
+# Args: $1 - key name
+# Returns: prints value (without surrounding whitespace) or nothing
+_env_get() {
+  local key="$1"
+  grep -E "^${key}=" ".env" 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d ' '
+}
+
+# _env_set: Set or append a simple KEY=value in .env.
+# Args: $1 - key name, $2 - value
+# Returns: nothing
+_env_set() {
+  local key="$1" value="$2" tmp
+  tmp="$(mktemp)"
+  if grep -qE "^${key}=" ".env"; then
+    awk -v key="$key" -v value="$value" 'BEGIN { FS=OFS="=" } $1 == key { $0 = key "=" value } { print }' ".env" > "$tmp"
+  else
+    cp ".env" "$tmp"
+    printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  fi
+  mv "$tmp" ".env"
 }
 
 # ---------------------------------------------------------------------------
@@ -64,6 +88,10 @@ FIRST_INSTALL=0
 if [ ! -f ".env" ]; then
   _log "  First installation — no .env found"
   FIRST_INSTALL=1
+  if [ ! -f ".env.example" ]; then
+    _die ".env.example not found"
+  fi
+  cp ".env.example" ".env"
 else
   _log "  Existing .env found"
   # Rotate backups: .env.backup.3 <- .env.backup.2 <- .env.backup.1 <- .env
@@ -76,43 +104,59 @@ fi
 # Read or generate admin password
 printf '\n'
 printf '=== Solr Admin Password ===\n'
-printf '  Leave empty to auto-generate (recommended for first install).\n'
+if [ "$FIRST_INSTALL" = "1" ]; then
+  printf '  Leave empty to auto-generate (recommended for first install).\n'
+else
+  printf '  Leave empty to keep the existing password from .env.\n'
+fi
 printf '  Admin password: '
 read -r -s INPUT_ADMIN_PASS
 printf '\n'
 
 if [ -z "$INPUT_ADMIN_PASS" ]; then
-  ADMIN_PASS="$(_gen_password)"
-  _log "  Admin password: auto-generated"
+  ADMIN_PASS="$(_env_get SOLR_ADMIN_PASSWORD)"
+  if [ "$FIRST_INSTALL" = "1" ] || [ -z "$ADMIN_PASS" ] || echo "$ADMIN_PASS" | grep -qi "CHANGE_ME"; then
+    ADMIN_PASS="$(_gen_password)"
+    _log "  Admin password: auto-generated"
+  else
+    _log "  Admin password: preserved from existing .env"
+  fi
 else
   ADMIN_PASS="$INPUT_ADMIN_PASS"
   _log "  Admin password: set manually"
 fi
 
 printf '=== Solr Support Password ===\n'
-printf '  Leave empty to auto-generate.\n'
+if [ "$FIRST_INSTALL" = "1" ]; then
+  printf '  Leave empty to auto-generate.\n'
+else
+  printf '  Leave empty to keep the existing password from .env.\n'
+fi
 printf '  Support password: '
 read -r -s INPUT_SUPPORT_PASS
 printf '\n'
 
 if [ -z "$INPUT_SUPPORT_PASS" ]; then
-  SUPPORT_PASS="$(_gen_password)"
-  _log "  Support password: auto-generated"
+  SUPPORT_PASS="$(_env_get SOLR_SUPPORT_PASSWORD)"
+  if [ "$FIRST_INSTALL" = "1" ] || [ -z "$SUPPORT_PASS" ] || echo "$SUPPORT_PASS" | grep -qi "CHANGE_ME"; then
+    SUPPORT_PASS="$(_gen_password)"
+    _log "  Support password: auto-generated"
+  else
+    _log "  Support password: preserved from existing .env"
+  fi
 else
   SUPPORT_PASS="$INPUT_SUPPORT_PASS"
   _log "  Support password: set manually"
 fi
 
-# Create .env from example
-if [ ! -f ".env.example" ]; then
-  _die ".env.example not found"
-fi
-
-cp ".env.example" ".env"
-sed -i "s|CHANGE_ME_ADMIN_PASSWORD|${ADMIN_PASS}|g" ".env"
-sed -i "s|CHANGE_ME_SUPPORT_PASSWORD|${SUPPORT_PASS}|g" ".env"
+_env_set "SOLR_ADMIN_PASSWORD" "$ADMIN_PASS"
+_env_set "SOLR_SUPPORT_PASSWORD" "$SUPPORT_PASS"
 chmod 600 ".env"
-_log "  .env created from .env.example with generated passwords"
+if [ "$FIRST_INSTALL" = "1" ]; then
+  _log "  .env created from .env.example with generated passwords"
+else
+  _log "  .env preserved; password fields updated only when requested"
+fi
 
 # ---------------------------------------------------------------------------
 # Step 2: tenants.env
@@ -121,9 +165,12 @@ _log "Step 2: tenants.env"
 
 if [ ! -f "tenants.env" ]; then
   touch "tenants.env"
+  chown 8983:8983 "tenants.env" 2>/dev/null || true
   chmod 600 "tenants.env"
   _log "  Created empty tenants.env"
 else
+  chown 8983:8983 "tenants.env" 2>/dev/null || true
+  chmod 600 "tenants.env"
   _log "  tenants.env already exists — preserving"
 fi
 
@@ -133,12 +180,12 @@ fi
 _log "Step 3: Log directory"
 
 mkdir -p "$LOG_DIR"
-# docker group can read logs; 750 = root:docker readable
-chown root:docker "$LOG_DIR" 2>/dev/null || chmod 755 "$LOG_DIR"
+# Solr container UID 8983 can write native logs; docker group can read them on host.
+chown 8983:docker "$LOG_DIR" 2>/dev/null || true
 if [ "$(stat -c '%G' "$LOG_DIR" 2>/dev/null)" = "docker" ]; then
-  chmod 750 "$LOG_DIR"
+  chmod 750 "$LOG_DIR" 2>/dev/null || true
 else
-  chmod 755 "$LOG_DIR"
+  chmod 755 "$LOG_DIR" 2>/dev/null || true
 fi
 _log "  Log directory: $LOG_DIR"
 
@@ -167,7 +214,7 @@ if [ -w "/etc/logrotate.d" ] || [ "$(id -u)" = "0" ]; then
     missingok
     notifempty
     copytruncate
-    create 640 root docker
+    create 640 8983 docker
 }
 EOF
   _log "  Logrotate config written to $LOGROTATE_FILE"

@@ -345,6 +345,16 @@ jobs:
           [ "$CODE" = "200" ] || { echo "FAIL: ZooKeeper API not reachable (HTTP $CODE)"; exit 1; }
           echo "PASS: Embedded ZooKeeper running (HTTP 200)"
 
+          CODE=$(curl -so /dev/null -w '%{http_code}' \
+            "http://127.0.0.1:8983/solr/admin/authentication?wt=json")
+          [ "$CODE" = "401" ] || { echo "FAIL: anonymous auth API access returned HTTP $CODE (expected 401)"; exit 1; }
+          echo "PASS: SolrCloud security.json is active from ZooKeeper (anonymous HTTP 401)"
+
+      - name: Run consolidated SolrCloud regression suite
+        run: |
+          chmod +x scripts/run-tests.sh
+          ./scripts/run-tests.sh --unit-only --tenant --cloud --no-cleanup
+
       - name: Create tenant via Collections API
         run: |
           docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_a --cores moodle_cloud_1

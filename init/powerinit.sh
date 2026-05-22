@@ -3,7 +3,7 @@
 # Solr Init Container — Multi-Tenant
 # Developer: BSC Bernd Schreistetter
 # Company: Eledia.de
-# Version: v3.0.0
+# Version: v3.0.1
 # =========================================
 # Runs as init container (exit 0 = Solr starts, exit != 0 = Solr blocked)
 # Rebuilds security.json COMPLETELY on every start from:
@@ -15,7 +15,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Logging — stdout + /var/log/solr/setup.log
 # ---------------------------------------------------------------------------
-LOG_DIR="/var/log/solr"
+LOG_DIR="${LOG_DIR:-/var/log/solr}"
 LOG_FILE="${LOG_DIR}/setup.log"
 
 # _log: Write a timestamped message to stdout and $LOG_FILE.
@@ -24,7 +24,8 @@ LOG_FILE="${LOG_DIR}/setup.log"
 _log() {
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
-  printf '[%s] %s\n' "$ts" "$*" | tee -a "$LOG_FILE"
+  printf '[%s] %s\n' "$ts" "$*"
+  printf '[%s] %s\n' "$ts" "$*" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 # _setup_logging: Create log directory and file, write start banner.
@@ -142,13 +143,13 @@ ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
 SUPPORT_USER="${SOLR_SUPPORT_USER:-support}"
 
 if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] || echo "${SOLR_ADMIN_PASSWORD:-}" | grep -qi "CHANGE_ME"; then
-  SOLR_ADMIN_PASSWORD="$(gen_password)"
-  _log "  Generated SOLR_ADMIN_PASSWORD"
+  _log "ERROR: SOLR_ADMIN_PASSWORD is missing or still contains CHANGE_ME. Run ./setup.sh or set a real password in .env."
+  exit 1
 fi
 
 if [ -z "${SOLR_SUPPORT_PASSWORD:-}" ] || echo "${SOLR_SUPPORT_PASSWORD:-}" | grep -qi "CHANGE_ME"; then
-  SOLR_SUPPORT_PASSWORD="$(gen_password)"
-  _log "  Generated SOLR_SUPPORT_PASSWORD"
+  _log "ERROR: SOLR_SUPPORT_PASSWORD is missing or still contains CHANGE_ME. Run ./setup.sh or set a real password in .env."
+  exit 1
 fi
 
 _validate_name "$ADMIN_USER" "SOLR_ADMIN_USER"

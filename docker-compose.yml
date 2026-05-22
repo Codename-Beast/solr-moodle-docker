@@ -2,7 +2,7 @@
 # Solr for Moodle — Multi-Tenant
 # Developer: Bernd Schreistetter
 # Company: Eledia.de
-# Version: v3.0.0
+# Version: v3.0.1
 # =========================================
 
 services:
@@ -50,14 +50,12 @@ services:
       # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
       # External access goes through the reverse proxy (nginx/apache) with TLS.
       - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
-    # SolrCloud mode: start with -c (cloud) and -DzkRun (embedded ZooKeeper).
-    # Standalone (default): solr-foreground without flags.
-    # Use list form — string form is split naively by spaces and breaks quoted shell logic.
-    # $$SOLR_MODE: docker-compose converts $$ → $ so the container bash evaluates $SOLR_MODE.
-    command:
-      - bash
-      - -c
-      - "if [ \"$$SOLR_MODE\" = \"solrcloud\" ]; then exec solr-foreground -c -DzkRun; else exec solr-foreground; fi"
+    # SolrCloud mode needs a short bootstrap after Solr starts: embedded
+    # ZooKeeper is only available at runtime, but Cloud security must live in
+    # ZK (/security.json), not only as /var/solr/data/security.json on disk.
+    # The shell entrypoint uploads security.json to ZK before healthcheck turns
+    # green. Standalone mode falls through to plain solr-foreground.
+    command: ["/opt/solr/scripts/solr-cloud-entrypoint.sh"]
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data:z
@@ -101,7 +99,9 @@ services:
         - "CMD-SHELL"
         - >-
           curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
-          http://localhost:${SOLR_PORT:-8983}/solr/admin/info/system || exit 1
+          http://localhost:${SOLR_PORT:-8983}/solr/admin/info/system >/dev/null &&
+          { [ "$${SOLR_MODE:-}" != "solrcloud" ] ||
+          [ "$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${SOLR_PORT:-8983}/solr/admin/authentication)" = "401" ]; }
       interval: 15s
       timeout: 10s
       retries: 5
