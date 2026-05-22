@@ -6,8 +6,14 @@
 # =========================================
 ARG SOLR_VERSION=9.10.1
 FROM solr:${SOLR_VERSION}
+# SolrCloud bootstrap is executed as the Solr container command. Copy it into
+# the image-owned script directory instead of relying only on the bind-mounted
+# ./scripts directory; Ansible/Docker-in-Docker CI may alter service volume
+# merges via override files.
+COPY --chown=solr:solr scripts/solr-cloud-entrypoint.sh /opt/solr/docker/scripts/solr-cloud-entrypoint.sh
 USER root
 RUN apt-get update -qq \
     && apt-get install -y --no-install-recommends jq \
+    && chmod 0755 /opt/solr/docker/scripts/solr-cloud-entrypoint.sh \
     && rm -rf /var/lib/apt/lists/*
 USER solr
