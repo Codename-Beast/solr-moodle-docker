@@ -19,10 +19,6 @@ docker compose ps
 curl -u "admin:<SOLR_ADMIN_PASSWORD>" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/info/system"
 ```
 
-## Status
-
-- Aktueller Statusbericht: `docs/STATUS-2026-05-24.md`
-
 ## Was ist neu / wichtig
 
 - SolrCloud Security-Bootstrap ueber `scripts/solr-cloud-entrypoint.sh` (security.json in ZK)
@@ -151,3 +147,10 @@ ansible-playbook -i .ci/ansible/test-inventory/hosts \
   -e "hosts=localhost" \
   examples/install_solr.yml --syntax-check
 ```
+
+## Kompatibilitaet zur Ansible-Rolle
+
+| solr-moodle-docker | ansible-role-solr | Hinweis |
+|---|---|---|
+| v2.3.2 | 1.9.8 - 1.9.10 (Default) | empfohlene Kombination |
+| v3.x | nur mit explizitem `solr_repo_version` Override | vor Einsatz Tenant/Auth-Flow testen |

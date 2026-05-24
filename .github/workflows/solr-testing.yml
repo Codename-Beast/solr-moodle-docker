@@ -3,8 +3,15 @@ name: Solr Test Suite
 on:
   push:
     branches: [main, "feature/*", "fix/*"]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".gitignore"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   workflow_dispatch:
 
 concurrency:
@@ -298,7 +305,7 @@ jobs:
     name: SolrCloud Mode Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: solr-test
+    needs: security-scan
 
     steps:
       - name: Checkout code

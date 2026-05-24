@@ -5,7 +5,7 @@
 # Extends the official Solr image and adds jq for tenant management scripts.
 # =========================================
 ARG SOLR_VERSION=9.10.1
-FROM solr:${SOLR_VERSION}
+FROM solr:${SOLR_VERSION}@sha256:b37a8fa998167fefc2acafe2cbaf3be992e81133881f1bad4df3d0859a27ed64
 # SolrCloud bootstrap is executed as the Solr container command. Copy it into
 # the image-owned script directory instead of relying only on the bind-mounted
 # ./scripts directory; Ansible/Docker-in-Docker CI may alter service volume
