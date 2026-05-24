@@ -77,7 +77,12 @@ services:
       SOLR_LOGS_REQUESTLOG_ENABLED: ${SOLR_LOGS_REQUESTLOG_ENABLED:-false}
       # Disable usage analytics + explicit security defaults for 9.10
       SOLR_SECURITY_MANAGER_ENABLED: ${SOLR_SECURITY_MANAGER_ENABLED:-false}
-      SOLR_OPTS: "-XX:-UseLargePages -Dsolr.usage.analytics.enabled=false -Dsolr.responses.stacktrace.enabled=false -Dsolr.security.allow.urls.enabled=false ${SOLR_JAVA_OPTS:-}"
+      SOLR_OPTS: >-
+        -XX:-UseLargePages
+        -Dsolr.usage.analytics.enabled=false
+        -Dsolr.responses.stacktrace.enabled=false
+        -Dsolr.security.allow.urls.enabled=false
+        ${SOLR_JAVA_OPTS:-}
     ulimits:
       nofile:
         soft: 65536
