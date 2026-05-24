@@ -299,8 +299,8 @@ integration_tests() {
     # Tenant management lifecycle (create/deactivate/enable/core add/core remove)
     print_header "TENANT MANAGEMENT TESTS"
 
-    # Unique tenant name per run to keep lifecycle test idempotent across reruns.
-    local tenant_name="ci_lifecycle_$(date +%s)_$RANDOM"
+    local tenant_name
+    tenant_name="ci_lifecycle_$(date +%s)_$RANDOM"
     local tenant_core_a="${SOLR_CORE_NAME}_a"
     local tenant_core_b="${SOLR_CORE_NAME}_b"
 
