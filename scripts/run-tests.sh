@@ -299,7 +299,8 @@ integration_tests() {
     # Tenant management lifecycle (create/deactivate/enable/core add/core remove)
     print_header "TENANT MANAGEMENT TESTS"
 
-    local tenant_name="ci_lifecycle"
+    # Unique tenant name per run to keep lifecycle test idempotent across reruns.
+    local tenant_name="ci_lifecycle_$(date +%s)_$RANDOM"
     local tenant_core_a="${SOLR_CORE_NAME}_a"
     local tenant_core_b="${SOLR_CORE_NAME}_b"
 
@@ -1215,16 +1216,13 @@ EOF
         success_rate=$((TESTS_PASSED * 100 / TESTS_TOTAL))
         echo -e "${BOLD}Success Rate:${NC}  ${success_rate}%"
 
-        if [ $success_rate -ge 90 ]; then
-            echo -e "\n${GREEN}${BOLD}TEST SUITE PASSED${NC}"
-            exit 0
-        elif [ $success_rate -ge 70 ]; then
-            echo -e "\n${YELLOW}${BOLD}TEST SUITE PASSED WITH WARNINGS${NC}"
-            exit 0
-        else
+        if [ $TESTS_FAILED -gt 0 ]; then
             echo -e "\n${RED}${BOLD}TEST SUITE FAILED${NC}"
             exit 1
         fi
+
+        echo -e "\n${GREEN}${BOLD}TEST SUITE PASSED${NC}"
+        exit 0
     else
         echo -e "\n${YELLOW}${BOLD}NO TESTS RUN${NC}"
         exit 1

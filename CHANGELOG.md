@@ -10,6 +10,11 @@ Versioning: Semantic Versioning
   - Root Cause: `/update/extract` wurde mit `literalsOverride=false` konfiguriert; dadurch konnten `literal.*`-Metadaten fuer Moodle-Pflichtfelder beim Tika-Indexing nicht verlaesslich greifen.
   - Symptom: `PDF indexing via Tika failed (HTTP 400)` in CI, obwohl `extractOnly=true` HTTP 200 lieferte.
   - Fix: `config/solrconfig.xml` setzt fuer `/update/extract` wieder `literalsOverride=true`.
+- `scripts/run-tests.sh`: False-Green beseitigt.
+  - Vorher konnte bei `Failed > 0` trotzdem `TEST SUITE PASSED` erscheinen (nur success-rate-basiert).
+  - Jetzt: jeder fehlgeschlagene Test erzwingt Exit-Code != 0 und `TEST SUITE FAILED`.
+- Tenant-Lifecycle-Test idempotent gemacht.
+  - Test-Tenant-Name ist pro Run eindeutig (`ci_lifecycle_<timestamp>_<random>`), damit keine Kollision mit Altzustand auftritt.
 - Hardening bleibt erhalten:
   - `captureAttr=false` bleibt aktiv.
   - Upload-Limits via System-Properties bleiben aktiv (`solr.multipartUploadLimitKB`, `solr.formdataUploadLimitKB`).
@@ -119,6 +124,8 @@ Versioning: Semantic Versioning
 - `managed-schema` verschlankt (kein `_text_` copyField-Pattern mehr).
 - Monitoring/Setup Altlasten aus Compose entfernt.
 
+[3.0.4]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.3...v3.0.4
+[3.0.3]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.2...v3.0.3
 [3.0.2]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/Codename-Beast/solr-moodle-docker/releases/tag/v3.0.0
