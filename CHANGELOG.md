@@ -7,11 +7,26 @@ Versioning: Semantic Versioning
 
 ### Fixed
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
-- Doku-Stand fuer CI/Status/Open-Issues konsolidiert (`docs/STATUS-2026-05-24.md`).
-- Flaky CI in `scripts/test-moodle-documents.sh` behoben: Marker-Suche nach Tika-Indexierung nutzt jetzt robusten Fallback (`ELEDIA+TIKA+TEST+MARKER`), und ist nicht mehr build-blockierend wenn Analyzer `_`-Tokenisierung anders behandelt.
+- Tika-/PDF-Assertion in `scripts/test-moodle-documents.sh` stabilisiert:
+  - Root Cause: `text_general` nutzt `StandardTokenizerFactory`; Marker mit `_` werden tokenisiert.
+  - Konsequenz: exakte Query `ELEDIA_TIKA_TEST_MARKER` ist schema-/analyzer-abhaengig und kann 0 Treffer liefern, obwohl Inhalt indexiert ist.
+  - Fix: Fallback-Query (`ELEDIA+TIKA+TEST+MARKER`) und semantischer Folgecheck bleiben verpflichtend.
+
+### Added
+- Tenant-Management-Lifecycle in `scripts/run-tests.sh` erweitert:
+  - `create` (mehrere Cores)
+  - `core-remove`
+  - `core-add`
+  - `delete` (deactivate)
+  - `enable` (reactivate)
+  - jeweils mit Zustandsverifikation via `solr-tenant.sh info`.
+
+### Changed
+- Statusdokumentation konsolidiert (`docs/STATUS-2026-05-24.md`).
+- CI-Testablauf angepasst, damit Analyzer-Details nicht mehr zu False-Negatives im Build fuehren.
 
 ### Docs
-- README + Docs auf aktuellen Betriebs- und Teststand aktualisiert.
+- README + Betriebsdoku auf aktuellen Stand gebracht; tenantbezogene Testabdeckung und Fehlerstatus nachgezogen.
 
 ---
 

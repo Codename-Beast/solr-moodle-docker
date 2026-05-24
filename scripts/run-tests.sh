@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+# Version: v3.0.1
+
 # =========================================
 # Solr for Moodle - Test Suite
 # Author: Bernd Schreistetter for Eledia.de
@@ -39,6 +43,21 @@ SOLR_HOST="127.0.0.1"
 SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
 SOLR_MODE="${SOLR_MODE:-}"
+if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
+    echo "ERROR: SOLR_HEAP='${SOLR_HEAP:-}' ist ungültig. Erwartet z.B. 2g oder 1024m." >&2
+    exit 1
+fi
+LOG_ROOT="${LOG_ROOT:-/var/log/eledia}"
+RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
+mkdir -p "${LOG_ROOT}" 2>/dev/null || {
+    echo "ERROR: cannot create ${LOG_ROOT}. Run with privileges or pre-create directory." >&2
+    exit 1
+}
+touch "${RUN_LOG_FILE}" 2>/dev/null || {
+    echo "ERROR: cannot write ${RUN_LOG_FILE}. Fix permissions for /var/log/eledia." >&2
+    exit 1
+}
+exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 
 # Helper functions
@@ -178,7 +197,21 @@ integration_tests() {
     fi
 
     docker compose up -d >/dev/null 2>&1
-    sleep 35
+
+    local waited=0
+    while [ $waited -lt 150 ]; do
+        if docker compose ps | grep -q "healthy"; then
+            break
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+
+    local mapped_port
+    mapped_port=$(docker compose port solr "${SOLR_PORT}" 2>/dev/null | awk -F: '{print $NF}' | tail -n1)
+    if [ -n "$mapped_port" ]; then
+        SOLR_PORT="$mapped_port"
+    fi
 
     if docker compose ps | grep -q "healthy"; then
         print_pass "Containers started and healthy"
@@ -250,6 +283,86 @@ integration_tests() {
         print_pass "Core status API returns ${SOLR_CORE_NAME}"
     else
         print_fail "Core status API does not return ${SOLR_CORE_NAME}"
+    fi
+
+    # Tenant management lifecycle (create/deactivate/enable/core add/core remove)
+    print_header "TENANT MANAGEMENT TESTS"
+
+    local tenant_name="ci_lifecycle"
+    local tenant_core_a="${SOLR_CORE_NAME}_a"
+    local tenant_core_b="${SOLR_CORE_NAME}_b"
+
+    print_test "Tenant create with two cores"
+    if docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh create "$tenant_name" --cores "${tenant_core_a},${tenant_core_b}" >/tmp/_tenant_create 2>&1; then
+        print_pass "Tenant created (${tenant_name})"
+    else
+        print_fail "Tenant create failed (${tenant_name})"
+        cat /tmp/_tenant_create || true
+    fi
+
+    print_test "Tenant info contains both cores"
+    TENANT_INFO=$(docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh info "$tenant_name" 2>/dev/null || true)
+    if echo "$TENANT_INFO" | grep -q "$tenant_core_a" && echo "$TENANT_INFO" | grep -q "$tenant_core_b"; then
+        print_pass "Tenant info includes expected cores"
+    else
+        print_fail "Tenant info missing expected cores"
+        echo "$TENANT_INFO"
+    fi
+
+    print_test "Tenant core-remove removes one core"
+    if docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh core-remove "$tenant_name" --core "$tenant_core_b" >/tmp/_tenant_core_remove 2>&1; then
+        TENANT_INFO=$(docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh info "$tenant_name" 2>/dev/null || true)
+        if echo "$TENANT_INFO" | grep -q "$tenant_core_b"; then
+            print_fail "core-remove executed but core still present"
+            echo "$TENANT_INFO"
+        else
+            print_pass "core-remove removed ${tenant_core_b}"
+        fi
+    else
+        print_fail "Tenant core-remove failed"
+        cat /tmp/_tenant_core_remove || true
+    fi
+
+    print_test "Tenant core-add restores removed core"
+    if docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh core-add "$tenant_name" --core "$tenant_core_b" >/tmp/_tenant_core_add 2>&1; then
+        TENANT_INFO=$(docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh info "$tenant_name" 2>/dev/null || true)
+        if echo "$TENANT_INFO" | grep -q "$tenant_core_b"; then
+            print_pass "core-add restored ${tenant_core_b}"
+        else
+            print_fail "core-add executed but core not present"
+            echo "$TENANT_INFO"
+        fi
+    else
+        print_fail "Tenant core-add failed"
+        cat /tmp/_tenant_core_add || true
+    fi
+
+    print_test "Tenant delete deactivates tenant"
+    if docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh delete "$tenant_name" --force >/tmp/_tenant_delete 2>&1; then
+        TENANT_INFO=$(docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh info "$tenant_name" 2>/dev/null || true)
+        if echo "$TENANT_INFO" | grep -Eq "(Status:[[:space:]]*false|Active:[[:space:]]*false|TENANT_.*_ACTIVE=false)"; then
+            print_pass "Tenant deactivated successfully"
+        else
+            print_fail "Tenant delete executed but ACTIVE flag not false"
+            echo "$TENANT_INFO"
+        fi
+    else
+        print_fail "Tenant delete failed"
+        cat /tmp/_tenant_delete || true
+    fi
+
+    print_test "Tenant enable reactivates tenant"
+    if docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh enable "$tenant_name" >/tmp/_tenant_enable 2>&1; then
+        TENANT_INFO=$(docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh info "$tenant_name" 2>/dev/null || true)
+        if echo "$TENANT_INFO" | grep -Eq "(Status:[[:space:]]*true|Active:[[:space:]]*true|TENANT_.*_ACTIVE=true)"; then
+            print_pass "Tenant reactivated successfully"
+        else
+            print_fail "Tenant enable executed but ACTIVE flag not true"
+            echo "$TENANT_INFO"
+        fi
+    else
+        print_fail "Tenant enable failed"
+        cat /tmp/_tenant_enable || true
     fi
 
     #Password change detection
@@ -1073,6 +1186,8 @@ EOF
     echo -e "${RED}${BOLD}Failed:${NC}        $TESTS_FAILED"
     echo -e "${YELLOW}${BOLD}Skipped:${NC}       $TESTS_SKIPPED"
     echo ""
+    echo -e "${BOLD}Run Log:${NC}       ${RUN_LOG_FILE}"
+    docker compose logs --no-color >> "${RUN_LOG_FILE}" 2>&1 || true
 
     if [ $TESTS_FAILED -gt 0 ]; then
         echo -e "${RED}${BOLD}Failed Tests:${NC}"
