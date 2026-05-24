@@ -27,6 +27,11 @@ Versioning: Semantic Versioning
 ### Changed
 - Statusdokumentation konsolidiert (`docs/STATUS-2026-05-24.md`).
 - CI-Testablauf angepasst, damit Analyzer-Details nicht mehr zu False-Negatives im Build fuehren.
+- `docs/architecture.md` in beiden Repos um code-nahe ASCII-Architekturdiagramme erweitert.
+- Compose-/Runtime-Warnungen reduziert:
+  - Named-Volume SELinux-Flag (`:z`) an `solr_data` entfernt (Docker warning beseitigt).
+  - `maxBooleanClauses` auf global konsistente 1024 gesetzt (Core-Load WARN beseitigt).
+  - Security-Manager/JVM-Noise reduziert (`SOLR_SECURITY_MANAGER_ENABLED=false`, `-XX:-UseLargePages`).
 
 ### Docs
 - README + Betriebsdoku auf aktuellen Stand gebracht; tenantbezogene Testabdeckung und Fehlerstatus nachgezogen.
