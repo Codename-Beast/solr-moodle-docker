@@ -3,6 +3,24 @@
 Format: Keep a Changelog
 Versioning: Semantic Versioning
 
+## [3.0.4] - 2026-05-24
+
+### Fixed
+- CI-Regression in `Run Moodle document tests` behoben (GitHub Actions Run 26352731461):
+  - Root Cause: `/update/extract` wurde mit `literalsOverride=false` konfiguriert; dadurch konnten `literal.*`-Metadaten fuer Moodle-Pflichtfelder beim Tika-Indexing nicht verlaesslich greifen.
+  - Symptom: `PDF indexing via Tika failed (HTTP 400)` in CI, obwohl `extractOnly=true` HTTP 200 lieferte.
+  - Fix: `config/solrconfig.xml` setzt fuer `/update/extract` wieder `literalsOverride=true`.
+- Hardening bleibt erhalten:
+  - `captureAttr=false` bleibt aktiv.
+  - Upload-Limits via System-Properties bleiben aktiv (`solr.multipartUploadLimitKB`, `solr.formdataUploadLimitKB`).
+
+### Verified
+- Lokal reproduziert und verifiziert:
+  - `./scripts/test-moodle-documents.sh` -> PASS inkl. Tika PDF Indexing
+  - `./scripts/run-tests.sh --integration-only --no-cleanup` -> PASS
+
+---
+
 ## [3.0.3] - 2026-05-24
 
 ### Fixed
