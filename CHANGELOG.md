@@ -10,6 +10,22 @@ All notable changes to this project will be documented in this file.
   - `feature/v2.5.0`: 85d9821
 Versioning: Semantic Versioning
 
+## [3.0.5] - 2026-05-24
+
+### Changed
+- GitHub Actions (`.github/workflows/solr-testing.yml`): `paths-ignore` fuer Docs-only Commits hinzugefuegt.
+- CI-Topologie optimiert: `solrcloud-test` haengt jetzt direkt an `security-scan` (parallel zu `solr-test`).
+- `Dockerfile.solr`: Base-Image auf Digest gepinnt (`solr:9.10.1@sha256:...`).
+- Operatives Snapshot-Dokument `REPORT.md` aus dem Repository entfernt.
+- README um Kompatibilitaetsmatrix zur ansible-role-solr ergaenzt.
+
+### Verified
+- `./scripts/run-tests.sh --unit-only` erfolgreich.
+- `./scripts/run-tests.sh --integration-only --no-cleanup` erfolgreich.
+- `./scripts/test-moodle-documents.sh` erfolgreich.
+
+---
+
 ## [3.0.4] - 2026-05-24
 
 ### Fixed
