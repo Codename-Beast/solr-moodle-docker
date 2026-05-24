@@ -7,6 +7,11 @@ Versioning: Semantic Versioning
 
 ### Fixed
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
+- CI-YAML-Lintfehler beseitigt (`docker-compose.yml` Zeilenlaenge in `SOLR_OPTS` auf block-scalar umgestellt).
+- `scripts/test-moodle-documents.sh` robust gemacht fuer lokale/non-CI Runs:
+  - Port-/Core-Defaults werden nach `.env`-Load korrekt aufgeloest.
+  - fehlender Test-Core wird automatisch via Core Admin API erstellt.
+  - Connectivity-Check nutzt jetzt `select?q=*:*&rows=0` statt `admin/ping`.
 - `scripts/run-tests.sh` ist jetzt CI-robust bei Log-Pfaden:
   - Fallback von `/var/log/eledia` auf `/tmp/eledia-logs`, falls Runner keine Schreibrechte auf `/var/log` hat.
   - verhindert fruehen Abbruch in Unit-Stage bei ansonsten lauffaehigem Stack.

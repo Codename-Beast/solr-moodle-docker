@@ -36,12 +36,12 @@ NC='\033[0m' # No Color
 KEEP_DOCUMENTS=false
 WAIT_TIME=0
 SOLR_HOST="127.0.0.1"
-SOLR_PORT="${SOLR_PORT:-8983}"
 
-# Load SOLR_CORE_NAME from .env or use default
+# Load runtime config from .env before deriving defaults
 if [ -f ".env" ]; then
     source .env
 fi
+SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE="${SOLR_CORE_NAME:-moodle_core}"
 
 # Counters
@@ -299,11 +299,21 @@ print_info "  Keep Documents: ${KEEP_DOCUMENTS}"
 print_info "  Wait Time: ${WAIT_TIME}s"
 echo ""
 
+# Ensure test core exists (standalone/local runs without prior tenant bootstrap)
+if ! curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+  "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&core=${SOLR_CORE}&wt=json" \
+  | grep -q '"instanceDir"'; then
+  print_info "Core '${SOLR_CORE}' fehlt — erstelle Test-Core via Core Admin API"
+  curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=CREATE&name=${SOLR_CORE}&configSet=moodle-tenant&wt=json" >/dev/null
+  sleep 2
+fi
+
 # Solr connectivity test
 print_header "CONNECTIVITY TEST"
 print_test "Solr connectivity and authentication"
-PING_RESULT=$(solr_get "admin/ping" 2>&1)
-if echo "$PING_RESULT" | grep -q '"status":"OK"'; then
+PING_RESULT=$(solr_get "select?q=*:*&rows=0&wt=json" 2>&1)
+if echo "$PING_RESULT" | jq -e '.responseHeader.status == 0' >/dev/null 2>&1; then
   print_pass "Solr is reachable and authenticated"
 else
   print_fail "Cannot connect to Solr"
