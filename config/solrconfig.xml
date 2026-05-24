@@ -106,8 +106,12 @@
 
   <!-- Request Dispatcher -->
   <requestDispatcher>
-    <requestParsers multipartUploadLimitInKB="2048000"
-                    formdataUploadLimitInKB="2048"
+    <!-- Upload limits are configurable via JVM system properties (SOLR_OPTS):
+         -Dsolr.multipartUploadLimitKB=102400   (default 100 MB)
+         -Dsolr.formdataUploadLimitKB=2048      (default 2 MB)
+         Keep limits tight to reduce DoS risk from oversized uploads. -->
+    <requestParsers multipartUploadLimitInKB="${solr.multipartUploadLimitKB:102400}"
+                    formdataUploadLimitInKB="${solr.formdataUploadLimitKB:2048}"
                     addHttpRequestToContext="false"/>
     <httpCaching never304="true"/>
   </requestDispatcher>
@@ -165,13 +169,16 @@
   <!-- Tika file extraction for Moodle file indexing (Moodle calls /update/extract) -->
   <requestHandler name="/update/extract" class="solr.extraction.ExtractingRequestHandler" startup="lazy">
     <lst name="defaults">
+      <!-- Hardened defaults for Moodle file indexing -->
       <str name="lowernames">true</str>
       <str name="uprefix">ignored_</str>
-      <str name="captureAttr">true</str>
+      <str name="captureAttr">false</str>
+      <str name="literalsOverride">false</str>
+      <str name="fmap.content">solr_filecontent</str>
       <str name="fmap.a">links</str>
       <str name="fmap.div">ignored_</str>
-      <str name="fmap.content">solr_filecontent</str>
     </lst>
+    <str name="defaultField">solr_filecontent</str>
   </requestHandler>
 
   <!-- Analysis Request Handler -->
