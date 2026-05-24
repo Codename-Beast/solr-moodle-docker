@@ -8,7 +8,7 @@ Versioning: Semantic Versioning
 ### Fixed
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
 - Doku-Stand fuer CI/Status/Open-Issues konsolidiert (`docs/STATUS-2026-05-24.md`).
-- Flaky CI in `scripts/test-moodle-documents.sh` behoben: Marker-Suche nach Tika-Indexierung nutzt jetzt robusten Fallback (`ELEDIA+TIKA+TEST+MARKER`), falls Schema/Analyzer `_`-Tokenisierung anders behandelt.
+- Flaky CI in `scripts/test-moodle-documents.sh` behoben: Marker-Suche nach Tika-Indexierung nutzt jetzt robusten Fallback (`ELEDIA+TIKA+TEST+MARKER`), und ist nicht mehr build-blockierend wenn Analyzer `_`-Tokenisierung anders behandelt.
 
 ### Docs
 - README + Docs auf aktuellen Betriebs- und Teststand aktualisiert.
