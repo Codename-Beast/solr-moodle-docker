@@ -1,6 +1,13 @@
 # Changelog
 
-Format: Keep a Changelog
+All notable changes to this project will be documented in this file.
+
+## Branch-Sync-Check (2026-05-24)
+
+- Nicht uebernommene CHANGELOG-Commits aus anderen Branches geprueft.
+- Offene Branch-Eintraege fuer moeglichen Rueckmerge:
+  - `feature/v2.3.0`: 8bbc9dc
+  - `feature/v2.5.0`: 85d9821
 Versioning: Semantic Versioning
 
 ## [3.0.4] - 2026-05-24
