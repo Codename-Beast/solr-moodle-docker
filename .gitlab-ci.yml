@@ -1,7 +1,9 @@
 image: ubuntu:22.04
 
 variables:
-  DOCKER_HOST: unix:///var/run/docker.sock
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
   COMPOSE_PROJECT_NAME: solr_test
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: "fast"
@@ -47,6 +49,9 @@ security-scan:
 
 .test-template:
   stage: test
+  services:
+    - name: docker:24-dind
+      command: ["--tls=false"]
   tags:
     - docker
   interruptible: true
@@ -59,8 +64,10 @@ security-scan:
       - stuck_or_timeout_failure
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq curl jq docker-compose-plugin=${DOCKER_VERSION} docker.io=${DOCKER_VERSION} ||
-      apt-get install -y -qq curl jq docker-compose docker.io
+    - apt-get install -y -qq --no-install-recommends curl jq docker-compose-plugin=${DOCKER_VERSION} docker.io=${DOCKER_VERSION} ||
+      apt-get install -y -qq --no-install-recommends curl jq docker-compose docker.io
+    - timeout 30 bash -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+    - rm -rf /var/lib/apt/lists/*
     - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh scripts/solr-tenant.sh
 
 solr-test:
@@ -86,7 +93,9 @@ solr-test:
         'SOLR_MEMORY_RESERVATION=2G' \
         > .env
       touch tenants.env
-      mkdir -p /var/log/solr
+      mkdir -p /var/log/eledia
+      export LOG_ROOT=/var/log/eledia
+      export ELEDIA_LOG_ROOT=/var/log/eledia
     - docker compose build solr-init
     - docker compose up -d
     - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
@@ -149,7 +158,9 @@ tenant-test:
         'SOLR_MEMORY_RESERVATION=2G' \
         > .env
       touch tenants.env
-      mkdir -p /var/log/solr
+      mkdir -p /var/log/eledia
+      export LOG_ROOT=/var/log/eledia
+      export ELEDIA_LOG_ROOT=/var/log/eledia
     - docker compose build solr-init
     - docker compose up -d
     - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
@@ -256,7 +267,9 @@ solrcloud-test:
         'SOLR_MODE=solrcloud' \
         > .env
       touch tenants.env
-      mkdir -p /var/log/solr
+      mkdir -p /var/log/eledia
+      export LOG_ROOT=/var/log/eledia
+      export ELEDIA_LOG_ROOT=/var/log/eledia
     - docker compose build solr-init
     - docker compose up -d
     - timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting for SolrCloud..."; done'

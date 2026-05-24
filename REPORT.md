@@ -109,7 +109,7 @@ Tests Moodle-realistic document indexing including:
 - Forum posts, courses, wikis, glossaries, book chapters, assignments
 - Query tests (phrase search, wildcard, faceting, highlighting, sorting)
 - Tika file indexing via `/update/extract` with a real PDF containing the unique marker
-  `ELEDIA_TIKA_TEST_MARKER`
+ `ELEDIA_TIKA_TEST_MARKER`
 
 #### `setup.sh`
 Interactive first-install script: generates passwords, creates `.env` and `tenants.env`,
@@ -258,10 +258,10 @@ Success Rate: 100%
 
 ### SolrCloud Mode
 - Start with `SOLR_MODE=solrcloud` and verify:
-  - Embedded ZooKeeper starts correctly
-  - Collections API creates collections
-  - `collection` field in permissions enforces true per-collection isolation (403 for cross-tenant access)
-  - Restart persistence via ZooKeeper (credentials survive restart without re-running init)
+ - Embedded ZooKeeper starts correctly
+ - Collections API creates collections
+ - `collection` field in permissions enforces true per-collection isolation (403 for cross-tenant access)
+ - Restart persistence via ZooKeeper (credentials survive restart without re-running init)
 
 ### Caddy Proxy Integration
 - Run `solr-tenant.sh caddy-config --domain solr.example.com`
@@ -306,18 +306,24 @@ Success Rate: 100%
 ## Known Limitations
 
 1. **No URL isolation in standalone mode without Caddy**: All tenants with role `"tenant"`
-   can technically reach any core at the Solr level. The Caddy reverse proxy must be
-   configured to enforce per-tenant URL routing. Run `solr-tenant.sh caddy-config` to
-   generate the Caddyfile.
+  can technically reach any core at the Solr level. The Caddy reverse proxy must be
+  configured to enforce per-tenant URL routing. Run `solr-tenant.sh caddy-config` to
+  generate the Caddyfile.
 
 2. **SolrCloud with single node embedded ZK**: While `SOLR_MODE=solrcloud` enables true
-   collection-level isolation, the embedded ZooKeeper is not suitable for production HA.
-   For production SolrCloud, use an external ZooKeeper ensemble.
+  collection-level isolation, the embedded ZooKeeper is not suitable for production HA.
+  For production SolrCloud, use an external ZooKeeper ensemble.
 
 3. **No Moodle-to-Solr SSL inside Docker**: Moodle connects to Solr via the Caddy proxy
-   which terminates SSL. Internal Docker network traffic (Caddy → Solr) is plaintext. This
-   is acceptable in a single-host Docker setup with localhost binding.
+  which terminates SSL. Internal Docker network traffic (Caddy → Solr) is plaintext. This
+  is acceptable in a single-host Docker setup with localhost binding.
 
 4. **Tika runs inside Solr**: The Solr `extraction` module bundles Apache Tika. There is
-   no separate Tika container. This means very large PDF processing happens inside the Solr
-   JVM, which can increase memory pressure. The `SOLR_HEAP` setting should account for this.
+  no separate Tika container. This means very large PDF processing happens inside the Solr
+  JVM, which can increase memory pressure. The `SOLR_HEAP` setting should account for this.
+
+
+## solr-helper-pro local UI notes
+- `scripts/solr-helper-pro.py` is treated as local-only operator tooling in this workspace.
+- Current UI behavior: create button in list header, selection-driven right panel (host+container info + live logs), tenant-capable column in server list, and detail screen with inline config/user/log operations plus Solr runtime/schema summary.
+- Theme direction: dark black/orange with stronger borders and accents.

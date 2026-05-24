@@ -57,3 +57,9 @@ Gesamt: ~10 Minuten.
 Fuer Self-Hosted GitLab, Runner-Konfiguration, Troubleshooting: [GITLAB-CI-CD-SETUP.md](GITLAB-CI-CD-SETUP.md)
 
 Fragen: [GitHub Issues](https://github.com/Codename-Beast/solr-moodle-docker/issues)
+
+
+## solr-helper-pro local UI notes
+- `scripts/solr-helper-pro.py` is treated as local-only operator tooling in this workspace.
+- Current UI behavior: create button in list header, selection-driven right panel (host+container info + live logs), tenant-capable column in server list, and detail screen with inline config/user/log operations plus Solr runtime/schema summary.
+- Theme direction: dark black/orange with stronger borders and accents.
