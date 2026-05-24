@@ -72,7 +72,7 @@
 
   <!-- Query Configuration -->
   <query>
-    <maxBooleanClauses>${solr.max.booleanClauses:2048}</maxBooleanClauses>
+    <maxBooleanClauses>${solr.max.booleanClauses:1024}</maxBooleanClauses>
 
     <!-- Cache Configuration
          Sizes are controlled via Solr system properties (-D flags in SOLR_OPTS).

@@ -3,6 +3,46 @@
 ## Ziel
 Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Security-Bootstrap und optionalem SolrCloud-Modus.
 
+## Architekturdiagramm (code-nah)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Host (Linux) / Repo: solr-moodle-docker                    │
+│                                                             │
+│  Projektdateien                                              │
+│  ├── docker-compose.yml                                      │
+│  ├── .env                                                    │
+│  ├── tenants.env                                             │
+│  ├── init/powerinit.sh                                       │
+│  ├── scripts/solr-tenant.sh                                  │
+│  ├── config/managed-schema                                   │
+│  └── config/solrconfig.xml                                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ docker compose up -d
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Docker Network: ${INSTANCE_NAME}-network                    │
+│                                                             │
+│  ┌────────────────┐   bootstrap   ┌───────────────────────┐ │
+│  │  solr-init     │──────────────▶│  solr (9.x)          │ │
+│  │  (one-shot)    │               │  /solr               │ │
+│  │  writes security.json          │  AuthN/AuthZ enabled │ │
+│  └────────────────┘               └──────────┬────────────┘ │
+│                                              │              │
+│                                   /update/extract (Tika)    │
+│                                              │              │
+│                                   fmap.content=solr_filecontent
+└──────────────────────────────────────────────┬──────────────┘
+                                               │
+                           bind 127.0.0.1:${SOLR_PORT}
+                                               │
+                                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Optional Reverse Proxy (Apache/Caddy/Nginx)                │
+│  HTTPS 443 -> /solr -> 127.0.0.1:${SOLR_PORT}              │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Komponenten
 
 - `docker-compose.yml`
@@ -34,16 +74,6 @@ Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Se
 - Collections API + embedded ZK
 - serverseitig Collection-basierte Isolation
 
-## Request-Flows
-
-1) Admin/API
-- Client -> Proxy (optional) -> Solr AuthN/AuthZ -> Core/Collection APIs
-
-2) Moodle File Indexing
-- Moodle -> `/update/extract`
-- Tika extrahiert Text -> Mapping nach `solr_filecontent`
-- Suchanfragen treffen `text_general` Analyzer
-
 ## Tika Marker Hinweis (wichtig)
 
 `text_general` nutzt `StandardTokenizerFactory`; Tokens mit `_` werden zerlegt.
@@ -65,4 +95,4 @@ Deshalb sind robuste Tests zweistufig:
 
 - Kein Multi-Node-Orchestrator
 - Kein externer ZK-Cluster-Manager im Projekt selbst
-- Proxy-/TLS-Produktionshärtung bleibt Umgebungsaufgabe
+- Proxy-/TLS-Produktionshaertung bleibt Umgebungsaufgabe
