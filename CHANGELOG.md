@@ -7,6 +7,9 @@ Versioning: Semantic Versioning
 
 ### Fixed
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
+- `scripts/run-tests.sh` ist jetzt CI-robust bei Log-Pfaden:
+  - Fallback von `/var/log/eledia` auf `/tmp/eledia-logs`, falls Runner keine Schreibrechte auf `/var/log` hat.
+  - verhindert fruehen Abbruch in Unit-Stage bei ansonsten lauffaehigem Stack.
 - Tika-/PDF-Assertion in `scripts/test-moodle-documents.sh` stabilisiert:
   - Root Cause: `text_general` nutzt `StandardTokenizerFactory`; Marker mit `_` werden tokenisiert.
   - Konsequenz: exakte Query `ELEDIA_TIKA_TEST_MARKER` ist schema-/analyzer-abhaengig und kann 0 Treffer liefern, obwohl Inhalt indexiert ist.

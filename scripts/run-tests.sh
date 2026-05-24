@@ -49,14 +49,25 @@ if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
 fi
 LOG_ROOT="${LOG_ROOT:-/var/log/eledia}"
 RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
-mkdir -p "${LOG_ROOT}" 2>/dev/null || {
-    echo "ERROR: cannot create ${LOG_ROOT}. Run with privileges or pre-create directory." >&2
-    exit 1
-}
-touch "${RUN_LOG_FILE}" 2>/dev/null || {
-    echo "ERROR: cannot write ${RUN_LOG_FILE}. Fix permissions for /var/log/eledia." >&2
-    exit 1
-}
+if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
+    LOG_ROOT="/tmp/eledia-logs"
+    RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
+    mkdir -p "${LOG_ROOT}" || {
+        echo "ERROR: cannot create fallback log dir ${LOG_ROOT}." >&2
+        exit 1
+    }
+    echo "WARN: using fallback LOG_ROOT=${LOG_ROOT} (no write access to /var/log/eledia)" >&2
+fi
+if ! touch "${RUN_LOG_FILE}" 2>/dev/null; then
+    LOG_ROOT="/tmp/eledia-logs"
+    RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
+    mkdir -p "${LOG_ROOT}" || true
+    touch "${RUN_LOG_FILE}" || {
+        echo "ERROR: cannot write log file ${RUN_LOG_FILE}." >&2
+        exit 1
+    }
+    echo "WARN: switched log output to ${RUN_LOG_FILE}" >&2
+fi
 exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 
