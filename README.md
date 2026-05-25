@@ -1,6 +1,20 @@
-# solr-moodle-docker
+# Solr für Moodle — Multi-Tenant
 
-Einfacher Solr-Stack für Moodle Global Search (Standalone + optional SolrCloud) mit Multi-Tenant.
+[![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=release_1.0)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
+![Version](https://img.shields.io/badge/version-3.0.8-blue)
+![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
+![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
+![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
+
+Docker-Stack für Solr + Moodle Global Search mit Multi-Tenant-Isolation.
+
+- Standalone oder optional SolrCloud
+- Tenant-User + Core/Collection-Isolation
+- Tika `/update/extract` für Datei-Indexierung
+- CI für Standalone und SolrCloud
+
+---
+Siehe [CHANGELOG.md](CHANGELOG.md) für alle Changes aus allen Branch-Linien.
 
 ## Schnellstart
 
@@ -8,29 +22,22 @@ Einfacher Solr-Stack für Moodle Global Search (Standalone + optional SolrCloud)
 git clone https://github.com/Codename-Beast/solr-moodle-docker
 cd solr-moodle-docker
 cp .env.example .env
-# WICHTIG: Passwörter in .env setzen (kein CHANGE_ME)
+# Passwörter setzen (kein CHANGE_ME)
 docker compose up -d --build
 ```
 
-Prüfen:
+Healthcheck:
 
 ```bash
 docker compose ps
 curl -u "admin:<SOLR_ADMIN_PASSWORD>" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/info/system"
 ```
 
-## Was der Stack macht
-
-- Solr inkl. `security.json` Bootstrap aus `.env` + `tenants.env`
-- Tika `/update/extract` für Datei-Indexierung (PDF, Office, Bilder-Metadaten)
-- Tenant-Verwaltung über `scripts/solr-tenant.sh`
-- Tests für Standalone + SolrCloud
-
-## Multi-Tenant Befehle
+## Multi-Tenant Basics
 
 ```bash
 # Tenant anlegen
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create schule_a --cores moodle_prod_a
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create schule_a --cores moodle_prod_a,moodle_test_a
 
 # Liste
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh list
@@ -38,19 +45,19 @@ docker exec solr-solr /opt/solr/scripts/solr-tenant.sh list
 # Passwort rotieren
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh passwd schule_a
 
-# Source-of-Truth abgleichen (.env + tenants.env -> API)
+# Source-of-Truth Sync (.env + tenants.env -> Solr API)
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh sync-sot
 ```
 
 ## SolrCloud (optional)
 
-In `.env` setzen:
+In `.env`:
 
 ```bash
 SOLR_MODE=solrcloud
 ```
 
-Dann neu starten:
+Danach neu starten:
 
 ```bash
 docker compose up -d --build
@@ -65,22 +72,15 @@ docker compose up -d --build
 
 ## Wichtige Hinweise
 
-- `SOLR_BIND` sollte `127.0.0.1` bleiben (Zugriff extern über Proxy).
-- `tenants.env` enthält Secrets und darf nicht in Git.
-- Monitoring-Dokumentation ist vorhanden, wird aber in diesem Repo nicht aktiv weiterentwickelt.
+- `SOLR_BIND=127.0.0.1` beibehalten, extern nur über Proxy.
+- `tenants.env` enthält Secrets und bleibt unversioniert.
+- Monitoring ist optional; Doku bleibt verfügbar, aber aktuell kein aktiver Ausbau.
 
-## Relevante Dateien
+## Struktur
 
-- `docker-compose.yml`
 - `config/managed-schema`
 - `config/solrconfig.xml`
 - `scripts/solr-tenant.sh`
 - `scripts/run-tests.sh`
 - `scripts/test-moodle-documents.sh`
-
-## Weitere Doku
-
-- `docs/architecture.md`
-- `docs/CI-CD.md`
-- `docs/monitoring.md`
-- `CHANGELOG.md`
+- `docs/`
