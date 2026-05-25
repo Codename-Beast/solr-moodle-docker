@@ -15,6 +15,15 @@ All notable changes to this project will be documented in this file.
 - Lokaler Lauf: `./scripts/test-moodle-documents.sh` erfolgreich (48/48).
 - GitHub Actions Run `26415360780` erfolgreich (Code Quality, Security Scan, Solr Tests, SolrCloud Tests).
 
+### Branch-Merge Übersicht (release_1.0)
+- Für `release_1.0` wurden CHANGELOG-Linien aus allen verfügbaren Remote-Branches geprüft:
+  - `main`, `develop`, `develop22`
+  - `feature/multi-tenant`, `feature/v2.3.0`, `feature/v2.3.2`, `feature/v2.3.3`, `feature/v2.4.0`, `feature/v2.5.0`
+  - `fix/solrcloud-security-ci`, `fix/powerinit-security-prometheus`, `fix/security-permissions-order`, `fix/test-robustness-v2.3`, `fix/test-robustness-v2.3.1`
+  - `feature/docs-and-ci-hardening-2026-05-24`
+- Relevante Versionslinien sind jetzt im Release-Changelog enthalten: `2.0.0` bis `3.0.8`.
+- Historische Branch-Sync-Hinweise bleiben im Verlauf erhalten, damit nichts still verloren geht.
+
 ## [3.0.7] - 2026-05-25
 
 ### Added
