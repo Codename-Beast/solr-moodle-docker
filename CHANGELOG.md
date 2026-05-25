@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.6] - 2026-05-25
+
+### Changed
+- `scripts/test-moodle-documents.sh` fachlich verfeinert, damit die Query-Checks Moodle-Solr-Engine-Logik realistisch abbilden (Moodle 4.1 bis 5.2 Zielbild):
+  - hinzugefuegt: `{!cache=false}`-Filter-Patterns fuer `courseid` und `areaid`.
+  - hinzugefuegt: Owner-Visibility-Filter (`owneruserid:(-1 OR <userid>)`) inkl. korrektem Escaping fuer negative IDs (`\-1`).
+  - hinzugefuegt: Context-Filter (`contextid:(...)`) und Moodle-typisches Group/Context-Fallback-Pattern.
+  - hinzugefuegt: kombinierte Mehrfach-Filter-Query (q + mehrere fq), wie sie Moodle beim Eingrenzen nutzt.
+- Query-Assertions in Hilfsfunktion `assert_min_hits()` konsolidiert, damit Checks reproduzierbar und wartbar bleiben.
+
+### Added
+- Neuer Abschnitt `SOLR LOG HEALTHCHECK` in `scripts/test-moodle-documents.sh`:
+  - prueft nach dem Query-/Indexing-Workload die letzten Solr-Logs auf actionable `ERROR/SEVERE`.
+  - prueft actionable `WARN` separat.
+  - gibt bei Befunden die ersten Logzeilen sichtbar aus, statt still zu scheitern.
+
+### Fixed
+- False-Positive im neuen Logcheck entfernt:
+  - Root cause: naive Suche auf `ERROR` matchte auch harmlose Info-Zeilen wie `solr.log.level=ERROR`.
+  - Fix: Regex auf echtes Solr-Loglevel-Format verschaerft (`... ERROR|SEVERE (`).
+- Owner-Filter-Query korrigiert:
+  - Root cause: `-1` ohne Escaping fuehrte zu falscher Query-Interpretation.
+  - Fix: URL-encodiertes `\-1` (`%5C-1`) fuer stabile Trefferlogik.
+
+### Verified
+- `./scripts/test-moodle-documents.sh` -> PASS (32/32)
+- `./scripts/run-tests.sh --moodle-only` -> PASS (32/32)
+- Solr Log Healthcheck im Testlauf: keine actionable WARN/ERROR gefunden.
+
+---
+
 ## Branch-Sync-Check (2026-05-24)
 
 - Nicht uebernommene CHANGELOG-Commits aus anderen Branches geprueft.
