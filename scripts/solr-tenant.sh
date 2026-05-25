@@ -1133,19 +1133,33 @@ cmd_sync_sot() {
     [ -n "${SOLR_MOODLE_USER:-}" ] && printf '%s\n' "${SOLR_MOODLE_USER}"
 
     if [ -f "$TENANTS_ENV" ]; then
-      while IFS='=' read -r key value; do
-        case "$key" in
+      local -A tenant_user_map tenant_active_map tenant_has_cores
+      local k v name
+
+      while IFS='=' read -r k v; do
+        case "$k" in
+          TENANT_*_USER)
+            name="${k#TENANT_}"; name="${name%_USER}"
+            tenant_user_map["$name"]="$v"
+            ;;
+          TENANT_*_ACTIVE)
+            name="${k#TENANT_}"; name="${name%_ACTIVE}"
+            tenant_active_map["$name"]="$v"
+            ;;
           TENANT_*_CORES)
-            local name user active
-            name="${key#TENANT_}"; name="${name%_CORES}"
-            user="$(grep "^TENANT_${name}_USER=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
-            active="$(grep "^TENANT_${name}_ACTIVE=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
-            user="${user:-solr_${name}}"
-            [ "${active:-true}" = "false" ] && continue
-            [ -n "$user" ] && printf '%s\n' "$user"
+            name="${k#TENANT_}"; name="${name%_CORES}"
+            tenant_has_cores["$name"]=1
             ;;
         esac
       done < "$TENANTS_ENV"
+
+      for name in "${!tenant_has_cores[@]}"; do
+        local user active
+        user="${tenant_user_map[$name]:-solr_${name}}"
+        active="${tenant_active_map[$name]:-true}"
+        [ "$active" = "false" ] && continue
+        [ -n "$user" ] && printf '%s\n' "$user"
+      done
     fi
   } | sed '/^$/d' | sort -u > "$allow_file"
 
