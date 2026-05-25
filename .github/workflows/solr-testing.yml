@@ -2,7 +2,7 @@ name: Solr Test Suite
 
 on:
   push:
-    branches: [main, "feature/*", "fix/*"]
+    branches: [main, "feature/*", "fix/*", "release*"]
     paths-ignore:
       - "docs/**"
       - "**.md"
