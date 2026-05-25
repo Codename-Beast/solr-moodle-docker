@@ -597,21 +597,26 @@ fi
 # Summary
 print_header "TEST SUMMARY"
 echo ""
-echo -e "${BOLD}Total Tests:${NC}    $TESTS_RUN"
+TOTAL_ASSERTIONS=$((TESTS_PASSED + TESTS_FAILED))
+echo -e "${BOLD}Total Tests:${NC}    $TOTAL_ASSERTIONS"
 echo -e "${GREEN}${BOLD}Passed:${NC}         $TESTS_PASSED"
 echo -e "${RED}${BOLD}Failed:${NC}         $TESTS_FAILED"
 echo ""
 echo -e "${BOLD}Documents:${NC}      $DOCS_INDEXED indexed"
 echo ""
 
-if [ $TESTS_FAILED -eq 0 ]; then
+if [ "$TESTS_FAILED" -eq 0 ]; then
   SUCCESS_RATE=100
   echo -e "${BOLD}Success Rate:${NC}   ${SUCCESS_RATE}%"
   echo ""
   echo -e "${GREEN}${BOLD}MOODLE DOCUMENT TESTS PASSED${NC}"
   exit 0
 else
-  SUCCESS_RATE=$((TESTS_PASSED * 100 / TESTS_RUN))
+  if [ "$TOTAL_ASSERTIONS" -gt 0 ]; then
+    SUCCESS_RATE=$((TESTS_PASSED * 100 / TOTAL_ASSERTIONS))
+  else
+    SUCCESS_RATE=0
+  fi
   echo -e "${BOLD}Success Rate:${NC}   ${SUCCESS_RATE}%"
   echo ""
   echo -e "${RED}${BOLD}SOME TESTS FAILED${NC}"
