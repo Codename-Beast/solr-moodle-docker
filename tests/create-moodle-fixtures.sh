@@ -29,7 +29,7 @@ cat > "$BASE_DIR/fixture-announcement.rtf" <<'EOF'
 {\rtf1\ansi\deff0 {\fonttbl {\f0 Arial;}}\f0\fs24 Moodle Workplace maintenance window with Solr reindex. Marker: ELEDIA RTF FIXTURE MARKER}
 EOF
 
-# Create PNG "photo" fixture (prefer ImageMagick, fallback to embedded PNG)
+# Create PNG "photo" fixture (prefer ImageMagick; otherwise keep checked-in PNG)
 if command -v convert >/dev/null 2>&1; then
   convert -size 1200x630 xc:'#202024' \
     -fill '#ff8c00' -stroke '#ff8c00' -strokewidth 4 -draw 'rectangle 40,40 1160,590' \
@@ -37,12 +37,10 @@ if command -v convert >/dev/null 2>&1; then
     -fill '#ffb440' -pointsize 34 -annotate +70+200 'ELEDIA PHOTO MARKER' \
     -fill '#dddddd' -pointsize 26 -annotate +70+280 'Photo fixture for Solr/Tika metadata indexing' \
     "$BASE_DIR/fixture-campus-photo.png"
+elif [ -f "$BASE_DIR/fixture-campus-photo.png" ]; then
+  :
 else
-  cat > "$BASE_DIR/fixture-campus-photo.png.b64" <<'EOF'
-iVBORw0KGgoAAAANSUhEUgAAAlgAAAD6CAIAAADOn0O5AAADSElEQVR4nO3WMQEAIAzAsIF/zyAjjzUKetd5JgC4zL0OANgZAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDg8MHCV4AB5HuxsQAAAAASUVORK5CYII=
-EOF
-  base64 -d "$BASE_DIR/fixture-campus-photo.png.b64" > "$BASE_DIR/fixture-campus-photo.png"
-  rm -f "$BASE_DIR/fixture-campus-photo.png.b64"
+  echo "INFO: no ImageMagick convert found and no prebuilt PNG present; photo fixture will be skipped by tests" >&2
 fi
 
 echo "Fixtures generated in $BASE_DIR"
