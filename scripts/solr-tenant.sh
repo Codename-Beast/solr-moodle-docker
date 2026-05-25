@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+# Version: v3.0.1
+
 # =========================================
 # Solr Multi-Tenant CLI
 # Developer: BSC Bernd Schreistetter
@@ -1095,6 +1099,83 @@ cmd_apply() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: sync-sot (.env + tenants.env are source of truth)
+#
+# Strategy:
+#  1) Apply desired state from tenants.env to API (cmd_apply)
+#  2) Read users from Solr API
+#  3) Build allow-list from .env fixed users + tenants.env users
+#  4) For API users not in allow-list: rotate to random password via API
+#     (blocks unknown/out-of-band credentials without deleting user entries)
+# ---------------------------------------------------------------------------
+cmd_sync_sot() {
+  _load_admin_creds
+  _log_action "sync-sot"
+
+  cmd_apply
+
+  local auth_json api_users
+  auth_json="$(_solr_api GET "/admin/authentication" 2>/dev/null || true)"
+  if [ -z "$auth_json" ]; then
+    printf 'ERROR: Could not read /admin/authentication from Solr API\n' >&2
+    return 1
+  fi
+
+  api_users="$(printf '%s' "$auth_json" | jq -r '.authentication.credentials | keys[]?' 2>/dev/null || true)"
+
+  local allow_file
+  allow_file="$(mktemp)"
+  chmod 600 "$allow_file"
+
+  {
+    printf '%s\n' "${SOLR_ADMIN_USER:-admin}"
+    printf '%s\n' "${SOLR_SUPPORT_USER:-support}"
+    [ -n "${SOLR_MOODLE_USER:-}" ] && printf '%s\n' "${SOLR_MOODLE_USER}"
+
+    if [ -f "$TENANTS_ENV" ]; then
+      while IFS='=' read -r key value; do
+        case "$key" in
+          TENANT_*_CORES)
+            local name user active
+            name="${key#TENANT_}"; name="${name%_CORES}"
+            user="$(grep "^TENANT_${name}_USER=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+            active="$(grep "^TENANT_${name}_ACTIVE=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+            user="${user:-solr_${name}}"
+            [ "${active:-true}" = "false" ] && continue
+            [ -n "$user" ] && printf '%s\n' "$user"
+            ;;
+        esac
+      done < "$TENANTS_ENV"
+    fi
+  } | sed '/^$/d' | sort -u > "$allow_file"
+
+  local rotated=0 kept=0
+  while IFS= read -r u; do
+    [ -z "$u" ] && continue
+    if grep -qx "$u" "$allow_file"; then
+      kept=$((kept + 1))
+      continue
+    fi
+
+    _log "WARN" "Unknown API user '$u' (not present in .env/tenants.env) -> rotating password"
+    if [ "$DRY_RUN" = "1" ]; then
+      printf '[DRY-RUN] Would rotate unknown API user: %s\n' "$u"
+      continue
+    fi
+
+    local rand_pass payload
+    rand_pass="$(_gen_password)"
+    payload="$(jq -n --arg user "$u" --arg pass "$rand_pass" '{"set-user": {($user): $pass}}')"
+    _cloud_auth_api "$payload"
+    rotated=$((rotated + 1))
+  done <<< "$api_users"
+
+  rm -f "$allow_file"
+  printf '✔ SOT sync done: kept=%s rotated_unknown=%s\n' "$kept" "$rotated"
+  _log "INFO" "sync-sot completed: kept=$kept rotated_unknown=$rotated"
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: export (YAML for Ansible host_vars)
 # ---------------------------------------------------------------------------
 cmd_export() {
@@ -1247,6 +1328,7 @@ Commands:
   core-add <name> --core <core>       Add a core to existing tenant
   core-remove <name> --core <core>    Remove core permission from tenant
   apply                               Re-apply all tenants from tenants.env (idempotent)
+  sync-sot                            Enforce .env+tenants.env as SOT and rotate unknown API users
   export                              YAML output for Ansible host_vars
   caddy-config --domain <d>           Generate Caddyfile for URL-level tenant isolation
 
@@ -1286,6 +1368,7 @@ case "$COMMAND" in
   core-add)     cmd_core_add "$@" ;;
   core-remove)  cmd_core_remove "$@" ;;
   apply)        cmd_apply "$@" ;;
+  sync-sot)     cmd_sync_sot "$@" ;;
   export)       cmd_export "$@" ;;
   caddy-config) cmd_caddy_config "$@" ;;
   --help|-h|help) usage ;;
