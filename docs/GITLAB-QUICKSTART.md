@@ -1,3 +1,6 @@
+> Hinweis (Release 1.0): Diese Doku wurde vereinfacht und auf den aktuellen Stand gebracht.
+> Monitoring ist optional und aktuell nicht im aktiven Ausbau.
+
 # GitLab CI/CD Quick Start
 
 Setup-Zeit: 5 Minuten.
