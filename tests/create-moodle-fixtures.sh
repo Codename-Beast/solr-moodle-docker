@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BASE_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 cat > "$BASE_DIR/fixture-notes.txt" <<'EOF'
 Moodle Solr Tika integration test notes.
