@@ -1,0 +1,3 @@
+Moodle Solr Tika integration test notes.
+Marker: ELEDIA TIKA TEST MARKER.
+This plain text file validates full-text indexing.
