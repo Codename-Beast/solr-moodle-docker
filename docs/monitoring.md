@@ -1,3 +1,6 @@
+> Hinweis (Release 1.0): Diese Doku wurde vereinfacht und auf den aktuellen Stand gebracht.
+> Monitoring ist optional und aktuell nicht im aktiven Ausbau.
+
 # Monitoring-Integration
 
 ## Metriken-Endpunkt
@@ -19,15 +22,15 @@ Promtail-Beispiel fuer Loki-Integration:
 ```yaml
 # promtail-config.yaml
 scrape_configs:
- - job_name: solr
-   docker_sd_configs:
-     - host: unix:///var/run/docker.sock
-       filters:
-         - name: name
-           values: ["${INSTANCE_NAME:-solr}-solr"]
-   relabel_configs:
-     - source_labels: [__meta_docker_container_name]
-       target_label: container
+- job_name: solr
+docker_sd_configs:
+- host: unix:///var/run/docker.sock
+filters:
+- name: name
+values: ["${INSTANCE_NAME:-solr}-solr"]
+relabel_configs:
+- source_labels: [__meta_docker_container_name]
+target_label: container
 ```
 
 ## Prometheus (Groundwork)

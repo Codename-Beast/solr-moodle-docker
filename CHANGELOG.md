@@ -2,14 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.8] - 2026-05-25
+
+### Changed
+- `config/solrconfig.xml`: `/update/extract` mappt `fmap.content` jetzt auf `content` (kanonisches Suchfeld).
+- `config/managed-schema`: `copyField content -> solr_filecontent` ergänzt (Rückwärtskompatibilität für bestehende Abfragen/Tools).
+- `scripts/test-moodle-documents.sh`: PDF-Marker-Prüfung jetzt strikt und deterministisch (`q=content:...` + `fq=id:tika_test_pdf`).
+- README bewusst vereinfacht und für Betrieb/Onboarding klarer gemacht.
+- Alle Markdown-Dokumente auf Release-1.0-Hinweis und aktuellen Stand gebracht.
+
+### Verified
+- Lokaler Lauf: `./scripts/test-moodle-documents.sh` erfolgreich (48/48).
+- GitHub Actions Run `26415360780` erfolgreich (Code Quality, Security Scan, Solr Tests, SolrCloud Tests).
+
 ## [3.0.7] - 2026-05-25
 
 ### Added
 - Neue Shell-Fixture-Generierung (`tests/create-moodle-fixtures.sh`) fuer Moodle/Solr Tika-Tests ohne Python-Abhaengigkeit.
 - Multi-Format-Testabdeckung in `scripts/test-moodle-documents.sh` erweitert:
-  - TXT, HTML, CSV, RTF, PNG (Photo-Fixture) zusaetzlich zur PDF-Pruefung.
-  - Fuer jedes Format: `/update/extract`-Indexing + ID-Verifikation.
-  - Fuer textbasierte Formate: `extractOnly`-Pruefung auf erwartete Marker.
+- TXT, HTML, CSV, RTF, PNG (Photo-Fixture) zusaetzlich zur PDF-Pruefung.
+- Fuer jedes Format: `/update/extract`-Indexing + ID-Verifikation.
+- Fuer textbasierte Formate: `extractOnly`-Pruefung auf erwartete Marker.
 - Persistente Log-Dokumentation: `tests/solr-log-findings.md` wird pro Testlauf erzeugt (WARN/ERROR/SEVERE-Befunde).
 
 ### Changed
@@ -17,8 +30,8 @@ All notable changes to this project will be documented in this file.
 - Fehlende `print_skip`-Hilfsfunktion in `scripts/test-moodle-documents.sh` ergänzt.
 - Lange Moodle-Kompatibilitaetsabfragen auf `POST /select` umgestellt (group visibility + combined filters), um Jetty-`URI is too large >8192` Warnungen zu vermeiden.
 - Solr-Log-Healthcheck praezisiert:
-  - bekannte, nicht-funktionale Startup-/PDFBox-Font-WARNs werden als non-actionable gefiltert.
-  - neue harte Pruefung auf `URI is too large` bleibt separat aktiv.
+- bekannte, nicht-funktionale Startup-/PDFBox-Font-WARNs werden als non-actionable gefiltert.
+- neue harte Pruefung auf `URI is too large` bleibt separat aktiv.
 
 ### Verified
 - `./scripts/test-moodle-documents.sh` -> PASS (47/47).
@@ -29,25 +42,25 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `scripts/test-moodle-documents.sh` fachlich verfeinert, damit die Query-Checks Moodle-Solr-Engine-Logik realistisch abbilden (Moodle 4.1 bis 5.2 Zielbild):
-  - hinzugefuegt: `{!cache=false}`-Filter-Patterns fuer `courseid` und `areaid`.
-  - hinzugefuegt: Owner-Visibility-Filter (`owneruserid:(-1 OR <userid>)`) inkl. korrektem Escaping fuer negative IDs (`\-1`).
-  - hinzugefuegt: Context-Filter (`contextid:(...)`) und Moodle-typisches Group/Context-Fallback-Pattern.
-  - hinzugefuegt: kombinierte Mehrfach-Filter-Query (q + mehrere fq), wie sie Moodle beim Eingrenzen nutzt.
+- hinzugefuegt: `{!cache=false}`-Filter-Patterns fuer `courseid` und `areaid`.
+- hinzugefuegt: Owner-Visibility-Filter (`owneruserid:(-1 OR <userid>)`) inkl. korrektem Escaping fuer negative IDs (`\-1`).
+- hinzugefuegt: Context-Filter (`contextid:(...)`) und Moodle-typisches Group/Context-Fallback-Pattern.
+- hinzugefuegt: kombinierte Mehrfach-Filter-Query (q + mehrere fq), wie sie Moodle beim Eingrenzen nutzt.
 - Query-Assertions in Hilfsfunktion `assert_min_hits()` konsolidiert, damit Checks reproduzierbar und wartbar bleiben.
 
 ### Added
 - Neuer Abschnitt `SOLR LOG HEALTHCHECK` in `scripts/test-moodle-documents.sh`:
-  - prueft nach dem Query-/Indexing-Workload die letzten Solr-Logs auf actionable `ERROR/SEVERE`.
-  - prueft actionable `WARN` separat.
-  - gibt bei Befunden die ersten Logzeilen sichtbar aus, statt still zu scheitern.
+- prueft nach dem Query-/Indexing-Workload die letzten Solr-Logs auf actionable `ERROR/SEVERE`.
+- prueft actionable `WARN` separat.
+- gibt bei Befunden die ersten Logzeilen sichtbar aus, statt still zu scheitern.
 
 ### Fixed
 - False-Positive im neuen Logcheck entfernt:
-  - Root cause: naive Suche auf `ERROR` matchte auch harmlose Info-Zeilen wie `solr.log.level=ERROR`.
-  - Fix: Regex auf echtes Solr-Loglevel-Format verschaerft (`... ERROR|SEVERE (`).
+- Root cause: naive Suche auf `ERROR` matchte auch harmlose Info-Zeilen wie `solr.log.level=ERROR`.
+- Fix: Regex auf echtes Solr-Loglevel-Format verschaerft (`... ERROR|SEVERE (`).
 - Owner-Filter-Query korrigiert:
-  - Root cause: `-1` ohne Escaping fuehrte zu falscher Query-Interpretation.
-  - Fix: URL-encodiertes `\-1` (`%5C-1`) fuer stabile Trefferlogik.
+- Root cause: `-1` ohne Escaping fuehrte zu falscher Query-Interpretation.
+- Fix: URL-encodiertes `\-1` (`%5C-1`) fuer stabile Trefferlogik.
 
 ### Verified
 - `./scripts/test-moodle-documents.sh` -> PASS (32/32)
@@ -60,8 +73,8 @@ All notable changes to this project will be documented in this file.
 
 - Nicht uebernommene CHANGELOG-Commits aus anderen Branches geprueft.
 - Offene Branch-Eintraege fuer moeglichen Rueckmerge:
-  - `feature/v2.3.0`: 8bbc9dc
-  - `feature/v2.5.0`: 85d9821
+- `feature/v2.3.0`: 8bbc9dc
+- `feature/v2.5.0`: 85d9821
 Versioning: Semantic Versioning
 
 ## [3.0.5] - 2026-05-24
@@ -84,22 +97,22 @@ Versioning: Semantic Versioning
 
 ### Fixed
 - CI-Regression in `Run Moodle document tests` behoben (GitHub Actions Run 26352731461):
-  - Root Cause: `/update/extract` wurde mit `literalsOverride=false` konfiguriert; dadurch konnten `literal.*`-Metadaten fuer Moodle-Pflichtfelder beim Tika-Indexing nicht verlaesslich greifen.
-  - Symptom: `PDF indexing via Tika failed (HTTP 400)` in CI, obwohl `extractOnly=true` HTTP 200 lieferte.
-  - Fix: `config/solrconfig.xml` setzt fuer `/update/extract` wieder `literalsOverride=true`.
+- Root Cause: `/update/extract` wurde mit `literalsOverride=false` konfiguriert; dadurch konnten `literal.*`-Metadaten fuer Moodle-Pflichtfelder beim Tika-Indexing nicht verlaesslich greifen.
+- Symptom: `PDF indexing via Tika failed (HTTP 400)` in CI, obwohl `extractOnly=true` HTTP 200 lieferte.
+- Fix: `config/solrconfig.xml` setzt fuer `/update/extract` wieder `literalsOverride=true`.
 - `scripts/run-tests.sh`: False-Green beseitigt.
-  - Vorher konnte bei `Failed > 0` trotzdem `TEST SUITE PASSED` erscheinen (nur success-rate-basiert).
-  - Jetzt: jeder fehlgeschlagene Test erzwingt Exit-Code != 0 und `TEST SUITE FAILED`.
+- Vorher konnte bei `Failed > 0` trotzdem `TEST SUITE PASSED` erscheinen (nur success-rate-basiert).
+- Jetzt: jeder fehlgeschlagene Test erzwingt Exit-Code != 0 und `TEST SUITE FAILED`.
 - Tenant-Lifecycle-Test idempotent gemacht.
-  - Test-Tenant-Name ist pro Run eindeutig (`ci_lifecycle_<timestamp>_<random>`), damit keine Kollision mit Altzustand auftritt.
+- Test-Tenant-Name ist pro Run eindeutig (`ci_lifecycle_<timestamp>_<random>`), damit keine Kollision mit Altzustand auftritt.
 - Hardening bleibt erhalten:
-  - `captureAttr=false` bleibt aktiv.
-  - Upload-Limits via System-Properties bleiben aktiv (`solr.multipartUploadLimitKB`, `solr.formdataUploadLimitKB`).
+- `captureAttr=false` bleibt aktiv.
+- Upload-Limits via System-Properties bleiben aktiv (`solr.multipartUploadLimitKB`, `solr.formdataUploadLimitKB`).
 
 ### Verified
 - Lokal reproduziert und verifiziert:
-  - `./scripts/test-moodle-documents.sh` -> PASS inkl. Tika PDF Indexing
-  - `./scripts/run-tests.sh --integration-only --no-cleanup` -> PASS
+- `./scripts/test-moodle-documents.sh` -> PASS inkl. Tika PDF Indexing
+- `./scripts/run-tests.sh --integration-only --no-cleanup` -> PASS
 
 ---
 
@@ -109,34 +122,34 @@ Versioning: Semantic Versioning
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
 - CI-YAML-Lintfehler beseitigt (`docker-compose.yml` Zeilenlaenge in `SOLR_OPTS` auf block-scalar umgestellt).
 - `scripts/test-moodle-documents.sh` robust gemacht fuer lokale/non-CI Runs:
-  - Port-/Core-Defaults werden nach `.env`-Load korrekt aufgeloest.
-  - fehlender Test-Core wird automatisch via Core Admin API erstellt.
-  - Connectivity-Check nutzt jetzt `select?q=*:*&rows=0` statt `admin/ping`.
+- Port-/Core-Defaults werden nach `.env`-Load korrekt aufgeloest.
+- fehlender Test-Core wird automatisch via Core Admin API erstellt.
+- Connectivity-Check nutzt jetzt `select?q=*:*&rows=0` statt `admin/ping`.
 - `scripts/run-tests.sh` ist jetzt CI-robust bei Log-Pfaden:
-  - Fallback von `/var/log/eledia` auf `/tmp/eledia-logs`, falls Runner keine Schreibrechte auf `/var/log` hat.
-  - verhindert fruehen Abbruch in Unit-Stage bei ansonsten lauffaehigem Stack.
+- Fallback von `/var/log/eledia` auf `/tmp/eledia-logs`, falls Runner keine Schreibrechte auf `/var/log` hat.
+- verhindert fruehen Abbruch in Unit-Stage bei ansonsten lauffaehigem Stack.
 - Tika-/PDF-Assertion in `scripts/test-moodle-documents.sh` stabilisiert:
-  - Root Cause: `text_general` nutzt `StandardTokenizerFactory`; Marker mit `_` werden tokenisiert.
-  - Konsequenz: exakte Query `ELEDIA_TIKA_TEST_MARKER` ist schema-/analyzer-abhaengig und kann 0 Treffer liefern, obwohl Inhalt indexiert ist.
-  - Fix: Fallback-Query (`ELEDIA+TIKA+TEST+MARKER`) und semantischer Folgecheck bleiben verpflichtend.
+- Root Cause: `text_general` nutzt `StandardTokenizerFactory`; Marker mit `_` werden tokenisiert.
+- Konsequenz: exakte Query `ELEDIA_TIKA_TEST_MARKER` ist schema-/analyzer-abhaengig und kann 0 Treffer liefern, obwohl Inhalt indexiert ist.
+- Fix: Fallback-Query (`ELEDIA+TIKA+TEST+MARKER`) und semantischer Folgecheck bleiben verpflichtend.
 
 ### Added
 - Tenant-Management-Lifecycle in `scripts/run-tests.sh` erweitert:
-  - `create` (mehrere Cores)
-  - `core-remove`
-  - `core-add`
-  - `delete` (deactivate)
-  - `enable` (reactivate)
-  - jeweils mit Zustandsverifikation via `solr-tenant.sh info`.
+- `create` (mehrere Cores)
+- `core-remove`
+- `core-add`
+- `delete` (deactivate)
+- `enable` (reactivate)
+- jeweils mit Zustandsverifikation via `solr-tenant.sh info`.
 
 ### Changed
 - Statusdokumentation konsolidiert (`docs/STATUS-2026-05-24.md`).
 - CI-Testablauf angepasst, damit Analyzer-Details nicht mehr zu False-Negatives im Build fuehren.
 - `docs/architecture.md` in beiden Repos um code-nahe ASCII-Architekturdiagramme erweitert.
 - Compose-/Runtime-Warnungen reduziert:
-  - Named-Volume SELinux-Flag (`:z`) an `solr_data` entfernt (Docker warning beseitigt).
-  - `maxBooleanClauses` auf global konsistente 1024 gesetzt (Core-Load WARN beseitigt).
-  - Security-Manager/JVM-Noise reduziert (`SOLR_SECURITY_MANAGER_ENABLED=false`, `-XX:-UseLargePages`).
+- Named-Volume SELinux-Flag (`:z`) an `solr_data` entfernt (Docker warning beseitigt).
+- `maxBooleanClauses` auf global konsistente 1024 gesetzt (Core-Load WARN beseitigt).
+- Security-Manager/JVM-Noise reduziert (`SOLR_SECURITY_MANAGER_ENABLED=false`, `-XX:-UseLargePages`).
 
 ### Docs
 - README + Betriebsdoku auf aktuellen Stand gebracht; tenantbezogene Testabdeckung und Fehlerstatus nachgezogen.
@@ -147,31 +160,31 @@ Versioning: Semantic Versioning
 
 ### Added
 - Copyright/SPDX/Version Header in allen Shell-Skripten:
-  - `Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter`
-  - `SPDX-License-Identifier: MIT`
-  - `Version: v3.0.1`
+- `Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter`
+- `SPDX-License-Identifier: MIT`
+- `Version: v3.0.1`
 - README komplett auf code-nahe Betriebsdoku umgestellt (TL;DR, SolrCloud, Tests, CI, Security, Ops).
 - Dokumentierte Solr-Doku-Tweaks fuer `/update/extract`.
 
 ### Changed
 - `docker-compose.yml`: dynamische Portbelegung bewusst beibehalten:
-  - `${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`
-  - Healthcheck URLs weiter mit `${SOLR_PORT}` (kein Hardcode auf 8983).
+- `${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`
+- Healthcheck URLs weiter mit `${SOLR_PORT}` (kein Hardcode auf 8983).
 - `config/solrconfig.xml`: Tika Feld-Mapping verbessert:
-  - `fmap.content=solr_filecontent`
-  - Ergebnis: extrahierter Datei-Text landet gezielt im Moodle-Dateifeld.
+- `fmap.content=solr_filecontent`
+- Ergebnis: extrahierter Datei-Text landet gezielt im Moodle-Dateifeld.
 - `.gitlab-ci.yml`: DinD robuster gemacht fuer klassische Docker-Runner:
-  - `DOCKER_HOST=tcp://docker:2375`
-  - `DOCKER_TLS_CERTDIR=""`
-  - `DOCKER_DRIVER=overlay2`
-  - `docker:24-dind` Service in Test-Template
-  - Docker-Readiness-Wait (`until docker info ...`)
+- `DOCKER_HOST=tcp://docker:2375`
+- `DOCKER_TLS_CERTDIR=""`
+- `DOCKER_DRIVER=overlay2`
+- `docker:24-dind` Service in Test-Template
+- Docker-Readiness-Wait (`until docker info ...`)
 
 ### Verified
 - Lokale Testsuite erfolgreich gelaufen (port-isoliert):
-  - `./scripts/run-tests.sh --unit-only`
-  - `./scripts/run-tests.sh --integration-only --no-cleanup`
-  - `./scripts/run-tests.sh --security-only --no-cleanup`
+- `./scripts/run-tests.sh --unit-only`
+- `./scripts/run-tests.sh --integration-only --no-cleanup`
+- `./scripts/run-tests.sh --security-only --no-cleanup`
 - Shell-Syntax-Pruefung ueber alle `.sh` im Repo: OK (`bash -n`).
 - GitHub Actions Runs fuer beide Repos erneut angestossen / rerun gestartet.
 

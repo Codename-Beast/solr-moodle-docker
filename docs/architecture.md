@@ -1,3 +1,6 @@
+> Hinweis (Release 1.0): Diese Doku wurde vereinfacht und auf den aktuellen Stand gebracht.
+> Monitoring ist optional und aktuell nicht im aktiven Ausbau.
+
 # Architektur — solr-moodle-docker
 
 ## Ziel
@@ -18,8 +21,8 @@ Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Se
 │  ├── config/managed-schema                                   │
 │  └── config/solrconfig.xml                                   │
 └──────────────────────────┬──────────────────────────────────┘
-                           │ docker compose up -d
-                           ▼
+│ docker compose up -d
+▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Docker Network: ${INSTANCE_NAME}-network                    │
 │                                                             │
@@ -33,10 +36,10 @@ Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Se
 │                                              │              │
 │                                   fmap.content=solr_filecontent
 └──────────────────────────────────────────────┬──────────────┘
-                                               │
-                           bind 127.0.0.1:${SOLR_PORT}
-                                               │
-                                               ▼
+│
+bind 127.0.0.1:${SOLR_PORT}
+│
+▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Optional Reverse Proxy (Apache/Caddy/Nginx)                │
 │  HTTPS 443 -> /solr -> 127.0.0.1:${SOLR_PORT}              │
@@ -46,17 +49,17 @@ Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Se
 ## Komponenten
 
 - `docker-compose.yml`
-  - `solr-init` (Init/Bootstrap)
-  - `solr` (Runtime)
+- `solr-init` (Init/Bootstrap)
+- `solr` (Runtime)
 - `init/powerinit.sh`
-  - erzeugt/aktualisiert `security.json`
-  - initialisiert Kerndaten und Rollen
+- erzeugt/aktualisiert `security.json`
+- initialisiert Kerndaten und Rollen
 - `scripts/solr-tenant.sh`
-  - Tenant-Lifecycle: create/delete/enable/passwd/core-add/core-remove/apply/export/caddy-config
+- Tenant-Lifecycle: create/delete/enable/passwd/core-add/core-remove/apply/export/caddy-config
 - `config/managed-schema`
-  - Moodle-Felder + `solr_filecontent` fuer Tika-Extraktion
+- Moodle-Felder + `solr_filecontent` fuer Tika-Extraktion
 - `config/solrconfig.xml`
-  - `/update/extract` Handler; `fmap.content=solr_filecontent`
+- `/update/extract` Handler; `fmap.content=solr_filecontent`
 
 ## Laufzeitdaten
 

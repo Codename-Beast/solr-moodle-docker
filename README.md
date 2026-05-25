@@ -1,156 +1,86 @@
 # solr-moodle-docker
 
-Lokale Solr 9.10.1 Umgebung fuer Moodle Global Search (Standalone + SolrCloud) mit Multi-Tenant Verwaltung.
+Einfacher Solr-Stack für Moodle Global Search (Standalone + optional SolrCloud) mit Multi-Tenant.
 
-## TL;DR
+## Schnellstart
 
 ```bash
 git clone https://github.com/Codename-Beast/solr-moodle-docker
 cd solr-moodle-docker
 cp .env.example .env
-# WICHTIG: sichere Passwoerter setzen (nicht CHANGE_ME)
+# WICHTIG: Passwörter in .env setzen (kein CHANGE_ME)
 docker compose up -d --build
 ```
 
-Healthcheck:
+Prüfen:
 
 ```bash
 docker compose ps
 curl -u "admin:<SOLR_ADMIN_PASSWORD>" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/info/system"
 ```
 
-## Was ist neu / wichtig
+## Was der Stack macht
 
-- SolrCloud Security-Bootstrap ueber `scripts/solr-cloud-entrypoint.sh` (security.json in ZK)
-- Setup idempotent: bestehende `.env` wird bei Re-Run nicht ueberschrieben
-- `tenants.env` Rechte fuer Solr UID 8983
-- Placeholder-Passwoerter werden fail-fast abgelehnt
-- Ports bleiben dynamisch (`SOLR_PORT`) in Compose + Healthchecks
-- GitHub Actions + GitLab CI auf Multi-Tenant/SolrCloud Tests ausgerichtet
+- Solr inkl. `security.json` Bootstrap aus `.env` + `tenants.env`
+- Tika `/update/extract` für Datei-Indexierung (PDF, Office, Bilder-Metadaten)
+- Tenant-Verwaltung über `scripts/solr-tenant.sh`
+- Tests für Standalone + SolrCloud
 
-## Wichtige Dateien
-
-- `.env.example` -> Runtime-Parameter
-- `docker-compose.yml` -> Solr + Init
-- `init/powerinit.sh` -> erzeugt `security.json` aus `.env` + `tenants.env`
-- `scripts/solr-tenant.sh` -> Tenant Verwaltung
-- `scripts/run-tests.sh` -> lokale Test-Suite
-- `config/managed-schema` -> Moodle Felder
-- `config/solrconfig.xml` -> Handler/Caches/Commit-Verhalten
-
-## Multi-Tenant Basics
-
-Tenant erstellen:
+## Multi-Tenant Befehle
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create schule_a --cores moodle_prod_a,moodle_test_a
-```
+# Tenant anlegen
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create schule_a --cores moodle_prod_a
 
-Liste:
-
-```bash
+# Liste
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh list
-```
 
-Passwort rotieren:
-
-```bash
+# Passwort rotieren
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh passwd schule_a
+
+# Source-of-Truth abgleichen (.env + tenants.env -> API)
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh sync-sot
 ```
 
-Idempotent aus `tenants.env` anwenden:
+## SolrCloud (optional)
+
+In `.env` setzen:
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh apply
-```
-
-## SolrCloud aktivieren
-
-```bash
-# .env
 SOLR_MODE=solrcloud
 ```
 
-Danach:
+Dann neu starten:
 
 ```bash
 docker compose up -d --build
-curl -u "admin:<SOLR_ADMIN_PASSWORD>" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/collections?action=LIST&wt=json"
 ```
 
 ## Tests
 
-Alles:
-
 ```bash
 ./scripts/run-tests.sh
+./scripts/test-moodle-documents.sh
 ```
 
-Nur Teilbereiche:
+## Wichtige Hinweise
 
-```bash
-./scripts/run-tests.sh --unit-only
-./scripts/run-tests.sh --integration-only --no-cleanup
-./scripts/run-tests.sh --security-only --no-cleanup
-./scripts/run-tests.sh --tenant
-./scripts/run-tests.sh --cloud
-```
+- `SOLR_BIND` sollte `127.0.0.1` bleiben (Zugriff extern über Proxy).
+- `tenants.env` enthält Secrets und darf nicht in Git.
+- Monitoring-Dokumentation ist vorhanden, wird aber in diesem Repo nicht aktiv weiterentwickelt.
 
-## CI
+## Relevante Dateien
 
-GitHub Actions:
-- `.github/workflows/solr-testing.yml`
-- Lint, Security Scan, Standalone Tests, SolrCloud Tests
+- `docker-compose.yml`
+- `config/managed-schema`
+- `config/solrconfig.xml`
+- `scripts/solr-tenant.sh`
+- `scripts/run-tests.sh`
+- `scripts/test-moodle-documents.sh`
 
-GitLab CI:
-- `.gitlab-ci.yml`
-- Docker-in-Docker (DinD) fuer reproduzierbare Runner ohne Host-Socket-Abhaengigkeit
+## Weitere Doku
 
-## Solr Doku-basierte Tweaks (bereits umgesetzt)
-
-- `/update/extract` ist aktiv (ExtractingRequestHandler)
-- Tika-Metadaten werden per `uprefix=ignored_` abgefangen
-- `fmap.content=solr_filecontent` mappt extrahierten Datei-Text gezielt ins Moodle-Dateifeld
-- `autoSoftCommit` + `autoCommit` sind fuer NRT-Suche gesetzt
-- CaffeineCache ist fuer Query-Caches aktiv
-
-Hinweis: grosse Uploads steuern ueber `multipartUploadLimitInKB` in `solrconfig.xml`.
-
-## Betrieb
-
-```bash
-docker compose logs -f solr
-docker compose restart
-docker compose down
-docker compose down -v
-```
-
-## Sicherheit
-
-- Bind nur lokal: `SOLR_BIND=127.0.0.1`
-- BasicAuth aktiv (admin/support/tenant)
-- `SOLR_MODULES=extraction` fuer Moodle File Indexing
-- Hardening Flags in `SOLR_OPTS`
-- `tenants.env` enthaelt Secrets -> nicht committen
-
-## Ansible Rolle
-
-Passend dazu:
-- `ansible-role-solr`
-
-Syntaxcheck lokal:
-
-```bash
-cd /home/bernd/ansible-role-solr
-ansible-playbook -i .ci/ansible/test-inventory/hosts \
-  -e @.ci/ansible/test-inventory/host_vars/localhost.yml \
-  -e "hosts=localhost" \
-  examples/install_solr.yml --syntax-check
-```
-
-## Kompatibilitaet zur Ansible-Rolle
-
-| solr-moodle-docker | ansible-role-solr | Hinweis |
-|---|---|---|
-| v2.3.2 | 1.9.8 - 1.9.10 (Default) | empfohlene Kombination |
-| v3.x | nur mit explizitem `solr_repo_version` Override | vor Einsatz Tenant/Auth-Flow testen |
+- `docs/architecture.md`
+- `docs/CI-CD.md`
+- `docs/monitoring.md`
+- `CHANGELOG.md`

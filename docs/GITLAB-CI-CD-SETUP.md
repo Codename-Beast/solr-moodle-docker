@@ -1,3 +1,6 @@
+> Hinweis (Release 1.0): Diese Doku wurde vereinfacht und auf den aktuellen Stand gebracht.
+> Monitoring ist optional und aktuell nicht im aktiven Ausbau.
+
 # GitLab CI/CD Setup Guide
 
 **Autor:** BSC Bernd Schreistetter | **Eledia GmbH**
@@ -140,21 +143,21 @@ Default Docker image: docker:27.0.7
 concurrent = 2
 
 [[runners]]
- name = "docker-runner-solr"
- url = "https://gitlab.com/"
- token = "YOUR_TOKEN"
- executor = "docker"
+name = "docker-runner-solr"
+url = "https://gitlab.com/"
+token = "YOUR_TOKEN"
+executor = "docker"
 
- [runners.docker]
-   image = "docker:27.0.7"
-   privileged = true  # noetig fuer Docker-in-Docker
-   volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]
-   pull_policy = ["if-not-present"]
+[runners.docker]
+image = "docker:27.0.7"
+privileged = true  # noetig fuer Docker-in-Docker
+volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]
+pull_policy = ["if-not-present"]
 
- [runners.cache]
-   Type = "local"
-   Path = "/var/lib/gitlab-runner/cache"
-   Shared = true
+[runners.cache]
+Type = "local"
+Path = "/var/lib/gitlab-runner/cache"
+Shared = true
 ```
 
 ### Starten und pruefen
@@ -183,8 +186,8 @@ Falls du trotzdem welche brauchst (**Settings → CI/CD → Variables → Add Va
 
 ```yaml
 variables:
- SOLR_VERSION: ${SOLR_VERSION:-9.10.1}
- SOLR_HEAP: ${SOLR_HEAP:-2g}
+SOLR_VERSION: ${SOLR_VERSION:-9.10.1}
+SOLR_HEAP: ${SOLR_HEAP:-2g}
 ```
 
 ---
@@ -218,8 +221,8 @@ Oder Self-Hosted Runner registrieren (siehe oben).
 In `/etc/gitlab-runner/config.toml`:
 ```toml
 [runners.docker]
- privileged = true
- volumes = ["/var/run/docker.sock:/var/run/docker.sock"]
+privileged = true
+volumes = ["/var/run/docker.sock:/var/run/docker.sock"]
 ```
 Dann `sudo gitlab-runner restart`.
 
@@ -235,7 +238,7 @@ sudo systemctl restart gitlab-runner
 In `.gitlab-ci.yml` Timeout erhoehen:
 ```yaml
 test:integration:
- timeout: 15 minutes
+timeout: 15 minutes
 ```
 
 ### "docker compose: command not found"
@@ -243,7 +246,7 @@ test:integration:
 In `.gitlab-ci.yml`:
 ```yaml
 before_script:
- - apk add --no-cache docker-compose
+- apk add --no-cache docker-compose
 ```
 
 ---
@@ -253,19 +256,19 @@ before_script:
 **Caching:**
 ```yaml
 test:integration:
- cache:
-   key: ${CI_COMMIT_REF_SLUG}
-   paths:
-     - .env
-     - docker-images/
+cache:
+key: ${CI_COMMIT_REF_SLUG}
+paths:
+- .env
+- docker-images/
 ```
 
 **Nur relevante Branches:**
 ```yaml
 rules:
- - if: '$CI_MERGE_REQUEST_ID'
- - if: '$CI_COMMIT_BRANCH == "main"'
- - if: '$CI_COMMIT_TAG'
+- if: '$CI_MERGE_REQUEST_ID'
+- if: '$CI_COMMIT_BRANCH == "main"'
+- if: '$CI_COMMIT_TAG'
 ```
 
 **Protected Branches:** Settings → Repository → Protected Branches: `main` nur Maintainer.

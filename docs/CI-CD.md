@@ -1,3 +1,6 @@
+> Hinweis (Release 1.0): Diese Doku wurde vereinfacht und auf den aktuellen Stand gebracht.
+> Monitoring ist optional und aktuell nicht im aktiven Ausbau.
+
 # CI/CD Pipeline
 
 Tests laufen bei jedem Push — GitHub Actions und GitLab CI.
