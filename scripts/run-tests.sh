@@ -724,9 +724,9 @@ moodle_document_tests() {
         ((TESTS_FAILED += MOODLE_FAILED))
 
         if [ "$MOODLE_FAILED" -eq 0 ]; then
-            print_pass "Moodle document tests completed successfully ($MOODLE_PASSED/$MOODLE_TESTS)"
+            echo -e "${GREEN}[PASS]${NC} Moodle document tests completed successfully ($MOODLE_PASSED/$MOODLE_TESTS)"
         else
-            print_fail "Some Moodle document tests failed ($MOODLE_FAILED failures)"
+            echo -e "${RED}[FAIL]${NC} Some Moodle document tests failed ($MOODLE_FAILED failures)"
             FAILED_TESTS+=("Moodle document tests ($MOODLE_FAILED failures)")
         fi
     else
