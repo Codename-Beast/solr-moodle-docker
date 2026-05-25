@@ -116,6 +116,8 @@
 
   <!-- File content (indexed only — text extracted by Tika from PDF/Office/etc.) -->
   <field name="solr_filecontent" type="text_general" indexed="true" stored="false" multiValued="false"/>
+  <!-- Keep backward compatibility for tools querying solr_filecontent explicitly. -->
+  <copyField source="content" dest="solr_filecontent"/>
 
   <!-- ===============================
        System Fields

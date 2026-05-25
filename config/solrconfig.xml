@@ -175,7 +175,8 @@
       <str name="captureAttr">false</str>
       <!-- Keep literal.* metadata authoritative for Moodle-required fields (id, contextid, etc.). -->
       <str name="literalsOverride">true</str>
-      <str name="fmap.content">solr_filecontent</str>
+      <!-- Map extracted body text to Moodle's canonical searchable field. -->
+      <str name="fmap.content">content</str>
       <str name="fmap.a">links</str>
       <str name="fmap.div">ignored_</str>
     </lst>
