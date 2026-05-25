@@ -113,6 +113,10 @@ print_info() {
   echo -e "${YELLOW}[INFO]${NC} $1"
 }
 
+print_skip() {
+  echo -e "${YELLOW}[SKIP]${NC} $1"
+}
+
 # Solr API helper
 solr_post() {
   local endpoint="$1"
@@ -449,15 +453,31 @@ assert_min_hits \
   "select?q=*:*&fq=contextid:(12345%20OR%2012350)&wt=json" \
   3
 
-assert_min_hits \
-  "Moodle group visibility pattern (group/context fallback)" \
-  "select?q=*:*&fq=(*:*%20-groupid:%5B*%20TO%20*%5D)%20OR%20groupid:(0)%20OR%20(*:*%20-contextid:(12345))&wt=json" \
-  7
+print_test "Moodle group visibility pattern (group/context fallback) [POST]"
+GROUP_VIS_RESULT=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+  -X POST "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/select?wt=json" \
+  --data-urlencode 'q=*:*' \
+  --data-urlencode 'fq=(*:* -groupid:[* TO *]) OR groupid:(0) OR (*:* -contextid:(12345))')
+GROUP_VIS_FOUND=$(echo "$GROUP_VIS_RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
+if [ "$GROUP_VIS_FOUND" -ge 7 ]; then
+  print_pass "Found $GROUP_VIS_FOUND documents (expected >= 7)"
+else
+  print_fail "Found $GROUP_VIS_FOUND documents (expected >= 7)"
+fi
 
-assert_min_hits \
-  "Combined Moodle query (q=Solr + course + area + owner filters)" \
-  "select?q=Solr&fq=%7B!cache=false%7Dcourseid:(5%20OR%206)&fq=%7B!cache=false%7Dareaid:(mod_forum-posts%20OR%20mod_wiki-pages%20OR%20mod_assign-activity)&fq=owneruserid:(-1%20OR%20123%20OR%20156%20OR%2045)&wt=json" \
-  3
+print_test "Combined Moodle query (q=Solr + course + area + owner filters) [POST]"
+COMBINED_RESULT=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+  -X POST "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/select?wt=json" \
+  --data-urlencode 'q=Solr' \
+  --data-urlencode 'fq={!cache=false}courseid:(5 OR 6)' \
+  --data-urlencode 'fq={!cache=false}areaid:(mod_forum-posts OR mod_wiki-pages OR mod_assign-activity)' \
+  --data-urlencode 'fq=owneruserid:(-1 OR 123 OR 156 OR 45)')
+COMBINED_FOUND=$(echo "$COMBINED_RESULT" | jq -r '.response.numFound' 2>/dev/null || echo "0")
+if [ "$COMBINED_FOUND" -ge 3 ]; then
+  print_pass "Found $COMBINED_FOUND documents (expected >= 3)"
+else
+  print_fail "Found $COMBINED_FOUND documents (expected >= 3)"
+fi
 
 # Highlighting
 print_header "HIGHLIGHTING TEST"
@@ -538,6 +558,15 @@ fi
 # PDF / Tika extraction test
 print_header "TIKA FILE INDEXING TEST"
 
+FIXTURE_SCRIPT="tests/create-moodle-fixtures.sh"
+if [ -f "$FIXTURE_SCRIPT" ]; then
+  print_info "Generating file fixtures via ${FIXTURE_SCRIPT}"
+  sh "$FIXTURE_SCRIPT" >/tmp/_fixture_gen.log 2>&1 || {
+    print_fail "Fixture generation failed"
+    sed 's/^/[FIXTURE] /' /tmp/_fixture_gen.log | head -n 20
+  }
+fi
+
 PDF_FILE="tests/test-moodle-document.pdf"
 if [ -f "$PDF_FILE" ]; then
   # Step 1: verify Tika extracts text from the PDF
@@ -549,7 +578,7 @@ if [ -f "$PDF_FILE" ]; then
   if [ "$TIKA_RESP" = "200" ]; then
     print_pass "Tika extraction endpoint reachable (HTTP 200)"
     # Verify extracted text contains known keyword
-    if grep -q "ELEDIA_TIKA_TEST_MARKER" /tmp/_tika_resp 2>/dev/null; then
+    if grep -q "ELEDIA TIKA TEST MARKER" /tmp/_tika_resp 2>/dev/null; then
       print_pass "Tika extracted PDF text content correctly (marker found)"
     else
       print_fail "Tika returned 200 but extracted content missing expected marker"
@@ -574,7 +603,7 @@ if [ -f "$PDF_FILE" ]; then
     # query and a fallback multi-term query.
     sleep 1
     print_test "PDF content searchable: query for marker keyword"
-    SEARCH_RESP=$(solr_get "select?q=ELEDIA_TIKA_TEST_MARKER&wt=json")
+    SEARCH_RESP=$(solr_get "select?q=ELEDIA+TIKA+TEST+MARKER&wt=json")
     FOUND=$(echo "$SEARCH_RESP" | jq -r '.response.numFound' 2>/dev/null || echo "0")
     if [ "$FOUND" -ge 1 ]; then
       print_pass "PDF content is searchable: found $FOUND document(s) containing marker"
@@ -603,8 +632,62 @@ if [ -f "$PDF_FILE" ]; then
   rm -f /tmp/_tika_resp
 else
   print_skip "Test PDF not found at $PDF_FILE — skipping Tika tests"
-  print_info "Generate with: python3 tests/create-test-pdf.py (or see tests/README)"
+  print_info "Generate with: sh tests/create-moodle-fixtures.sh"
 fi
+
+# Multi-format Tika checks (text files, HTML, CSV, RTF, image metadata)
+print_header "MULTI-FORMAT FILE TESTS"
+
+FILE_FIXTURES=(
+  "tests/fixture-notes.txt|tika_fixture_txt|ELEDIA TIKA TEST MARKER"
+  "tests/fixture-course-overview.html|tika_fixture_html|ELEDIA HTML FIXTURE MARKER"
+  "tests/fixture-gradebook.csv|tika_fixture_csv|workplace indexing"
+  "tests/fixture-announcement.rtf|tika_fixture_rtf|ELEDIA RTF FIXTURE MARKER"
+  "tests/fixture-campus-photo.png|tika_fixture_png|"
+)
+
+for spec in "${FILE_FIXTURES[@]}"; do
+  IFS='|' read -r file_path doc_id marker <<< "$spec"
+
+  if [ ! -f "$file_path" ]; then
+    print_skip "Fixture missing: $file_path"
+    continue
+  fi
+
+  print_test "Tika index fixture: $(basename "$file_path")"
+  idx_code=$(curl -s -o /tmp/_tika_idx -w '%{http_code}' \
+    -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    -F "file=@${file_path}" \
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/update/extract?commit=true&literal.id=${doc_id}&literal.title=$(basename "$file_path")&literal.areaid=test_files&literal.contextid=99999&literal.itemid=1&literal.courseid=1&literal.owneruserid=1&literal.modified=2026-01-01T00:00:00Z&literal.type=1&wt=json" 2>/dev/null)
+
+  if [ "$idx_code" = "200" ]; then
+    print_pass "Indexed $(basename "$file_path")"
+    ((DOCS_INDEXED++))
+  else
+    print_fail "Indexing failed for $(basename "$file_path") (HTTP $idx_code)"
+    sed 's/^/[IDX] /' /tmp/_tika_idx | head -n 10
+    continue
+  fi
+
+  assert_min_hits "Indexed doc retrievable by id: ${doc_id}" \
+    "select?q=id:${doc_id}&rows=1&wt=json" 1
+
+  if [ -n "$marker" ]; then
+    print_test "Tika extractOnly validates content in $(basename "$file_path")"
+    extract_code=$(curl -s -o /tmp/_tika_extract -w '%{http_code}' \
+      -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+      -F "file=@${file_path}" \
+      "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/update/extract?extractOnly=true&wt=json" 2>/dev/null)
+
+    if [ "$extract_code" = "200" ] && grep -qi "$marker" /tmp/_tika_extract; then
+      print_pass "Extracted text contains expected marker"
+    else
+      print_fail "extractOnly did not return expected marker for $(basename "$file_path")"
+      sed 's/^/[EXTRACT] /' /tmp/_tika_extract | head -n 10
+    fi
+  fi
+done
+rm -f /tmp/_tika_idx /tmp/_tika_extract /tmp/_fixture_gen.log
 
 # Abort if no documents were indexed — cleanup would be misleading
 if [ "$DOCS_INDEXED" -eq 0 ]; then
@@ -648,25 +731,81 @@ fi
 print_header "SOLR LOG HEALTHCHECK"
 print_test "No actionable ERROR/SEVERE in recent Solr logs"
 SOLR_LOG_TAIL=$(docker compose logs --no-color --tail=400 solr 2>/dev/null || true)
+LOG_REPORT="tests/solr-log-findings.md"
+{
+  echo "# Solr Log Findings"
+  echo ""
+  echo "Generated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+  echo ""
+  echo "## Scope"
+  echo "- Source: docker compose logs --tail=400 solr"
+  echo "- Focus: actionable WARN/ERROR/SEVERE related to Moodle/Solr indexing and query behavior"
+  echo ""
+} > "$LOG_REPORT"
 
 SOLR_ERRORS=$(echo "$SOLR_LOG_TAIL" | grep -E '^[^|]*\| .*\b(ERROR|SEVERE)\b\s+\(' | grep -Evi 'SSL is off|No appenders could be found' || true)
 if [ -z "$SOLR_ERRORS" ]; then
   print_pass "No actionable ERROR/SEVERE lines found in recent Solr logs"
+  {
+    echo "## ERROR/SEVERE"
+    echo "none"
+    echo ""
+  } >> "$LOG_REPORT"
 else
   print_fail "Actionable ERROR/SEVERE lines detected in Solr logs"
   print_info "First findings:"
   echo "$SOLR_ERRORS" | head -n 8 | sed 's/^/[LOG] /'
+  {
+    echo "## ERROR/SEVERE"
+    echo '```'
+    echo "$SOLR_ERRORS" | head -n 50
+    echo '```'
+    echo ""
+  } >> "$LOG_REPORT"
 fi
 
 print_test "No actionable WARN lines in recent Solr logs"
-SOLR_WARNINGS=$(echo "$SOLR_LOG_TAIL" | grep -Ei '\bWARN\b' | grep -Evi 'SSL is off|deprecated|deprecation' || true)
+SOLR_WARNINGS=$(echo "$SOLR_LOG_TAIL" | grep -Ei '\bWARN\b' | grep -Evi 'SSL is off|deprecated|deprecation|Jetty request logging enabled|MessagingBinders .*DataSource.*not found|FileSystemFontProvider New fonts found|FileSystemFontProvider Building on-disk font cache|FileSystemFontProvider Finished building on-disk font cache|PDType1Font Using fallback font LiberationSans' || true)
 if [ -z "$SOLR_WARNINGS" ]; then
   print_pass "No actionable WARN lines found in recent Solr logs"
+  {
+    echo "## WARN"
+    echo "none"
+    echo ""
+  } >> "$LOG_REPORT"
 else
   print_fail "Actionable WARN lines detected in Solr logs"
   print_info "First findings:"
   echo "$SOLR_WARNINGS" | head -n 8 | sed 's/^/[LOG] /'
+  {
+    echo "## WARN"
+    echo '```'
+    echo "$SOLR_WARNINGS" | head -n 80
+    echo '```'
+    echo ""
+  } >> "$LOG_REPORT"
 fi
+print_test "No URI size overflow warnings in Solr logs"
+SOLR_URI_WARN=$(echo "$SOLR_LOG_TAIL" | grep -E 'URI is too large' || true)
+if [ -z "$SOLR_URI_WARN" ]; then
+  print_pass "No URI size overflow warnings found"
+  {
+    echo "## URI length"
+    echo "none"
+    echo ""
+  } >> "$LOG_REPORT"
+else
+  print_fail "URI size overflow warnings detected (Jetty HttpParser)"
+  echo "$SOLR_URI_WARN" | head -n 8 | sed 's/^/[LOG] /'
+  {
+    echo "## URI length"
+    echo '```'
+    echo "$SOLR_URI_WARN" | head -n 50
+    echo '```'
+    echo ""
+  } >> "$LOG_REPORT"
+fi
+print_info "Log findings written to ${LOG_REPORT}"
 
 # Summary
 print_header "TEST SUMMARY"

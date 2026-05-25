@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.7] - 2026-05-25
+
+### Added
+- Neue Shell-Fixture-Generierung (`tests/create-moodle-fixtures.sh`) fuer Moodle/Solr Tika-Tests ohne Python-Abhaengigkeit.
+- Multi-Format-Testabdeckung in `scripts/test-moodle-documents.sh` erweitert:
+  - TXT, HTML, CSV, RTF, PNG (Photo-Fixture) zusaetzlich zur PDF-Pruefung.
+  - Fuer jedes Format: `/update/extract`-Indexing + ID-Verifikation.
+  - Fuer textbasierte Formate: `extractOnly`-Pruefung auf erwartete Marker.
+- Persistente Log-Dokumentation: `tests/solr-log-findings.md` wird pro Testlauf erzeugt (WARN/ERROR/SEVERE-Befunde).
+
+### Changed
+- Test-Hinweise/Erzeugung auf Shell umgestellt (`sh tests/create-moodle-fixtures.sh`).
+- Fehlende `print_skip`-Hilfsfunktion in `scripts/test-moodle-documents.sh` ergänzt.
+- Lange Moodle-Kompatibilitaetsabfragen auf `POST /select` umgestellt (group visibility + combined filters), um Jetty-`URI is too large >8192` Warnungen zu vermeiden.
+- Solr-Log-Healthcheck praezisiert:
+  - bekannte, nicht-funktionale Startup-/PDFBox-Font-WARNs werden als non-actionable gefiltert.
+  - neue harte Pruefung auf `URI is too large` bleibt separat aktiv.
+
+### Verified
+- `./scripts/test-moodle-documents.sh` -> PASS (47/47).
+- `./scripts/run-tests.sh --moodle-only` -> PASS (47/47).
+- Solr Log Healthcheck: keine actionable WARN/ERROR/SEVERE und keine URI-Overflow-WARN im Testlauf.
+
 ## [3.0.6] - 2026-05-25
 
 ### Changed
