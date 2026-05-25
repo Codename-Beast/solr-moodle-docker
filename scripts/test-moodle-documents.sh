@@ -136,6 +136,23 @@ solr_get() {
     "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE}/${endpoint}"
 }
 
+assert_min_hits() {
+  local test_name="$1"
+  local endpoint="$2"
+  local min_hits="$3"
+
+  print_test "$test_name"
+  local result num_found
+  result=$(solr_get "$endpoint")
+  num_found=$(echo "$result" | jq -r '.response.numFound' 2>/dev/null || echo "0")
+
+  if [ "$num_found" -ge "$min_hits" ]; then
+    print_pass "Found $num_found documents (expected >= $min_hits)"
+  else
+    print_fail "Found $num_found documents (expected >= $min_hits)"
+  fi
+}
+
 # =========================================
 # MOODLE TEST DOCUMENTS (Realistic Data)
 # =========================================
@@ -409,6 +426,39 @@ else
   print_fail "Expected at least 2 documents, found $NUM_FOUND"
 fi
 
+# Moodle engine-like query patterns (validated against Moodle 4.1-5.2 Solr engine fq usage)
+print_header "MOODLE 4.1-5.2 QUERY COMPATIBILITY"
+
+assert_min_hits \
+  "Moodle-style course filter ({!cache=false}courseid:(5 OR 6))" \
+  "select?q=*:*&fq=%7B!cache=false%7Dcourseid:(5%20OR%206)&wt=json" \
+  4
+
+assert_min_hits \
+  "Moodle-style area filter ({!cache=false}areaid:(mod_forum-posts OR core_course))" \
+  "select?q=*:*&fq=%7B!cache=false%7Dareaid:(mod_forum-posts%20OR%20core_course)&wt=json" \
+  3
+
+assert_min_hits \
+  "Moodle owner visibility filter (owneruserid:(-1 OR 123))" \
+  "select?q=*:*&fq=owneruserid:(%5C-1%20OR%20123)&wt=json" \
+  3
+
+assert_min_hits \
+  "Moodle context filter (contextid:(12345 OR 12350))" \
+  "select?q=*:*&fq=contextid:(12345%20OR%2012350)&wt=json" \
+  3
+
+assert_min_hits \
+  "Moodle group visibility pattern (group/context fallback)" \
+  "select?q=*:*&fq=(*:*%20-groupid:%5B*%20TO%20*%5D)%20OR%20groupid:(0)%20OR%20(*:*%20-contextid:(12345))&wt=json" \
+  7
+
+assert_min_hits \
+  "Combined Moodle query (q=Solr + course + area + owner filters)" \
+  "select?q=Solr&fq=%7B!cache=false%7Dcourseid:(5%20OR%206)&fq=%7B!cache=false%7Dareaid:(mod_forum-posts%20OR%20mod_wiki-pages%20OR%20mod_assign-activity)&fq=owneruserid:(-1%20OR%20123%20OR%20156%20OR%2045)&wt=json" \
+  3
+
 # Highlighting
 print_header "HIGHLIGHTING TEST"
 print_test "Highlighting (hl=true, hl.fl=title,content)"
@@ -592,6 +642,30 @@ if [ "$KEEP_DOCUMENTS" = false ]; then
   else
     print_fail "Index still contains $REMAINING_DOCS documents"
   fi
+fi
+
+# Solr log validation after query workload
+print_header "SOLR LOG HEALTHCHECK"
+print_test "No actionable ERROR/SEVERE in recent Solr logs"
+SOLR_LOG_TAIL=$(docker compose logs --no-color --tail=400 solr 2>/dev/null || true)
+
+SOLR_ERRORS=$(echo "$SOLR_LOG_TAIL" | grep -E '^[^|]*\| .*\b(ERROR|SEVERE)\b\s+\(' | grep -Evi 'SSL is off|No appenders could be found' || true)
+if [ -z "$SOLR_ERRORS" ]; then
+  print_pass "No actionable ERROR/SEVERE lines found in recent Solr logs"
+else
+  print_fail "Actionable ERROR/SEVERE lines detected in Solr logs"
+  print_info "First findings:"
+  echo "$SOLR_ERRORS" | head -n 8 | sed 's/^/[LOG] /'
+fi
+
+print_test "No actionable WARN lines in recent Solr logs"
+SOLR_WARNINGS=$(echo "$SOLR_LOG_TAIL" | grep -Ei '\bWARN\b' | grep -Evi 'SSL is off|deprecated|deprecation' || true)
+if [ -z "$SOLR_WARNINGS" ]; then
+  print_pass "No actionable WARN lines found in recent Solr logs"
+else
+  print_fail "Actionable WARN lines detected in Solr logs"
+  print_info "First findings:"
+  echo "$SOLR_WARNINGS" | head -n 8 | sed 's/^/[LOG] /'
 fi
 
 # Summary
