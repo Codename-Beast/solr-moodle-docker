@@ -22,7 +22,7 @@ services:
       - solr_data:/var/solr/data
       - ./.env:/.env:ro,z
       - ./tenants.env:/opt/solr/tenants.env:ro,z
-      - ${ELEDIA_LOG_ROOT:-/var/log/eledia}:/var/log/solr:z
+      - ${SOLR_LOG_INSTANCES_ROOT:-/var/log/solr/instances}/${INSTANCE_NAME:-solr}-init:/var/log/solr:z
     env_file:
       - .env
     environment:
@@ -59,9 +59,10 @@ services:
     user: "8983:8983"
     volumes:
       - solr_data:/var/solr/data
-      - ./scripts:/opt/solr/scripts:ro,z
+      # Runtime helper scripts are baked into Dockerfile.solr at /opt/solr/scripts.
+      # Keep tenants.env mounted as mutable tenant source-of-truth.
       - ./tenants.env:/opt/solr/tenants.env:z
-      - ${ELEDIA_LOG_ROOT:-/var/log/eledia}:/var/log/solr:z
+      - ${SOLR_LOG_INSTANCES_ROOT:-/var/log/solr/instances}/${INSTANCE_NAME:-solr}-solr:/var/log/solr:z
     env_file:
       - .env
     environment:

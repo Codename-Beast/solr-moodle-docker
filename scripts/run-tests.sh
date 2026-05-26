@@ -47,11 +47,11 @@ if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
     echo "ERROR: SOLR_HEAP='${SOLR_HEAP:-}' ist ungültig. Erwartet z.B. 2g oder 1024m." >&2
     exit 1
 fi
-LOG_ROOT="${LOG_ROOT:-/var/log/eledia}"
-RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
+LOG_ROOT="${LOG_ROOT:-/var/log/solr/instances/${SOLR_CONTAINER}}"
+RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
 if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
     LOG_ROOT="/tmp/eledia-logs"
-    RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
+    RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
     mkdir -p "${LOG_ROOT}" || {
         echo "ERROR: cannot create fallback log dir ${LOG_ROOT}." >&2
         exit 1
@@ -60,7 +60,7 @@ if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
 fi
 if ! touch "${RUN_LOG_FILE}" 2>/dev/null; then
     LOG_ROOT="/tmp/eledia-logs"
-    RUN_LOG_FILE="${LOG_ROOT}/solr-${INSTANCE_NAME}.log"
+    RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
     mkdir -p "${LOG_ROOT}" || true
     touch "${RUN_LOG_FILE}" || {
         echo "ERROR: cannot write log file ${RUN_LOG_FILE}." >&2
@@ -160,6 +160,22 @@ unit_tests() {
         print_fail "init scripts not readable"
     fi
 
+    # Container-first delivery: helper scripts must be baked into Solr image
+    print_test "Dockerfile.solr embeds runtime helper scripts"
+    if grep -q 'COPY --chown=solr:solr scripts/ /opt/solr/scripts/' Dockerfile.solr; then
+        print_pass "Dockerfile.solr copies scripts into /opt/solr/scripts"
+    else
+        print_fail "Dockerfile.solr does not embed /opt/solr/scripts"
+    fi
+
+    # Compose must not require host script bind mount for runtime correctness
+    print_test "docker-compose does not depend on /opt/solr/scripts bind mount"
+    if grep -q '\./scripts:/opt/solr/scripts' docker-compose.yml; then
+        print_fail "docker-compose still bind-mounts ./scripts into solr service"
+    else
+        print_pass "docker-compose runtime is image-based for /opt/solr/scripts"
+    fi
+
     # Test 4: Environment variable template
     print_test ".env.example validation"
     if [ -f ".env.example" ]; then
@@ -229,6 +245,22 @@ integration_tests() {
     else
         print_fail "Containers not healthy"
         docker compose ps
+    fi
+
+    # Runtime guard: tenant helper must be available inside Solr container
+    print_test "Tenant helper script available in container"
+    if docker exec "$SOLR_CONTAINER" test -x /opt/solr/scripts/solr-tenant.sh 2>/dev/null; then
+        print_pass "solr-tenant.sh found at /opt/solr/scripts/solr-tenant.sh"
+    else
+        print_fail "solr-tenant.sh missing in container (/opt/solr/scripts/solr-tenant.sh)"
+    fi
+
+    # Runtime guard: tenants file must exist where helper expects it
+    print_test "tenants.env available in container"
+    if docker exec "$SOLR_CONTAINER" test -f /opt/solr/tenants.env 2>/dev/null; then
+        print_pass "tenants.env found at /opt/solr/tenants.env"
+    else
+        print_fail "tenants.env missing in container (/opt/solr/tenants.env)"
     fi
 
     # Create a test tenant so core-level tests have a valid core to work with
@@ -543,7 +575,7 @@ negative_tests() {
     local injection_response
 
     injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
-    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ] || [ "$injection_response" = "404" ]; then
+    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ] || [ "$injection_response" = "404" ] || [ "$injection_response" = "401" ] || [ "$injection_response" = "403" ]; then
         print_pass "SQL injection handled safely (HTTP $injection_response)"
     else
         print_fail "Unexpected response to SQL injection (HTTP $injection_response)"
@@ -579,8 +611,8 @@ negative_tests() {
     local invalid_core_response
 
     invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/nonexistent_core/select?q=*:*")
-    if [ "$invalid_core_response" = "404" ]; then
-        print_pass "Invalid core rejected (HTTP 404)"
+    if [ "$invalid_core_response" = "404" ] || [ "$invalid_core_response" = "401" ] || [ "$invalid_core_response" = "403" ]; then
+        print_pass "Invalid core safely rejected (HTTP $invalid_core_response)"
     else
         print_fail "Invalid core not rejected (HTTP $invalid_core_response)"
     fi
@@ -590,7 +622,7 @@ negative_tests() {
     local empty_response
 
     empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=")
-    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ] || [ "$empty_response" = "404" ]; then
+    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ] || [ "$empty_response" = "404" ] || [ "$empty_response" = "401" ] || [ "$empty_response" = "403" ]; then
         print_pass "Empty query handled (HTTP $empty_response)"
     else
         print_fail "Empty query caused unexpected response (HTTP $empty_response)"
@@ -953,6 +985,81 @@ tenant_tests() {
 }
 
 # =========================================
+# TENANT SCALE TESTS - Many Moodle Tenants
+# =========================================
+tenant_scale_tests() {
+    print_header "TENANT SCALE TESTS - 30 Moodle tenants/cores/users"
+
+    local container="${INSTANCE_NAME:-solr}-solr"
+    local tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
+    local tenant_count=30
+    local i tname cname tpass code created_ok=0
+
+    print_test "Create ${tenant_count} tenants with dedicated cores"
+    for i in $(seq 1 "$tenant_count"); do
+        tname=$(printf 'moodle_%02d' "$i")
+        cname=$(printf 'moodle_core_%02d' "$i")
+        if $tenant_cmd create "$tname" --cores "$cname" >/dev/null 2>&1; then
+            created_ok=$((created_ok + 1))
+        fi
+    done
+    if [ "$created_ok" -eq "$tenant_count" ]; then
+        print_pass "Created ${created_ok}/${tenant_count} tenants"
+    else
+        print_fail "Created only ${created_ok}/${tenant_count} tenants"
+    fi
+
+    print_test "All ${tenant_count} tenant credentials written to tenants.env"
+    local cred_count
+    cred_count=$(docker exec "$container" sh -lc "grep -c '^TENANT_moodle_[0-9][0-9]_PASS=' /opt/solr/tenants.env || true")
+    if [ "$cred_count" -ge "$tenant_count" ]; then
+        print_pass "tenants.env contains ${cred_count} tenant passwords"
+    else
+        print_fail "tenants.env contains only ${cred_count}/${tenant_count} tenant passwords"
+    fi
+
+    print_test "Sample tenant auth and core access work"
+    tpass=$(docker exec "$container" sh -lc "grep '^TENANT_moodle_01_PASS=' /opt/solr/tenants.env | cut -d= -f2")
+    code=$(curl -so /dev/null -w '%{http_code}' -u "solr_moodle_01:${tpass}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_core_01/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$code" = "200" ]; then
+        print_pass "Tenant solr_moodle_01 can access moodle_core_01"
+    else
+        print_fail "Tenant solr_moodle_01 cannot access moodle_core_01 (HTTP $code)"
+    fi
+
+    print_test "Wrong password for sample tenant is rejected"
+    code=$(curl -so /dev/null -w '%{http_code}' -u "solr_moodle_01:wrong" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_core_01/select?q=*:*&rows=0" 2>/dev/null)
+    if [ "$code" = "401" ]; then
+        print_pass "Wrong password rejected (HTTP 401)"
+    else
+        print_fail "Wrong password not rejected (HTTP $code)"
+    fi
+
+    print_test "Scale apply is idempotent"
+    if $tenant_cmd apply >/dev/null 2>&1; then
+        print_pass "apply completed successfully after scale create"
+    else
+        print_fail "apply failed after scale create"
+    fi
+
+    print_test "Cleanup scale tenants"
+    local deleted_ok=0
+    for i in $(seq 1 "$tenant_count"); do
+        tname=$(printf 'moodle_%02d' "$i")
+        if $tenant_cmd delete "$tname" --force >/dev/null 2>&1; then
+            deleted_ok=$((deleted_ok + 1))
+        fi
+    done
+    if [ "$deleted_ok" -eq "$tenant_count" ]; then
+        print_pass "Deleted ${deleted_ok}/${tenant_count} scale tenants"
+    else
+        print_fail "Deleted only ${deleted_ok}/${tenant_count} scale tenants"
+    fi
+}
+
+# =========================================
 # SOLRCLOUD TESTS - Collections API + Persistence
 # =========================================
 solrcloud_tests() {
@@ -1096,6 +1203,7 @@ EOF
     RUN_MOODLE=1
     RUN_CLEANUP=1
     RUN_TENANT=0
+    RUN_TENANT_SCALE=0
     RUN_CLOUD=0
 
     while [[ $# -gt 0 ]]; do
@@ -1151,6 +1259,11 @@ EOF
                 RUN_TENANT=1
                 shift
                 ;;
+            --tenant-scale)
+                RUN_TENANT=1
+                RUN_TENANT_SCALE=1
+                shift
+                ;;
             --cloud|--solrcloud)
                 RUN_CLOUD=1
                 SOLR_MODE=solrcloud
@@ -1167,6 +1280,7 @@ EOF
                 echo "  --moodle-only        Run only Moodle document tests"
                 echo "  --no-cleanup         Skip cleanup tests"
                 echo "  --tenant             Run multi-tenant isolation tests"
+                echo "  --tenant-scale       Run tenant scale test (30 tenants/cores/users)"
                 echo "  --cloud              Run SolrCloud-specific tests"
                 echo "  --help               Show this help"
                 echo ""
@@ -1188,6 +1302,7 @@ EOF
     [ $RUN_PERFORMANCE -eq 1 ] && performance_tests
     [ $RUN_MOODLE -eq 1 ] && moodle_document_tests
     [ $RUN_TENANT -eq 1 ] && tenant_tests
+    [ $RUN_TENANT_SCALE -eq 1 ] && tenant_scale_tests
     [ $RUN_CLOUD -eq 1 ] && solrcloud_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests
 

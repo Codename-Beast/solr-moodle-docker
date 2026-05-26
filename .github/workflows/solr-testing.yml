@@ -92,7 +92,7 @@ jobs:
         \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
         \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
         \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
-        \ \\\n  > .env\ntouch tenants.env\nchmod 666 tenants.env\nsudo mkdir -p /var/log/solr\nsudo chmod 777 /var/log/solr\n"
+        \ \\\n  > .env\ntouch tenants.env\nchmod 666 tenants.env\nsudo mkdir -p /var/log/solr/instances/solr-solr /var/log/solr/instances/solr-init\nsudo chmod -R 777 /var/log/solr/instances\n"
     - name: Build containers
       run: docker compose build solr-init solr
     - name: Start Solr
@@ -175,6 +175,19 @@ jobs:
         echo \"PASS: apply completed\"\n\necho \"Testing restart persistence...\"\ndocker compose restart solr\nsleep 30\n\
         $TENANT_CMD list | grep -q \"tenant_a\" || { echo \"FAIL: tenants lost after restart\"; exit 1; }\necho \"PASS: Tenants\
         \ persist after restart\"\n\ndocker compose down -v\n"
+    - name: Tenant scale test (30 tenants/cores/users)
+      run: |
+        cp -f .env.example .env
+        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
+        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890/' .env || true
+        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890/' .env || true
+        : > tenants.env
+        chmod 666 tenants.env
+        docker compose build solr-init solr
+        docker compose up -d
+        timeout 150 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+        bash scripts/run-tests.sh --integration-only --tenant-scale --no-cleanup
+        docker compose down -v
     - name: Collect logs on failure
       if: failure()
       run: 'mkdir -p logs
@@ -213,12 +226,29 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     - name: Create .env for SolrCloud testing
-      run: "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
-        \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
-        \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
-        \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
-        \ \\\n  'SOLR_MODE=solrcloud' \\\n  > .env\ntouch tenants.env\nchmod 666 tenants.env\nsudo mkdir -p /var/log/solr\n\
-        sudo chmod 777 /var/log/solr\n"
+      run: "printf '%s\n' \\
+  'INSTANCE_NAME=solr' \\
+  'SOLR_VERSION=9.10.1' \\
+  'SOLR_PORT=8983' \\
+  'SOLR_BIND=127.0.0.1' \\
+  'SOLR_HEAP=2g' \\
+  'SOLR_LOG_LEVEL=INFO' \\
+  'SOLR_NETWORK_NAME=solr_network' \\
+  'SOLR_ADMIN_USER=admin' \\
+  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\
+  'SOLR_SUPPORT_USER=support' \\
+  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890' \\
+  'SOLR_CPU_LIMIT=2' \\
+  'SOLR_MEMORY_LIMIT=4G' \\
+  'SOLR_CPU_RESERVATION=0.5' \\
+  'SOLR_MEMORY_RESERVATION=2G' \\
+  'SOLR_MODE=solrcloud' \\
+  > .env
+touch tenants.env
+chmod 666 tenants.env
+sudo mkdir -p /var/log/solr/instances/solr-solr /var/log/solr/instances/solr-init
+sudo chmod -R 777 /var/log/solr/instances
+"
     - name: Build and start SolrCloud
       run: 'docker compose build solr-init solr
 
