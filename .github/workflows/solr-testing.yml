@@ -42,9 +42,9 @@ jobs:
         dockerfile: Dockerfile
         failure-threshold: warning
     - name: Validate YAML files
-      run: "sudo apt-get install -y yamllint\nyamllint -d \"{extends: default, rules: {\n  line-length: {max: 150},\n  indentation:\
-        \ {spaces: consistent},\n  document-start: disable,\n  truthy: disable,\n  brackets: {max-spaces-inside: 1}\n}}\"\
-        \ .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml\n"
+      run: |
+        sudo apt-get install -y yamllint
+        yamllint -c .yamllint .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml
   security-scan:
     name: Security Vulnerability Scan
     runs-on: ubuntu-latest
