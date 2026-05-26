@@ -1,57 +1,66 @@
-> Hinweis (Release 1.0): Diese Doku wurde vereinfacht und auf den aktuellen Stand gebracht.
-> Monitoring ist optional und aktuell nicht im aktiven Ausbau.
-
-# CI/CD Pipeline
-
-Tests laufen bei jedem Push — GitHub Actions und GitLab CI.
-
----
+# CI/CD — solr-moodle-docker
 
 ## GitHub Actions
 
 Workflow: [.github/workflows/solr-testing.yml](../.github/workflows/solr-testing.yml)
 
-Laeuft automatisch bei Push/PR auf `main` oder `feature/*`.
+Läuft automatisch bei Push/PR auf `main`, `feature/*` und `release*`.
 
-### Stages
+### Pipeline-Stages
 
-| Stage | Was geprueft wird |
-|-------|-------------------|
-| Code Quality | shellcheck, hadolint, yamllint |
-| Security Scan | Trivy (CVE-Scan beider Images) |
-| Solr Tests | Standalone: Auth, Permissions, Tika, Multi-Tenant |
-| SolrCloud Tests | Collections API, echte Isolation, Dokument-Indexierung, Neustart-Persistenz |
+| Stage | Job | Was geprüft wird |
+|-------|-----|-------------------|
+| Lint | Code Quality Checks | shellcheck, hadolint, yamllint |
+| Security | Security Vulnerability Scan | Trivy CVE-Scan (init + Solr Image) |
+| Test | Solr Tests | Auth, Permissions, Tika, Multi-Tenant, Placeholder-Schutz |
+| Test | SolrCloud Mode Tests | Collections API, echte Isolation, Neustart-Persistenz |
 
-### Standalone-Tests
+### Solr Tests (Standalone)
 
 - Container-Start + Healthcheck
-- Admin/Support-Auth korrekt
-- Tenant anlegen (`solr-tenant.sh create`)
+- Admin/Support-Authentifizierung
+- Tenant anlegen via `solr-tenant.sh create`
 - Tenant-User kann eigene Cores lesen/schreiben
-- Tika `/update/extract` funktioniert (harter Fehler)
-- Schema-API zugaenglich
-- Backup-Script laeuft durch
+- Tika `/update/extract` — harter Fehler wenn nicht funktional
+- Placeholder-Passwort-Schutz (CHANGE_ME wird abgewiesen)
+- Multi-Tenant-Isolation (403 beim Zugriff auf fremden Core)
 
-### SolrCloud-Tests
+### SolrCloud Tests
 
 - `SOLR_MODE=solrcloud` — eingebetteter ZooKeeper
-- Security Bootstrap (ZK-Initialisierungsproblem automatisch behoben)
+- Security Bootstrap via ZooKeeper
 - Collections API statt Core Admin API
 - Echte Collection-Level-Isolation (403 ohne Proxy)
-- Moodle-Dokument mit allen Pflichtfeldern indexierbar
-- Dokument ueberlebt Container-Neustart
-- Tika `/update/extract` funktioniert
+- Moodle-Dokument indexieren + Neustart-Persistenz
+- Tika `/update/extract` im SolrCloud-Modus
 
 ---
 
-## GitLab CI/CD
+## GitLab CI
 
-Pipeline in `.gitlab-ci.yml`. Gleiche Stages wie GitHub Actions.
+Pipeline: [.gitlab-ci.yml](../.gitlab-ci.yml)
 
-Runner-Anforderungen:
-- Tags: `[docker, privileged]`
+### Runner-Konfiguration
+
+Runner-Tag via GitLab-Variable konfigurieren:
+
+```
+Settings → CI/CD → Variables → CI_RUNNER_TAG = <euer Runner-Name>
+```
+
+Default: `docker` (für lokale Testinstanz).
+
+Anforderungen:
+- Docker-Socket-Mount (`/var/run/docker.sock`)
 - Mind. 4 GB RAM
-- Docker-in-Docker (`DOCKER_DRIVER: overlay2`)
+- `pull_policy = if-not-present` in `config.toml`
+
+### Stages
+
+| Stage | Jobs |
+|-------|------|
+| lint | shellcheck, docker compose config, bash -n |
+| test | feature-full-test (unit-only im 10min-Limit) |
 
 ---
 
@@ -59,18 +68,24 @@ Runner-Anforderungen:
 
 ```bash
 # Stack starten
-docker compose build --no-cache solr-init
-docker compose up -d
+docker compose up -d --build
 
-# Einzeln
+# Unit-Tests
 ./scripts/run-tests.sh --unit-only
-./scripts/run-tests.sh --integration-only
-./scripts/run-tests.sh --security-only
+
+# Integration-Tests
+./scripts/run-tests.sh --integration-only --no-cleanup
+
+# Sicherheits-Tests
+./scripts/run-tests.sh --security-only --no-cleanup
+
+# Moodle-Dokument-Indexierung
+./scripts/test-moodle-documents.sh
 
 # Alles
 ./scripts/run-tests.sh
 
-# Aufraeumen
+# Aufräumen
 docker compose down -v
 ```
 
@@ -78,35 +93,25 @@ docker compose down -v
 
 ## Troubleshooting
 
-**"Init-Container schlaegt fehl":**
+**Init-Container schlägt fehl:**
 ```bash
 docker compose logs solr-init
-# Oft: .env fehlt oder SOLR_ADMIN_PASSWORD nicht gesetzt
+# Häufig: SOLR_ADMIN_PASSWORD nicht gesetzt oder noch CHANGE_ME
 ```
 
-**"Solr antwortet nicht":**
+**Solr antwortet nicht:**
 ```bash
 docker compose logs solr
 docker inspect --format='{{.State.Health.Status}}' solr-solr
 ```
 
-**"Tika-Test schlaegt fehl":**
-Pruefen ob `SOLR_MODULES=extraction` in `docker-compose.yml` gesetzt ist.
-Das Modul ladet Tika auf Server-Ebene — kein separater Container noetig.
+**Tika-Test schlägt fehl:**
+```bash
+# Prüfen ob SOLR_MODULES=extraction in docker-compose.yml gesetzt ist
+grep SOLR_MODULES docker-compose.yml
+```
 
-**"Permission Denied bei Scripts":**
+**Permission Denied bei Scripts:**
 ```bash
 chmod +x scripts/*.sh
 ```
-
----
-
-## Support
-
-Pipeline-Logs anschauen, lokal testen, Issue auf GitHub/GitLab erstellen.
-
-
-## solr-helper-pro local UI notes
-- `scripts/solr-helper-pro.py` is treated as local-only operator tooling in this workspace.
-- Current UI behavior: create button in list header, selection-driven right panel (host+container info + live logs), tenant-capable column in server list, and detail screen with inline config/user/log operations plus Solr runtime/schema summary.
-- Theme direction: dark black/orange with stronger borders and accents.
