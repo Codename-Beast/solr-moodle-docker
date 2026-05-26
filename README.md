@@ -1,7 +1,7 @@
 # Solr für Moodle — Multi-Tenant Docker Stack
 
 [![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=release_1.0)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
-![Version](https://img.shields.io/badge/version-3.0.8-blue)
+![Version](https://img.shields.io/badge/version-3.1.0-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)

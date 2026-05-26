@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-05-26
+
+### Changed
+- `.gitlab-ci.yml` auf Runner-Realität ausgerichtet: konfigurierbarer Runner-Tag über `CI_RUNNER_TAG` klar dokumentiert und als Default im Pipeline-File hinterlegt.
+- YAML-Header (`---`) ergänzt für konsistente Lint-Auswertung.
+
+### Verified
+- Lokaler CI-äquivalenter Lint-Check erfolgreich:
+  - `docker compose --env-file .env.example config`
+  - `bash -n` über alle versionierten `*.sh`
+
 ## [3.0.8] - 2026-05-25
 
 ### Changed
