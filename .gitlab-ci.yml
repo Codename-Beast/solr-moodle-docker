@@ -1,3 +1,14 @@
+################################################################################
+# GitLab CI — solr-moodle-docker
+#
+# Runner-Tag konfigurierbar über GitLab-Variable:
+#   Settings → CI/CD → Variables → CI_RUNNER_TAG = <euer Runner-Name>
+#   Beispiel: xen-04, docker-runner, privileged-runner, …
+#   Default (lokal): docker
+#
+# Max. 2 parallele Jobs (runner concurrent=2), Timeout je 10 Minuten.
+################################################################################
+
 stages:
   - lint
   - test
@@ -5,15 +16,20 @@ stages:
 variables:
   DOCKER_HOST: unix:///var/run/docker.sock
   DOCKER_TLS_CERTDIR: ""
+  # ↓ Euren Runner-Namen hier oder via GitLab-Variable setzen
+  CI_RUNNER_TAG: 'docker'
 
 default:
   tags:
-    - docker
-    - dind
+    - $CI_RUNNER_TAG
 
+# ---------------------------------------------------------------------------
+# Stage: lint
+# ---------------------------------------------------------------------------
 main-minimal:
   stage: lint
   image: alpine:3.20
+  timeout: 10 minutes
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
@@ -26,6 +42,7 @@ main-minimal:
 feature-lint:
   stage: lint
   image: alpine:3.20
+  timeout: 10 minutes
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /^feature\/v[0-9].*/'
     - if: '$CI_COMMIT_BRANCH =~ /^release.*/'
@@ -36,9 +53,13 @@ feature-lint:
     - docker compose config >/dev/null
     - for f in $(find . -name "*.sh" -type f); do bash -n "$f"; done
 
+# ---------------------------------------------------------------------------
+# Stage: test
+# ---------------------------------------------------------------------------
 feature-full-test:
   stage: test
   image: alpine:3.20
+  timeout: 10 minutes
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /^feature\/v[0-9].*/'
     - if: '$CI_COMMIT_BRANCH =~ /^release.*/'
