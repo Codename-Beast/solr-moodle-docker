@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+# Version: v3.0.1
+
 # =========================================
 # Solr runtime entrypoint
 # Developer: BSC Bernd Schreistetter
