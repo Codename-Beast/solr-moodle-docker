@@ -69,6 +69,8 @@ feature-full-test:
     - cp -f .env.example .env
     - sed -i 's/^SOLR_MODE=.*/SOLR_MODE=standalone/' .env || true
     - sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
+    - sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890/' .env || true
+    - sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890/' .env || true
     - touch tenants.env
   script:
     - docker compose build solr-init solr
