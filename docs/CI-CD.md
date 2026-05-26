@@ -4,7 +4,11 @@
 
 Workflow: [.github/workflows/solr-testing.yml](../.github/workflows/solr-testing.yml)
 
-Läuft automatisch bei Push/PR auf `main`, `feature/*` und `release*`.
+Läuft automatisch bei Push auf `feature/*` und `release*`, sowie bei PRs gegen `main`.
+
+Manueller Start:
+- GitHub: `workflow_dispatch` in `solr-testing.yml` (voller Lauf, kein separater Speed-Modus).
+- GitLab: Pipeline auf Branch `release*` oder `feature/*` starten.
 
 ### Pipeline-Stages
 

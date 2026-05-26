@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- GitLab-Job `feature-full-test` startet den Stack jetzt explizit vor den Tests (`docker compose build`, `docker compose up -d`, Health-Wait bis `healthy`).
+- Damit werden HTTP-000-Fehler durch nicht gestartete Container in `scripts/run-tests.sh --unit-only` vermieden.
+
+### Documentation
+- `docs/CI-CD.md` präzisiert Trigger (Push/PR) und manuellen Start für GitHub/GitLab.
+
 ## [3.1.0] - 2026-05-26
 
 ### Changed

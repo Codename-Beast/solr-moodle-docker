@@ -71,6 +71,9 @@ feature-full-test:
     - sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
     - touch tenants.env
   script:
+    - docker compose build solr-init solr
+    - docker compose up -d
+    - timeout 180 sh -c 'until docker compose ps | grep -q "healthy"; do sleep 5; echo "waiting for healthy containers..."; done'
     - bash scripts/run-tests.sh --unit-only --no-cleanup
   after_script:
     - docker compose down -v || true
