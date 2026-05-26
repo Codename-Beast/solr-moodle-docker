@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+# Version: v3.0.1
+
 # =========================================
 # Solr Init Container — Multi-Tenant
 # Developer: BSC Bernd Schreistetter
@@ -45,6 +49,7 @@ _setup_logging
 DATA_DIR="/var/solr/data"
 CONFIGSET_SRC="/config"
 CONFIGSET_DST="${DATA_DIR}/configsets/moodle-tenant/conf"
+DEFAULT_CONFIGSET_DST="${DATA_DIR}/configsets/_default/conf"
 TENANTS_ENV="/opt/solr/tenants.env"
 ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 
@@ -215,20 +220,36 @@ _load_tenants
 _log "  Found $TENANT_COUNT tenant(s)"
 
 # ---------------------------------------------------------------------------
-# Step 2: Create configset (idempotent)
+# Step 2: Create configsets (idempotent)
 # ---------------------------------------------------------------------------
-_log "Step 2: Configset moodle-tenant"
+_log "Step 2: Configset moodle-tenant + _default"
 
 if [ -d "$CONFIGSET_DST" ]; then
-  _log "  Configset already exists — skipping"
+  _log "  Configset moodle-tenant already exists — skipping"
 else
-  _log "  Creating configset from $CONFIGSET_SRC"
+  _log "  Creating configset moodle-tenant from $CONFIGSET_SRC"
   mkdir -p "$CONFIGSET_DST"
   if ! cp -a "${CONFIGSET_SRC}/." "${CONFIGSET_DST}/"; then
-    _log "ERROR: Failed to copy config files to configset"
+    _log "ERROR: Failed to copy config files to moodle-tenant configset"
     exit 2
   fi
-  _log "  Configset created at $CONFIGSET_DST"
+  _log "  Configset moodle-tenant created at $CONFIGSET_DST"
+fi
+
+# Also enforce Moodle-capable _default so plain Core CREATE without explicit
+# configSet stays Moodle-compatible.
+if [ -d "$DEFAULT_CONFIGSET_DST" ]; then
+  _log "  Configset _default already exists — refreshing managed-schema + solrconfig.xml"
+  cp -f "${CONFIGSET_SRC}/managed-schema" "${DEFAULT_CONFIGSET_DST}/managed-schema"
+  cp -f "${CONFIGSET_SRC}/solrconfig.xml" "${DEFAULT_CONFIGSET_DST}/solrconfig.xml"
+else
+  _log "  Creating configset _default from $CONFIGSET_SRC"
+  mkdir -p "$DEFAULT_CONFIGSET_DST"
+  if ! cp -a "${CONFIGSET_SRC}/." "${DEFAULT_CONFIGSET_DST}/"; then
+    _log "ERROR: Failed to copy config files to _default configset"
+    exit 2
+  fi
+  _log "  Configset _default created at $DEFAULT_CONFIGSET_DST"
 fi
 
 chown -R 8983:8983 "${DATA_DIR}/configsets" 2>/dev/null || true

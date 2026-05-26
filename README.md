@@ -112,7 +112,7 @@ docker compose ps
 curl -u "admin:<SOLR_ADMIN_PASSWORD>" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/info/system"
 ```
 
-## Installationsprozess (code-nah)
+## Installationsprozess (technischer Ablauf)
 
 1. `cp .env.example .env` und Pflichtpasswörter setzen.
 2. `docker compose up -d --build` startet den Stack.
@@ -120,7 +120,7 @@ curl -u "admin:<SOLR_ADMIN_PASSWORD>" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/
 4. Erst danach startet `solr` (abhängig von erfolgreichem Init-Exit).
 5. Verifikation über `docker compose ps` und `.../solr/admin/info/system`.
 
-## Runtime-Prozess (code-nah)
+## Runtime-Prozess (technischer Ablauf)
 
 - Zugriffspfad: Moodle -> Reverse Proxy (TLS) -> `127.0.0.1:${SOLR_PORT:-8983}`.
 - Tenant-Verwaltung: `scripts/solr-tenant.sh` (`create/list/passwd/sync-sot`).

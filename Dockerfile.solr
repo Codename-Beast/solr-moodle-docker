@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+
 # =========================================
 # Custom Solr image for Eledia multi-tenant deployment
 # Developer: BSC Bernd Schreistetter

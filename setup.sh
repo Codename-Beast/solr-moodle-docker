@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+# Version: v3.0.1
+
 # =========================================
 # Solr Multi-Tenant — Interactive Setup
 # Developer: BSC Bernd Schreistetter
@@ -6,13 +10,16 @@
 # Version: v3.0.1
 # =========================================
 # Idempotent: safe to re-run.
-# First run: creates .env, tenants.env, /var/log/solr, logrotate, starts Solr.
+# First run: creates .env, tenants.env, /var/log/eledia/solr-<instance>.log, logrotate, starts Solr.
 # Re-run: backs up .env (max 3 generations), updates passwords if requested.
 
 set -euo pipefail
 
-LOG_DIR="${LOG_DIR:-/var/log/solr}"
-LOG_FILE="${LOG_DIR}/setup.log"
+INSTANCE_NAME="${INSTANCE_NAME:-$(grep '^INSTANCE_NAME=' .env 2>/dev/null | cut -d= -f2 | tr -d ' ' || echo solr)}"
+INSTANCE_NAME="${INSTANCE_NAME:-solr}"
+LOG_ROOT="${LOG_ROOT:-/var/log/eledia}"
+LOG_DIR="${LOG_DIR:-${LOG_ROOT}}"
+LOG_FILE="${LOG_DIR}/solr-${INSTANCE_NAME}.log"
 
 # _log: Write a timestamped message to stdout and $LOG_FILE.
 # Args: $@ - message text
@@ -70,7 +77,7 @@ if [ ! -f "docker-compose.yml" ]; then
   exit 1
 fi
 
-# Setup /var/log/solr early (before _log works)
+# Setup log file early (before _log works)
 mkdir -p "$LOG_DIR" 2>/dev/null || {
   printf 'WARNING: Cannot create %s — continuing without file log\n' "$LOG_DIR" >&2
   LOG_FILE="/dev/null"
@@ -204,17 +211,17 @@ fi
 # ---------------------------------------------------------------------------
 _log "Step 4: Logrotate"
 
-LOGROTATE_FILE="/etc/logrotate.d/solr"
+LOGROTATE_FILE="/etc/logrotate.d/solr-eledia"
 if [ -w "/etc/logrotate.d" ] || [ "$(id -u)" = "0" ]; then
-  cat > "$LOGROTATE_FILE" <<'EOF'
-/var/log/solr/*.log {
+  cat > "$LOGROTATE_FILE" <<EOF
+${LOG_ROOT}/solr-*.log {
     daily
     rotate 7
     compress
     missingok
     notifempty
     copytruncate
-    create 640 8983 docker
+    create 640 root docker
 }
 EOF
   _log "  Logrotate config written to $LOGROTATE_FILE"
@@ -278,6 +285,9 @@ SOLR_PORT="$(grep '^SOLR_PORT=' .env | cut -d= -f2 | tr -d ' ')"
 SOLR_PORT="${SOLR_PORT:-8983}"
 
 _log "=== Setup completed successfully ==="
+_log "Collecting setup-time container logs into ${LOG_FILE}"
+docker compose logs --no-color >> "$LOG_FILE" 2>&1 || true
+
 
 printf '\n'
 printf '╔══════════════════════════════════════════════════════════╗\n'

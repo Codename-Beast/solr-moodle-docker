@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+
 set -eu
 
 BASE_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
