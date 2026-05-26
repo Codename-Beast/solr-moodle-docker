@@ -18,6 +18,7 @@ main-minimal:
     - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
     - apk add --no-cache bash docker-cli docker-cli-compose
+    - cp -f .env.example .env
   script:
     - docker compose config >/dev/null
     - for f in $(find . -name "*.sh" -type f); do bash -n "$f"; done
@@ -30,6 +31,7 @@ feature-lint:
     - if: '$CI_COMMIT_BRANCH =~ /^release.*/'
   before_script:
     - apk add --no-cache bash docker-cli docker-cli-compose
+    - cp -f .env.example .env
   script:
     - docker compose config >/dev/null
     - for f in $(find . -name "*.sh" -type f); do bash -n "$f"; done
