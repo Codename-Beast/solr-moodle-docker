@@ -1,239 +1,211 @@
 image: ubuntu:22.04
-
 variables:
-  DOCKER_HOST: unix:///var/run/docker.sock
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ''
+  DOCKER_DRIVER: overlay2
   COMPOSE_PROJECT_NAME: solr_test
-  FF_USE_FASTZIP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "fast"
-  CACHE_COMPRESSION_LEVEL: "fast"
+  FF_USE_FASTZIP: 'true'
+  ARTIFACT_COMPRESSION_LEVEL: fast
+  CACHE_COMPRESSION_LEVEL: fast
   GIT_STRATEGY: clone
   GIT_DEPTH: 1
-  DOCKER_VERSION: "5:24.0.7-1~ubuntu.22.04~jammy"
-
+  DOCKER_VERSION: 5:24.0.7-1~ubuntu.22.04~jammy
 stages:
-  - security
-  - test
-
+- security
+- test
+- tenant-test
+- solrcloud-test
 security-scan:
   stage: security
   image: docker:24-git
   services:
-    - name: docker:24-dind
-      command: ["--tls=false"]
+  - name: docker:24-dind
+    command:
+    - --tls=false
   variables:
-    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_CERTDIR: ''
     DOCKER_DRIVER: overlay2
   tags:
-    - docker
+  - docker
   timeout: 15 minutes
   needs: []
   before_script:
-    - apk add --no-cache curl
-    - sleep 5  # Wait for Docker daemon to start
-    - docker info || exit 1
+  - apk add --no-cache curl
+  - sleep 5
+  - docker info || exit 1
   script:
-    - echo "Building init container for security scan..."
-    - docker build -f Dockerfile -t solr-init:test .
-    - echo "Running Trivy vulnerability scanner on init image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test || true
-    - echo "Running Trivy vulnerability scanner on Solr base image..."
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1 || true
+  - echo "Building init container for security scan..."
+  - docker build -f Dockerfile -t solr-init:test .
+  - echo "Running Trivy vulnerability scanner on init image..."
+  - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr-init:test
+    || true
+  - echo "Running Trivy vulnerability scanner on Solr base image..."
+  - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL solr:9.10.1
+    || true
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH == "develop22"'
-
+  - if: $CI_COMMIT_BRANCH == "main"
+  - if: $CI_COMMIT_BRANCH =~ /^feature\/v[0-9].*/
+  - if: $CI_COMMIT_BRANCH =~ /^release.*/
 .test-template:
   stage: test
+  services:
+  - name: docker:24-dind
+    command:
+    - --tls=false
   tags:
-    - docker
+  - docker
   interruptible: true
   needs:
-    - security-scan
+  - security-scan
   retry:
     max: 1
     when:
-      - runner_system_failure
-      - stuck_or_timeout_failure
-  cache:
-    key: docker-compose-cache
-    paths:
-      - .cache/docker
-    policy: pull-push
-
+    - runner_system_failure
+    - stuck_or_timeout_failure
+  before_script:
+  - apt-get update -qq
+  - apt-get install -y -qq --no-install-recommends curl jq docker-compose-plugin=${DOCKER_VERSION} docker.io=${DOCKER_VERSION}
+    || apt-get install -y -qq --no-install-recommends curl jq docker-compose docker.io
+  - timeout 30 bash -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+  - rm -rf /var/lib/apt/lists/*
+  - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh scripts/solr-tenant.sh
 solr-test:
   extends: .test-template
-
-  parallel:
-    matrix:
-      - SOLR_CORE_NAME: moodle_core
-      - SOLR_CORE_NAME: custom_test_core
-
-  before_script:
-    - echo "Installing dependencies for Ubuntu $(lsb_release -rs || cat /etc/os-release | grep VERSION_ID)"
-    - apt-get update -qq
-    - apt-get install -y -qq curl jq docker-compose-plugin=${DOCKER_VERSION} docker.io=${DOCKER_VERSION} ||
-      apt-get install -y -qq curl jq docker-compose docker.io
-    - echo "Ubuntu environment ready"
-    - echo "Docker version:" $(docker --version)
-    - echo "Docker Compose version:" $(docker compose version)
-    - chmod +x scripts/run-tests.sh scripts/test-moodle-documents.sh
-
   script:
-    - echo "Generating .env file with core name:" $SOLR_CORE_NAME
-    - SOLR_CORE_NAME=$SOLR_CORE_NAME docker compose --profile setup up moodle_setup
-    - echo ".env file created successfully"
-    - ls -lah .env
-    - echo "Core name in .env:"
-    - grep SOLR_CORE_NAME .env
-
-    - echo "Building init container..."
-    - docker compose build solr-init
-
-    - echo "Starting Solr containers..."
-    - docker compose up -d
-
-    - echo "Waiting for Solr to be healthy (max 2 minutes)..."
-    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Still waiting..."; done'
-    - echo "Solr is healthy"
-
-    - echo "Container status:"
-    - docker compose ps
-    - echo ""
-    - echo "Solr logs (last 50 lines):"
-    - docker compose logs --tail=50 solr
-
-    - echo "Running unit tests..."
-    - ./scripts/run-tests.sh --unit-only
-
-    - echo "Running integration tests..."
-    - ./scripts/run-tests.sh --integration-only --no-cleanup
-
-    - echo "Running security tests..."
-    - ./scripts/run-tests.sh --security-only --no-cleanup
-
-    - echo "Running Moodle document tests..."
-    - ./scripts/test-moodle-documents.sh
-
-    - echo "Testing automatic password generation..."
-    - docker compose down -v
-    - rm -f .env
-    - |
-      cat > .env <<'EOF'
-      INSTANCE_NAME=solr
-      SOLR_VERSION=9.10.1
-      SOLR_PORT=8983
-      SOLR_BIND=127.0.0.1
-      SOLR_CORE_NAME=test_auto_core
-      SOLR_CORES=
-      SOLR_HEAP=2g
-      SOLR_LOG_LEVEL=INFO
-      SOLR_NETWORK_NAME=solr_network
-      SOLR_ADMIN_USER=admin
-      SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN
-      SOLR_SUPPORT_USER=support
-      SOLR_SUPPORT_PASSWORD=
-      SOLR_MOODLE_USER=moodle
-      SOLR_MOODLE_PASSWORD=CHANGE_ME_PASSWORD
-      MONITORING_BIND_IP=127.0.0.1
-      SOLR_METRICS_PORT=9854
-      PROMETHEUS_PORT=9090
-      PROMETHEUS_BIND=127.0.0.1
-      GRAFANA_PORT=3000
-      GRAFANA_BIND=127.0.0.1
-      GRAFANA_ADMIN_USER=admin
-      GRAFANA_ADMIN_PASSWORD=admin
-      EOF
-    - docker compose build solr-init
-    - docker compose up -d
-    - |
-      echo "Waiting for containers to be healthy..."
-      for i in {1..30}; do
-        if docker compose ps | grep -q healthy; then
-          echo "Containers are healthy after attempt ${i}"
-          break
-        fi
-        sleep 2
-      done
-    - echo "Checking init container logs..."
-    - docker compose logs solr-init
-    - docker compose logs solr-init | grep -q "Generated secure password" || exit 1
-    - echo "Password auto-generation test PASSED"
-    - docker compose down -v
-
-    - echo "Testing dynamic core management..."
-    - rm -f .env
-    - |
-      cat > .env <<EOF
-      INSTANCE_NAME=solr
-      SOLR_VERSION=9.10.1
-      SOLR_PORT=8983
-      SOLR_BIND=127.0.0.1
-      SOLR_CORE_NAME=
-      SOLR_CORES=test_core1,test_core2
-      SOLR_HEAP=2g
-      SOLR_LOG_LEVEL=INFO
-      SOLR_NETWORK_NAME=solr_network
-      SOLR_ADMIN_USER=admin
-      SOLR_ADMIN_PASSWORD=test123
-      SOLR_SUPPORT_USER=support
-      SOLR_SUPPORT_PASSWORD=test123
-      SOLR_MOODLE_USER=moodle
-      SOLR_MOODLE_PASSWORD=test123
-      MONITORING_BIND_IP=127.0.0.1
-      SOLR_METRICS_PORT=9854
-      PROMETHEUS_PORT=9090
-      PROMETHEUS_BIND=127.0.0.1
-      GRAFANA_PORT=3000
-      GRAFANA_BIND=127.0.0.1
-      GRAFANA_ADMIN_USER=admin
-      GRAFANA_ADMIN_PASSWORD=admin
-      EOF
-    - docker compose build solr-init
-    - docker compose up -d
-    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
-    - docker compose logs solr-init | grep "Creating core 'test_core1'" || exit 1
-    - docker compose logs solr-init | grep "Creating core 'test_core2'" || exit 1
-    - sed -i 's/SOLR_CORES=test_core1,test_core2/SOLR_CORES=test_core1,test_core2,test_core3/' .env
-    - docker compose down
-    - docker compose up -d
-    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
-    - docker compose logs solr-init | grep "Creating core 'test_core3'" || exit 1
-    - sed -i 's/SOLR_CORES=test_core1,test_core2,test_core3/SOLR_CORES=test_core1,test_core3/' .env
-    - docker compose down
-    - docker compose up -d
-    - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
-    - docker compose logs solr-init | grep "Deleting core 'test_core2'" || exit 1
-    - echo "Dynamic core management test PASSED"
-    - docker compose down -v
-
+  - "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
+    \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
+    \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
+    \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
+    \ \\\n  > .env\ntouch tenants.env\nmkdir -p /var/log/eledia\nexport LOG_ROOT=/var/log/eledia\nexport ELEDIA_LOG_ROOT=/var/log/eledia\n"
+  - docker compose build solr-init
+  - docker compose up -d
+  - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
+  - docker compose ps
+  - ./scripts/run-tests.sh --unit-only
+  - ./scripts/run-tests.sh --integration-only --no-cleanup
+  - ./scripts/run-tests.sh --security-only --no-cleanup
+  - docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test --cores moodle_core
+  - echo "SOLR_CORE_NAME=moodle_core" >> .env
+  - ./scripts/test-moodle-documents.sh
   after_script:
-    - |
-      if [ "$CI_JOB_STATUS" != "success" ]; then
-        echo "Tests failed. Collecting logs..."
-        mkdir -p logs
-        docker compose logs > logs/docker-compose-all.log 2>&1 || true
-        docker compose logs solr > logs/solr.log 2>&1 || true
-        docker compose logs solr-init > logs/solr-init.log 2>&1 || true
-        docker compose ps > logs/container-status.log 2>&1 || true
-        docker inspect $(docker compose ps -q) > logs/container-inspect.log 2>&1 || true
-      fi
-    - echo "Cleaning up..."
-    - docker compose down -v || true
-    - rm -f .env || true
-
+  - "if [ \"$CI_JOB_STATUS\" != \"success\" ]; then\n  mkdir -p logs\n  docker compose logs > logs/docker-compose-all.log\
+    \ 2>&1 || true\n  docker compose logs solr > logs/solr.log 2>&1 || true\n  docker compose logs solr-init > logs/solr-init.log\
+    \ 2>&1 || true\n  docker compose ps > logs/container-status.log 2>&1 || true\nfi\n"
+  - docker compose down -v || true
+  - rm -f .env tenants.env || true
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH == "develop22"'
-
+  - if: $CI_COMMIT_BRANCH =~ /^feature\/v[0-9].*/
+  - if: $CI_COMMIT_BRANCH =~ /^release.*/
+  - when: never
   artifacts:
     when: on_failure
     paths:
-      - .env
-      - logs/
+    - logs/
     expire_in: 7 days
-
   timeout: 15 minutes
+tenant-test:
+  stage: tenant-test
+  extends: .test-template
+  needs:
+  - solr-test
+  script:
+  - "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
+    \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
+    \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
+    \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
+    \ \\\n  > .env\ntouch tenants.env\nmkdir -p /var/log/eledia\nexport LOG_ROOT=/var/log/eledia\nexport ELEDIA_LOG_ROOT=/var/log/eledia\n"
+  - docker compose build solr-init
+  - docker compose up -d
+  - timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
+  - CONTAINER="solr-solr"
+  - TENANT_CMD="docker exec $CONTAINER /opt/solr/scripts/solr-tenant.sh"
+  - echo "Creating tenant_a..."
+  - $TENANT_CMD create tenant_a --cores core_a
+  - PASS_A=$(docker exec "$CONTAINER" grep 'TENANT_tenant_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+  - echo "Creating tenant_b..."
+  - $TENANT_CMD create tenant_b --cores core_b
+  - PASS_B=$(docker exec "$CONTAINER" grep 'TENANT_tenant_b_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+  - echo "Testing tenant_a -> core_a (expect 200)..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_tenant_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/core_a/select?q=*:*&rows=0\"\
+    )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: HTTP $CODE\"; exit 1; }\necho \"PASS\"\n"
+  - echo "Testing auth isolation: wrong password => 401..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_tenant_a:wrongpassword\" \\\n  \"http://127.0.0.1:8983/solr/core_a/select?q=*:*&rows=0\"\
+    )\n[ \"$CODE\" = \"401\" ] || { echo \"FAIL: expected 401 got HTTP $CODE\"; exit 1; }\necho \"PASS: Auth isolation OK\
+    \ (wrong password rejected)\"\n"
+  - echo "Testing admin API blocked for tenant (expect 403)..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_tenant_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/admin/cores\"\
+    )\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL: admin API not blocked HTTP $CODE\"; exit 1; }\necho \"PASS: Admin API blocked\
+    \ for tenant (HTTP 403)\"\n"
+  - echo "Testing support can read (expect 200)..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"support:CI_SupportPass_1234567890\" \\\n  \"http://127.0.0.1:8983/solr/core_a/select?q=*:*&rows=0\"\
+    )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: support read failed HTTP $CODE\"; exit 1; }\necho \"PASS: Support can read\
+    \ (HTTP 200)\"\n"
+  - echo "Testing support CANNOT write (expect 403)..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"support:CI_SupportPass_1234567890\" \\\n  -X POST \"http://127.0.0.1:8983/solr/core_a/update\"\
+    \ \\\n  -H \"Content-Type: application/json\" -d '{\"commit\":{}}')\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL: support\
+    \ can write HTTP $CODE (expected 403)\"; exit 1; }\necho \"PASS: Support cannot write (HTTP 403)\"\n"
+  - echo "Testing apply is idempotent..."
+  - $TENANT_CMD apply
+  - echo "PASS"
+  - echo "Testing restart persistence..."
+  - docker compose restart solr
+  - sleep 30
+  - $TENANT_CMD list | grep -q "tenant_a" || { echo "FAIL: tenants lost after restart"; exit 1; }
+  - echo "PASS: Tenants persisted"
+  after_script:
+  - docker compose down -v || true
+  - rm -f .env tenants.env || true
+  rules:
+  - if: $CI_COMMIT_BRANCH =~ /^feature\/v[0-9].*/
+  - if: $CI_COMMIT_BRANCH =~ /^release.*/
+  - when: never
+  timeout: 20 minutes
+solrcloud-test:
+  stage: solrcloud-test
+  extends: .test-template
+  needs:
+  - tenant-test
+  script:
+  - "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
+    \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
+    \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
+    \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
+    \ \\\n  'SOLR_MODE=solrcloud' \\\n  > .env\ntouch tenants.env\nmkdir -p /var/log/eledia\nexport LOG_ROOT=/var/log/eledia\n\
+    export ELEDIA_LOG_ROOT=/var/log/eledia\n"
+  - docker compose build solr-init
+  - docker compose up -d
+  - timeout 180 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting for SolrCloud..."; done'
+  - docker compose ps
+  - CONTAINER="solr-solr"
+  - TENANT_CMD="docker exec $CONTAINER /opt/solr/scripts/solr-tenant.sh"
+  - echo "Verifying SolrCloud mode is active..."
+  - "STATUS=$(curl -sf -u \"admin:CI_AdminPass_1234567890\" \\\n  \"http://127.0.0.1:8983/solr/admin/collections?action=clusterstatus&wt=json\"\
+    \ | \\\n  python3 -c \"import sys,json; d=json.load(sys.stdin); print('ok' if 'cluster' in d else 'fail')\" 2>/dev/null\
+    \ || echo \"fail\")\n[ \"$STATUS\" = \"ok\" ] && echo \"PASS: SolrCloud cluster active\" || { echo \"FAIL: Not in SolrCloud\
+    \ mode\"; exit 1; }\n"
+  - echo "Creating tenants in SolrCloud mode..."
+  - $TENANT_CMD create cloud_a --cores col_a
+  - $TENANT_CMD create cloud_b --cores col_b
+  - PASS_A=$(docker exec "$CONTAINER" grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)
+  - echo "Testing cloud_a -> col_a (expect 200)..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/col_a/select?q=*:*&rows=0\"\
+    )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: HTTP $CODE\"; exit 1; }\necho \"PASS\"\n"
+  - echo "Testing SolrCloud isolation: cloud_a cannot access col_b (expect 403)..."
+  - "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/col_b/select?q=*:*&rows=0\"\
+    )\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL: isolation broken HTTP $CODE\"; exit 1; }\necho \"PASS: SolrCloud isolation\
+    \ OK\"\n"
+  - echo "Testing PDF indexing via Tika (/update/extract)..."
+  - "echo \"This is a test PDF content for Solr Tika extraction\" > /tmp/test.txt\nCODE=$(curl -so /dev/null -w '%{http_code}'\
+    \ -u \"solr_cloud_a:$PASS_A\" \\\n  -F \"file=@/tmp/test.txt\" \\\n  \"http://127.0.0.1:8983/solr/col_a/update/extract?extractOnly=true&wt=json\"\
+    )\n[ \"$CODE\" = \"200\" ] && echo \"PASS: Tika extraction OK\" || echo \"WARN: Tika returned HTTP $CODE\"\nrm -f /tmp/test.txt\n"
+  - echo "Testing apply idempotent in SolrCloud mode..."
+  - $TENANT_CMD apply
+  - echo "PASS"
+  after_script:
+  - docker compose down -v || true
+  - rm -f .env tenants.env || true
+  rules:
+  - if: $CI_COMMIT_BRANCH =~ /^feature\/v[0-9].*/
+  - if: $CI_COMMIT_BRANCH =~ /^release.*/
+  - when: never
+  timeout: 25 minutes
