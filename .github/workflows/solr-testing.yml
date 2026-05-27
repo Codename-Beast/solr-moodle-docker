@@ -41,8 +41,8 @@ jobs:
         '
     - name: Run hadolint on Dockerfiles (containerized, no JS action runtime)
       run: |
-        docker run --rm -i hadolint/hadolint < Dockerfile
-        docker run --rm -i hadolint/hadolint < Dockerfile.solr
+        docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile
+        docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile.solr
     - name: Validate YAML files
       run: |
         sudo apt-get install -y yamllint
