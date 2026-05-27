@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - `powerinit.sh` — `_default` configset always refreshed from `eLeDia-moodle-tenant` source. Ensures Moodle-optimized schema is never stale across restarts.
 - `setup.sh` — `tenants.env` permissions changed from `600` to `644` so container solr user (uid 8983) can read the file.
 - `docker-compose.yml` / `docker-compose.cloud-test.yml` — removed SELinux `:z` flag from `tenants.env` mount (unnecessary, caused warnings).
+- `scripts/solr-tenant-core.sh` — added SolrCloud configset source fallback (`/var/solr/data/configsets/moodle-tenant/conf`) when `eLeDia-moodle-tenant` is missing in runtime containers.
+- `scripts/solr-cloud-entrypoint.sh` — added configset upload fallback path detection for mixed legacy/new configset directory layouts.
 
 ### Performance
 - `upgrade-docker.sh` — conditional `--build`: only rebuilds Docker image when Dockerfile, config, or scripts changed (sha256 checksum comparison). Skips rebuild on repeated runs with no changes, reducingupgrade time from minutes to seconds.
@@ -43,6 +45,7 @@ All notable changes to this project will be documented in this file.
 - `scripts/test-mode-switch.sh`: Kontinuitätstest für `standalone -> solrcloud -> standalone` mit Moodle-API-Verifikation.
 - `scripts/upgrade-docker.sh`: Upgrade-Skript für Bare-Metal Solr 8/9/10/11 nach Docker.
 - `systemd/upgrade-docker@.service`: systemd oneshot-template für instance-basiertes Upgrade.
+- Added prototype Moodle plugin scaffold at `prototypes/local_eledia_solrplus/` (settings + health probe around core `search_solr`) to supersede legacy ideas from `tool_coursesearch`/`mod_tagsearch`.
 
 ### Fixed (previous, retained)
 - `powerinit.sh`: `SOLR_MODE` no longer overwritten by `load_env()`.

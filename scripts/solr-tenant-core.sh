@@ -212,6 +212,7 @@ _collection_exists() {
 # --- _ensure_configset_zk ---
 _ensure_configset_zk() {
   local conf_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
+  local legacy_conf_dir="/var/solr/data/configsets/moodle-tenant/conf"
   local resp
   resp="$(_solr_api GET "/admin/configs?action=LIST&wt=json" 2>/dev/null)"
   if printf '%s' "$resp" | jq -e '.configSets | index("eLeDia-moodle-tenant") != null' > /dev/null 2>&1; then
@@ -220,8 +221,13 @@ _ensure_configset_zk() {
   fi
   _log "INFO" "Uploading configset 'eLeDia-moodle-tenant' to ZooKeeper ($ZK_HOST)"
   if [ ! -d "$conf_dir" ]; then
-    _log "ERROR" "Configset source not found: $conf_dir"
-    return 1
+    if [ -d "$legacy_conf_dir" ]; then
+      _log "WARN" "Configset source fallback: using legacy path $legacy_conf_dir"
+      conf_dir="$legacy_conf_dir"
+    else
+      _log "ERROR" "Configset source not found: $conf_dir (fallback missing: $legacy_conf_dir)"
+      return 1
+    fi
   fi
   /opt/solr/bin/solr zk upconfig \
     -n eLeDia-moodle-tenant \

@@ -114,10 +114,15 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   bootstrap_cloud_security
 
   # Upload eLeDia-moodle-tenant configset to ZooKeeper so Collections API can use it.
-  log "Uploading eLeDia-moodle-tenant configset to ZooKeeper ${ZK_HOST}"
+  local_conf_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
+  if [ ! -d "$local_conf_dir" ] && [ -d "/var/solr/data/configsets/moodle-tenant/conf" ]; then
+    log "WARN: eLeDia configset path missing, fallback to legacy moodle-tenant path"
+    local_conf_dir="/var/solr/data/configsets/moodle-tenant/conf"
+  fi
+  log "Uploading eLeDia-moodle-tenant configset to ZooKeeper ${ZK_HOST} from ${local_conf_dir}"
   /opt/solr/bin/solr zk upconfig \
     -n eLeDia-moodle-tenant \
-    -d /var/solr/data/configsets/eLeDia-moodle-tenant/conf \
+    -d "$local_conf_dir" \
     -z "$ZK_HOST" 2>&1 | while IFS= read -r line; do log "[zk] $line"; done
 
   # Create collections for all active tenants via solr-tenant.sh
