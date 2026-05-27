@@ -102,11 +102,11 @@ jobs:
     - name: Run security tests
       run: ./scripts/run-tests.sh --security-only --no-cleanup
     - name: Create test tenant for document tests
-      run: 'docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test --cores moodle_core 2>&1 || true
+      run: 'docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test --cores eLeDia_core 2>&1 || true
 
         PASS=$(docker exec solr-solr grep ''TENANT_ci_test_PASS='' /opt/solr/tenants.env | cut -d= -f2)
 
-        echo "SOLR_CORE_NAME=moodle_core" >> .env
+        echo "SOLR_CORE_NAME=eLeDia_core" >> .env
 
         echo "CI_TENANT_PASS=$PASS" >> .env
 
@@ -114,7 +114,7 @@ jobs:
     - name: Test Tika file extraction (/update/extract)
       run: "PASS=$(docker exec solr-solr grep 'TENANT_ci_test_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nprintf 'Moodle\
         \ Tika extraction test \u2014 this line must be indexed.\\n' > /tmp/tika_test.txt\nCODE=$(curl -so /dev/null -w '%{http_code}'\
-        \ \\\n  -u \"solr_ci_test:$PASS\" \\\n  -F \"file=@/tmp/tika_test.txt\" \\\n  \"http://127.0.0.1:8983/solr/moodle_core/update/extract?extractOnly=true&wt=json\"\
+        \ \\\n  -u \"solr_ci_test:$PASS\" \\\n  -F \"file=@/tmp/tika_test.txt\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_core/update/extract?extractOnly=true&wt=json\"\
         )\nrm -f /tmp/tika_test.txt\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: /update/extract returned HTTP $CODE (Tika not\
         \ working)\"; exit 1; }\necho \"PASS: Tika /update/extract (HTTP 200)\"\n"
     - name: Run Moodle document tests
@@ -262,7 +262,7 @@ jobs:
 
         '
     - name: Create tenant via Collections API
-      run: 'docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_a --cores moodle_cloud_1
+      run: 'docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_a --cores eLeDia_cloud_1
 
         PASS_A=$(docker exec solr-solr grep ''TENANT_cloud_a_PASS='' /opt/solr/tenants.env | cut -d= -f2)
 
@@ -271,13 +271,13 @@ jobs:
         '
     - name: Verify collection exists and tenant can access it
       run: "PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nCODE=$(curl -so\
-        \ /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/moodle_cloud_1/select?q=*:*&rows=0\"\
+        \ /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/select?q=*:*&rows=0\"\
         )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: tenant cannot access collection (HTTP $CODE)\"; exit 1; }\necho \"PASS:\
         \ tenant can access own collection (HTTP 200)\"\n"
     - name: Test true collection isolation (SolrCloud enforces collection field)
-      run: "docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_b --cores moodle_cloud_2\nPASS_A=$(docker\
+      run: "docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_b --cores eLeDia_cloud_2\nPASS_A=$(docker\
         \ exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nCODE=$(curl -so /dev/null -w '%{http_code}'\
-        \ -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/moodle_cloud_2/select?q=*:*&rows=0\")\n[ \"$CODE\"\
+        \ -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_2/select?q=*:*&rows=0\")\n[ \"$CODE\"\
         \ = \"403\" ] || { echo \"FAIL: isolation broken \u2014 cloud_a can access cloud_b collection (HTTP $CODE)\"; exit\
         \ 1; }\necho \"PASS: True collection isolation enforced by SolrCloud (HTTP 403)\"\n"
     - name: Index document and verify restart persistence
@@ -286,22 +286,22 @@ jobs:
         owneruserid\":0,\n       \"modified\":\"2026-01-01T00:00:00Z\",\"type\":0,\"areaid\":\"core-user-myprofile\",\n  \
         \     \"itemid\":1,\"content\":\"restart test content for CI persistence check\"}]'\nCODE=$(curl -so /dev/null -w\
         \ '%{http_code}' \\\n  -u \"solr_cloud_a:$PASS_A\" \\\n  -X POST -H 'Content-Type: application/json' \\\n  -d \"$DOC\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/moodle_cloud_1/update?commit=true\")\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL:\
+        \ \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/update?commit=true\")\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL:\
         \ indexing failed (HTTP $CODE)\"; exit 1; }\necho \"PASS: Moodle document indexed\"\n\necho \"Restarting Solr container...\"\
         \ndocker compose restart solr\ntimeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo \"\
         Waiting...\"; done'\n\n# Verify document survives restart (index data in named volume)\nRESP=$(curl -s -u \"solr_cloud_a:$PASS_A\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/moodle_cloud_1/select?q=id:ci-persist-1&wt=json\")\necho \"$RESP\" | grep -q\
+        \ \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/select?q=id:ci-persist-1&wt=json\")\necho \"$RESP\" | grep -q\
         \ '\"numFound\":1' || { echo \"FAIL: document lost after restart\"; exit 1; }\necho \"PASS: Document survives Solr\
         \ restart (ZK + index persistence confirmed)\"\n\n# Verify collection still listed\nRESP=$(curl -s -u \"admin:CI_AdminPass_1234567890\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/admin/collections?action=LIST&wt=json\")\necho \"$RESP\" | grep -q '\"moodle_cloud_1\"\
+        \ \\\n  \"http://127.0.0.1:8983/solr/admin/collections?action=LIST&wt=json\")\necho \"$RESP\" | grep -q '\"eLeDia_cloud_1\"\
         ' || { echo \"FAIL: collection lost after restart\"; exit 1; }\necho \"PASS: Collection persists after restart\"\n\
         \n# Verify isolation still holds after restart\nCODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/moodle_cloud_2/select?q=*:*&rows=0\")\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL:\
+        \ \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_2/select?q=*:*&rows=0\")\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL:\
         \ isolation broken after restart (HTTP $CODE)\"; exit 1; }\necho \"PASS: Isolation holds after restart\"\n"
     - name: Test Tika file extraction in SolrCloud
       run: "PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nprintf 'Moodle\
         \ Tika extraction test in SolrCloud mode.\\n' > /tmp/tika_cloud_test.txt\nCODE=$(curl -so /dev/null -w '%{http_code}'\
-        \ \\\n  -u \"solr_cloud_a:$PASS_A\" \\\n  -F \"file=@/tmp/tika_cloud_test.txt\" \\\n  \"http://127.0.0.1:8983/solr/moodle_cloud_1/update/extract?extractOnly=true&wt=json\"\
+        \ \\\n  -u \"solr_cloud_a:$PASS_A\" \\\n  -F \"file=@/tmp/tika_cloud_test.txt\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/update/extract?extractOnly=true&wt=json\"\
         )\nrm -f /tmp/tika_cloud_test.txt\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: /update/extract HTTP $CODE in SolrCloud\"\
         ; exit 1; }\necho \"PASS: Tika /update/extract in SolrCloud (HTTP 200)\"\n"
     - name: Generate Caddy config
