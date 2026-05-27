@@ -249,6 +249,7 @@ fi
 
 # Also enforce Moodle-capable _default so plain Core CREATE without explicit
 # configSet stays Moodle-compatible.
+# Always refresh: _default must stay in sync with moodle-tenant schema.
 if [ -d "$DEFAULT_CONFIGSET_DST" ]; then
   _log "  Configset _default already exists — refreshing managed-schema + solrconfig.xml"
   cp -f "${CONFIGSET_SRC}/managed-schema" "${DEFAULT_CONFIGSET_DST}/managed-schema"

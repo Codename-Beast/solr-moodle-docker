@@ -173,11 +173,11 @@ _log "Step 2: tenants.env"
 if [ ! -f "tenants.env" ]; then
   touch "tenants.env"
   chown 8983:8983 "tenants.env" 2>/dev/null || true
-  chmod 600 "tenants.env"
+  chmod 644 "tenants.env"
   _log "  Created empty tenants.env"
 else
   chown 8983:8983 "tenants.env" 2>/dev/null || true
-  chmod 600 "tenants.env"
+  chmod 644 "tenants.env"
   _log "  tenants.env already exists — preserving"
 fi
 

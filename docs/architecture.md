@@ -6,11 +6,11 @@
 ## Ziel
 Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Security-Bootstrap und optionalem SolrCloud-Modus.
 
-## Architekturdiagramm (code-nah)
+## Architekturdiagramm
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Host (Linux) / Repo: solr-moodle-docker                    │
+│  Umgebung                                                    │
 │                                                             │
 │  Projektdateien                                              │
 │  ├── docker-compose.yml                                      │
@@ -94,8 +94,7 @@ Deshalb sind robuste Tests zweistufig:
 - enable: reaktiviert Tenant
 - apply: reconciled Zustand aus `tenants.env`
 
-## Grenzen
+## Status
 
-- Kein Multi-Node-Orchestrator
-- Kein externer ZK-Cluster-Manager im Projekt selbst
-- Proxy-/TLS-Produktionshaertung bleibt Umgebungsaufgabe
+- Multi-Node-Orchestrierung und externer ZK-Cluster-Manager sind nicht Teil dieses Repositories.
+- Proxy/TLS-Härtung wird über die jeweilige Zielumgebung umgesetzt.

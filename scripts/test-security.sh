@@ -1,0 +1,362 @@
+#!/bin/bash
+# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
+# SPDX-License-Identifier: MIT
+# Version: v3.1.0
+#
+# eLeDia Security Tests — auth, isolation, negative, performance
+# Part of the eLeDia Solr Multi-Tenant Docker Stack.
+# Sourced by run-tests.sh — do not run directly.
+
+# Allow tests to continue even if some fail
+# Using pipefail to catch errors in pipelines
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# Test counters
+TESTS_TOTAL=0
+TESTS_PASSED=0
+TESTS_FAILED=0
+TESTS_SKIPPED=0
+
+# Test results array
+declare -a FAILED_TESTS
+
+# Get dynamic container names from .env or fallback to default
+if [ -f ".env" ]; then
+    source .env
+fi
+INSTANCE_NAME=${INSTANCE_NAME:-solr}
+SOLR_CONTAINER="${INSTANCE_NAME}-solr"
+INIT_CONTAINER="${INSTANCE_NAME}-init"
+SOLR_HOST="127.0.0.1"
+SOLR_PORT="${SOLR_PORT:-8983}"
+SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
+SOLR_MODE="${SOLR_MODE:-}"
+if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
+    echo "ERROR: SOLR_HEAP='${SOLR_HEAP:-}' ist ungültig. Erwartet z.B. 2g oder 1024m." >&2
+    exit 1
+fi
+LOG_ROOT="${LOG_ROOT:-/var/log/solr/instances/${SOLR_CONTAINER}}"
+RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
+if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
+    LOG_ROOT="/tmp/eledia-logs"
+    RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
+    mkdir -p "${LOG_ROOT}" || {
+        echo "ERROR: cannot create fallback log dir ${LOG_ROOT}." >&2
+        exit 1
+    }
+    echo "WARN: using fallback LOG_ROOT=${LOG_ROOT} (no write access to /var/log/eledia)" >&2
+fi
+if ! touch "${RUN_LOG_FILE}" 2>/dev/null; then
+    LOG_ROOT="/tmp/eledia-logs"
+    RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
+    mkdir -p "${LOG_ROOT}" || true
+    touch "${RUN_LOG_FILE}" || {
+        echo "ERROR: cannot write log file ${RUN_LOG_FILE}." >&2
+        exit 1
+    }
+    echo "WARN: switched log output to ${RUN_LOG_FILE}" >&2
+fi
+exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
+# Security Tests Module
+
+security_tests() {
+    print_header "SECURITY TESTS - Security Validation"
+
+    #Network binding
+    print_test "Network binding (localhost only)"
+    local binding
+
+    binding=$(docker compose port solr "${SOLR_PORT}" 2>/dev/null)
+    if echo "$binding" | grep -q "127.0.0.1"; then
+        print_pass "Solr correctly bound to localhost only"
+    else
+        print_fail "Solr not bound to localhost: $binding"
+    fi
+
+   #Container privileges
+    print_test "Container privileges (non-root for Solr)"
+    local user
+    user=$(docker inspect "$SOLR_CONTAINER" --format='{{.Config.User}}' 2>/dev/null)
+    if [ "$user" = "8983:8983" ]; then
+        print_pass "Solr runs as non-root user (8983:8983)"
+    else
+        print_fail "Solr runs as wrong user: $user"
+    fi
+
+    # Test 3: Privileged mode
+    print_test "Privileged mode disabled"
+    local privileged
+    privileged=$(docker inspect "$SOLR_CONTAINER" --format='{{.HostConfig.Privileged}}' 2>/dev/null)
+    if [ "$privileged" = "false" ]; then
+        print_pass "Privileged mode disabled"
+    else
+        print_fail "Privileged mode enabled (SECURITY RISK)"
+    fi
+
+    # Secrets in environment (informational only)
+    print_test "Container environment password check"
+    if docker exec "$SOLR_CONTAINER" env 2>/dev/null | grep -qi "password"; then
+        print_info "Password env vars found (normal for Docker containers)"
+        print_pass "Container uses environment variables for configuration"
+    else
+        print_pass "No passwords in container environment"
+    fi
+
+    # File permissions
+    print_test "Sensitive file permissions"
+    local sec_perms
+    sec_perms=$(docker exec "$SOLR_CONTAINER" stat -c '%a' /var/solr/data/security.json 2>/dev/null)
+
+    if [ "$sec_perms" = "600" ]; then
+        print_pass "security.json has correct permissions (600)"
+    else
+        print_fail "security.json has wrong permissions: $sec_perms (expected 600)"
+    fi
+
+    #.env in gitignore
+    print_test ".env in .gitignore"
+    if grep -q "\.env" .gitignore 2>/dev/null; then
+        print_pass ".env correctly listed in .gitignore"
+    else
+        print_fail ".env not in .gitignore (SECURITY RISK!!)"
+    fi
+
+    # Default passwords in production
+    print_test "No default passwords used"
+    local admin_pass
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    if [ "$admin_pass" = "eledia_default" ]; then
+        print_fail "Default password still in use (CHANGE IT!)"
+    else
+        print_pass "Default password changed"
+    fi
+
+    # Moodle PHP SolrClient: /admin/system/ must be accessible for moodle role
+    # PHP PECL SolrClient::system() hits /solr/{core}/admin/system/ to get version.
+    # Without core-system-read permission, is_server_ready() fails with 403.
+    print_test "Moodle user can access /admin/system/ (PHP SolrClient::system())"
+    local moodle_pass moodle_user system_code
+    moodle_user=$(grep "^SOLR_MOODLE_USER=" .env 2>/dev/null | cut -d= -f2 | tr -d '"')
+    moodle_pass=$(grep "^SOLR_MOODLE_PASSWORD=" .env 2>/dev/null | cut -d= -f2 | tr -d '"')
+    if [ -n "$moodle_user" ] && [ -n "$moodle_pass" ]; then
+        system_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -u "${moodle_user}:${moodle_pass}" \
+            "http://${SOLR_HOST}:8983/solr/${SOLR_CORE_NAME}/admin/system/")
+        if [ "$system_code" = "200" ]; then
+            print_pass "Moodle user can reach /admin/system/ (HTTP 200)"
+        else
+            print_fail "Moodle user blocked on /admin/system/ (HTTP $system_code) — Moodle is_server_ready() will fail"
+        fi
+    else
+        print_skip "SOLR_MOODLE_USER/PASSWORD not in .env — skipping"
+    fi
+
+    # SSL warning check
+    print_test "SSL configuration awareness"
+    if docker compose logs solr 2>&1 | grep -q "SSL is off"; then
+        print_info "SSL warning present (OK for localhost, use reverse proxy for production)"
+        print_pass "SSL warning logged correctly"
+    else
+        print_skip "SSL warning not found (maybe suppressed)"
+    fi
+
+    # tenants.env accessible in container
+    print_test "tenants.env accessible in container"
+    if docker exec "$SOLR_CONTAINER" test -f /opt/solr/tenants.env 2>/dev/null; then
+        print_pass "tenants.env accessible in container"
+    else
+        print_fail "tenants.env not accessible in container"
+    fi
+}
+
+# =========================================
+# NEGATIVE TESTS - Invalid Input Handling
+# =========================================
+
+negative_tests() {
+    print_header "NEGATIVE TESTS - Invalid Input Handling"
+
+    local admin_pass
+
+    # Test Invalid credentials
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    print_test "Reject invalid credentials"
+    local invalid_response
+
+    invalid_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:wrongpassword" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
+    if [ "$invalid_response" = "401" ]; then
+        print_pass "Invalid credentials rejected (HTTP 401)"
+    else
+        print_fail "Invalid credentials not rejected (HTTP $invalid_response)"
+    fi
+
+    # Tes SQL injection attempt in query
+    print_test "SQL injection protection"
+    local injection_response
+
+    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
+    if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ] || [ "$injection_response" = "404" ] || [ "$injection_response" = "401" ] || [ "$injection_response" = "403" ]; then
+        print_pass "SQL injection handled safely (HTTP $injection_response)"
+    else
+        print_fail "Unexpected response to SQL injection (HTTP $injection_response)"
+    fi
+
+    # Test XSS attempt in query
+    print_test "XSS protection"
+    local xss_response
+
+    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
+    if echo "$xss_response" | grep -qv "<script>"; then
+        print_pass "XSS attack sanitized"
+    else
+        print_fail "XSS content not sanitized"
+    fi
+
+    # Test  Extremely long query
+    print_test "Handle extremely long query"
+    local long_query
+
+    long_query=$(python3 -c "print('a'*10000)")
+    local long_response
+
+    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
+    if [ "$long_response" = "400" ] || [ "$long_response" = "414" ] || [ "$long_response" = "200" ]; then
+        print_pass "Long query handled (HTTP $long_response)"
+    else
+        print_fail "Long query caused unexpected response (HTTP $long_response)"
+    fi
+
+    # Test Invalid core name
+    print_test "Reject invalid core name"
+    local invalid_core_response
+
+    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/nonexistent_core/select?q=*:*")
+    if [ "$invalid_core_response" = "404" ] || [ "$invalid_core_response" = "401" ] || [ "$invalid_core_response" = "403" ]; then
+        print_pass "Invalid core safely rejected (HTTP $invalid_core_response)"
+    else
+        print_fail "Invalid core not rejected (HTTP $invalid_core_response)"
+    fi
+
+    # Test Empty query parameter
+    print_test "Handle empty query"
+    local empty_response
+
+    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=")
+    if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ] || [ "$empty_response" = "404" ] || [ "$empty_response" = "401" ] || [ "$empty_response" = "403" ]; then
+        print_pass "Empty query handled (HTTP $empty_response)"
+    else
+        print_fail "Empty query caused unexpected response (HTTP $empty_response)"
+    fi
+}
+
+# =========================================
+# PERFORMANCE TESTS - Basic Performance
+# =========================================
+
+performance_tests() {
+    print_header "PERFORMANCE TESTS - Basic Performance"
+
+    local admin_pass
+
+    # Test Response time
+
+
+    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    print_test "API response time (<2s)"
+    local start_time
+
+    start_time=$(date +%s%3N)
+    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    local end_time
+
+    end_time=$(date +%s%3N)
+    local response_time
+
+
+    response_time=$((end_time - start_time))
+    if [ $response_time -lt 2000 ]; then
+        print_pass "Response time: ${response_time}ms (good)"
+    else
+        print_fail "Response time: ${response_time}ms (slow, >2000ms)"
+    fi
+
+    # Test Container resource usage
+    print_test "Container memory usage"
+    local mem_usage
+    mem_usage=$(docker stats "$SOLR_CONTAINER" --no-stream --format "{{.MemUsage}}" 2>/dev/null | cut -d'/' -f1)
+    if [ -n "$mem_usage" ]; then
+        print_pass "Memory usage: $mem_usage"
+    else
+        print_skip "Could not retrieve memory stats"
+    fi
+
+    # Test Healthcheck responsiveness
+    print_test "Healthcheck endpoint response"
+    local health_response
+
+    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/ping" 2>/dev/null)
+    if [ "$health_response" = "401" ] || [ "$health_response" = "200" ]; then
+        print_pass "Healthcheck endpoint responsive (HTTP $health_response)"
+    else
+        print_fail "Healthcheck endpoint not responding (HTTP $health_response)"
+    fi
+
+    # Test Concurrent request handling (load test)
+    print_test "Concurrent request handling (10 parallel requests)"
+    local concurrent_start
+
+    concurrent_start=$(date +%s%3N)
+    for i in {1..10}; do
+        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
+    done
+    wait
+    local concurrent_end
+
+    concurrent_end=$(date +%s%3N)
+    local concurrent_time
+
+
+    concurrent_time=$((concurrent_end - concurrent_start))
+    if [ $concurrent_time -lt 5000 ]; then
+        print_pass "Handled 10 concurrent requests in ${concurrent_time}ms"
+    else
+        print_fail "Concurrent requests too slow: ${concurrent_time}ms (expected <5000ms)"
+    fi
+
+    # Test Query performance under load
+    print_test "Query performance under load (20 queries)"
+    local load_start
+
+    load_start=$(date +%s%3N)
+    for i in {1..20}; do
+        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
+    done
+    local load_end
+
+    load_end=$(date +%s%3N)
+    local load_time
+
+    load_time=$((load_end - load_start))
+    local avg_time
+
+
+    avg_time=$((load_time / 20))
+    if [ $avg_time -lt 200 ]; then
+        print_pass "Average query time under load: ${avg_time}ms per query"
+    else
+        print_fail "Query performance under load too slow: ${avg_time}ms per query (expected <200ms)"
+    fi
+}
+
+# =========================================
+# MOODLE DOCUMENT TESTS
+# =========================================
+

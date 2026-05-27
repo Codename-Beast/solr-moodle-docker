@@ -42,6 +42,17 @@ detect_mode() {
   fi
 }
 
+wait_solr_ready() {
+  local waited=0 code
+  while [ "$waited" -lt 180 ]; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' -u "$(admin_auth)" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/info/system" || true)"
+    [ "$code" = "200" ] && return 0
+    sleep 3
+    waited=$((waited + 3))
+  done
+  return 1
+}
+
 export_manifest() {
   local out="${1:-${ROOT_DIR}/mode-portability-export.json}"
   local mode now core_json ten_json tmp
@@ -144,9 +155,12 @@ import_manifest() {
       $tenant_cmd core-add "$name" --core "$c" >/dev/null 2>&1 || true
     done
 
-    if [ "$active" = "true" ]; then
+    # Idempotent active/deactivate: only change if current state differs
+    local current_active
+    current_active="$($tenant_cmd info "$name" 2>/dev/null | awk '/Active:/ {print $2}')"
+    if [ "$active" = "true" ] && [ "$current_active" = "false" ]; then
       $tenant_cmd enable "$name" >/dev/null 2>&1 || true
-    else
+    elif [ "$active" = "false" ] && [ "$current_active" != "false" ]; then
       $tenant_cmd delete "$name" --force >/dev/null 2>&1 || true
     fi
   done
@@ -188,6 +202,11 @@ switch_mode() {
     (cd "$ROOT_DIR" && docker compose up -d)
   else
     (cd "$ROOT_DIR" && docker compose up -d --build)
+  fi
+
+  if ! wait_solr_ready; then
+    err "Solr not ready after mode switch to ${to}"
+    exit 1
   fi
 
   import_manifest "$manifest"

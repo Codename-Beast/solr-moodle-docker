@@ -5,25 +5,57 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **SolrCloud Bootstrap**: Automatic security.json upload to ZooKeeper, configset upload, and collection creation via `solr-tenant.sh apply` on first startup.
-- `docker-compose.cloud-test.yml` for isolated SolrCloud integration testing.
-- `scripts/solr-mode-portability.sh`: neue Import/Export/Switch-Schnittstelle für Core/Collection-/Tenant-Portabilität zwischen Standalone und SolrCloud.
-- `scripts/test-mode-switch.sh`: dedizierter Kontinuitätstest für `standalone -> solrcloud -> standalone` mit Moodle-API-Verifikation.
-- `docs/SOLR-8-to-10-impact.md`: komprimierte Impact-Analyse Solr 8.x bis 10.0 für dieses Repository inkl. Lessons Learned.
+- **Modular architecture**: `solr-tenant.sh` split into focused modules (all < 800 lines):
+  - `scripts/solr-tenant-api.sh` — helpers: logging, auth, env, naming
+  - `scripts/solr-tenant-core.sh` — core/collection CRUD (standalone + SolrCloud)
+  - `scripts/solr-tenant-security.sh` — credentials, roles, permissions
+  - `scripts/solr-tenant-cmd.sh` — create, delete, enable, apply, export
+- **Modular test suite**: `run-tests.sh` split into focused modules (all < 800 lines):
+  - `scripts/test-lib.sh` — colors, counters, print helpers
+  - `scripts/test-unit.sh` — file checks, compose config, Dockerfile
+  - `scripts/test-integration.sh` — tenant lifecycle, scale, isolation
+  - `scripts/test-security.sh` — auth, isolation, negative, performance
+  - `scripts/test-moodle.sh` — document indexing, Tika extraction, cloud
+- `scripts/solr-mode-portability.sh`: `wait_solr_ready()` helper for post-switch verification.
+- `scripts/upgrade-docker.sh`: Conditional `--build` — only rebuilds when Dockerfile/config/scripts changed (sha256 checksum).
 
 ### Fixed
-- `powerinit.sh`: `SOLR_MODE` no longer overwritten by `load_env()` — value from compose `environment:` is preserved.
-- `powerinit.sh`: `tenant-read`/`tenant-write` permissions now inserted **before** `all` permission in standalone mode (Solr evaluates top-down; `all` must be last).
-- `solr-cloud-entrypoint.sh`: Uploads `moodle-tenant` configset to ZooKeeper and runs `solr-tenant.sh apply` to create collections + permissions on startup.
-- `tenants.env` bind-mount: File must be world-readable (`chmod 644`) on host for solr user (uid 8983) access inside container.
+- **Idempotency: `cmd_core_add`** — skips if core already assigned to tenant. Prevents duplicate core entries in `tenants.env` (was: `moodle_core,moodle_core,moodle_core` on repeated calls).
+- **Idempotency: `import_manifest`** — `enable`/`delete` only called when tenant active state actually changes. Prevents unnecessary password resets on repeated imports.
+- **Idempotency: `_create_core`** — Response body checked after CREATE. Handles `coreNodeName missing` gracefully (stale standalone dirs in SolrCloud mode) and verifies core existence instead of blind 200 OK.
+- **Idempotency: `powerinit.sh`** — `_default` configset always refreshed from `moodle-tenant` source. Ensures Moodle-optimized schema is never stale.
+- `setup.sh`: `tenants.env` permissions `644` (was `600`) — container solr user (uid 8983) can read the file.
+- `docker-compose.yml` / `docker-compose.cloud-test.yml`: Removed SELinux `:z` flag from `tenants.env` mount (not needed, causes warnings).
 
 ### Changed
-- `solr-cloud-entrypoint.sh`: Tenant application runs in subshell with error tolerance — single tenant failure does not kill the entrypoint.
-- `.github/workflows/solr-testing.yml` erweitert:
-  - Push-Trigger auf `feature/**` und `fix/**` ergänzt (inkl. `feature/3.3.x`).
-  - Neuer Job `mode-switch-test` für die neue Portability-Schnittstelle (`scripts/test-mode-switch.sh`).
-  - Mode-Switch-Job korrigiert (`SOLR_ADMIN_PASSWORD`/`SOLR_SUPPORT_PASSWORD` in `.env` vollständig gesetzt; Fix für Exit 127).
-  - JS-Action-Warnungen reduziert: hadolint/trivy/buildx-Setup auf containerisierte bzw. CLI-basierte Steps umgestellt.
+- **eLeDia branding**: All module headers standardized with `eLeDia GmbH / Bernd Schreistetter (bsc)`.
+- `solr-tenant.sh`: Main dispatcher is now 42 lines (was 1429). Sources 4 modules.
+- `run-tests.sh`: Main orchestrator is now 198 lines (was 1459). Sources 5 modules.
+- `tests/solr-log-findings.md`: Documented historical `coreNodeName missing` error (harmless SolrCloud startup side-effect with stale standalone dirs).
+
+### Documentation
+- `README.md`: Bare-Metal 8/9/10/11 → Docker upgrade section added.
+- `docs/architecture.md`: Consolidated, removed outdated status docs.
+- Removed `docs/SOLR-8-to-10-impact.md` and `docs/STATUS-2026-05-24.md` (consolidated into README/CHANGELOG).
+
+### Added (previous, retained)
+- **SolrCloud Bootstrap**: Automatic security.json upload to ZooKeeper, configset upload, and collection creation via `solr-tenant.sh apply` on first startup.
+- `docker-compose.cloud-test.yml` for isolated SolrCloud integration testing.
+- `scripts/solr-mode-portability.sh`: Import/Export/Switch-Schnittstelle für Core/Collection-/Tenant-Portabilität zwischen Standalone und SolrCloud.
+- `scripts/test-mode-switch.sh`: Kontinuitätstest für `standalone -> solrcloud -> standalone` mit Moodle-API-Verifikation.
+- `scripts/upgrade-docker.sh`: Upgrade-Skript für Bare-Metal Solr 8/9/10/11 nach Docker.
+- `systemd/upgrade-docker@.service`: systemd oneshot-template für instance-basiertes Upgrade.
+
+### Fixed (previous, retained)
+- `powerinit.sh`: `SOLR_MODE` no longer overwritten by `load_env()`.
+- `powerinit.sh`: `tenant-read`/`tenant-write` permissions inserted before `all` permission.
+- `solr-cloud-entrypoint.sh`: Uploads `moodle-tenant` configset to ZK, runs `solr-tenant.sh apply`.
+- `tenants.env` bind-must be world-readable (`chmod 644`) on host.
+
+### Changed (previous, retained)
+- `solr-cloud-entrypoint.sh`: Tenant application runs in subshell with error tolerance.
+- Upgrade-Flow auf Einbahnstraße: 8.x Bare-Metal → Docker ohne Downgrade-Path.
+- `.github/workflows/solr-testing.yml`: Push-Trigger, mode-switch job, containerized linting.
 
 ### Tested
 - SolrCloud mode: 8 collections created, 37 credentials (admin, support, 5 active + 30 inactive tenants), security active (401 anonymous), moodle-tenant configset in ZK.
@@ -34,10 +66,6 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 - `docs/CI-CD.md` präzisiert Trigger (Push/PR) und manuellen Start für GitHub/GitLab.
-- `README.md` erweitert um Release-/Upgrade-/EOL-Branch-Strategie:
-  - Upgrade-Feature-Branch-Schema `feature/solr-<major>-<minor>-upgrade`
-  - Aussagekräftiger EOL-Archiv-Branch `main_eol_solr-<major>-<minor>_<YYYY-MM-DD>`
-  - Begründung für EOL-Archivierung (Audit, Rollback, Nachvollziehbarkeit)
 
 ### Fixed
 - `scripts/run-tests.sh`: HTTP-000 Root Cause beseitigt.
@@ -217,9 +245,9 @@ Versioning: Semantic Versioning
 - jeweils mit Zustandsverifikation via `solr-tenant.sh info`.
 
 ### Changed
-- Statusdokumentation konsolidiert (`docs/STATUS-2026-05-24.md`).
+- Statusdokumentation konsolidiert.
 - CI-Testablauf angepasst, damit Analyzer-Details nicht mehr zu False-Negatives im Build fuehren.
-- `docs/architecture.md` in beiden Repos um code-nahe ASCII-Architekturdiagramme erweitert.
+- `docs/architecture.md` in beiden Repos um ASCII-Architekturdiagramme erweitert.
 - Compose-/Runtime-Warnungen reduziert:
 - Named-Volume SELinux-Flag (`:z`) an `solr_data` entfernt (Docker warning beseitigt).
 - `maxBooleanClauses` auf global konsistente 1024 gesetzt (Core-Load WARN beseitigt).
@@ -237,7 +265,7 @@ Versioning: Semantic Versioning
 - `Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter`
 - `SPDX-License-Identifier: MIT`
 - `Version: v3.0.1`
-- README komplett auf code-nahe Betriebsdoku umgestellt (TL;DR, SolrCloud, Tests, CI, Security, Ops).
+- README auf Betriebsdoku umgestellt (TL;DR, SolrCloud, Tests, CI, Security, Ops).
 - Dokumentierte Solr-Doku-Tweaks fuer `/update/extract`.
 
 ### Changed
@@ -514,12 +542,4 @@ Versioning: Semantic Versioning
 
 ---
 
-## Operational Note (Upgrade-Prozess, bewusst am Ende)
 
-Der verbindliche Upgrade-Ablauf ist in `README.md` und `docs/SOLR-8-to-10-impact.md` dokumentiert,
-inklusive EOL-Archivbranch für den alten Main-Stand:
-
-- Feature-Upgrade nur auf `feature/solr-<major>-<minor>-upgrade`
-- Vor Merge: `main` als `main_eol_solr-<major>-<minor>_<YYYY-MM-DD>` sichern
-- Pflichtnachweise: Testläufe grün (inkl. optional `--mode-switch` bei Modusänderungen)
-- Danach MR auf `main`

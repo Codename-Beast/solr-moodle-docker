@@ -107,12 +107,8 @@ Die Unterschiede liegen im Betrieb, nicht in der Moodle-Anbindung.
 | Setup-Komplexität | niedriger | höher |
 | Tenant-Isolation | über Security + Proxy-Regeln | nativ über Collections + Security API |
 | Skalierung | vertikal / einzelner Node | horizontal erweiterbar |
-| Betriebsaufwand | geringer | höher |
+| Aufwand | geringer | höher |
 | Empfehlung | kleine/mittlere Installationen | größere Multi-Tenant-Setups / Wachstumspfad |
-
-Praxisregel:
-- Wenn ein einzelner Node reicht und Betrieb simpel bleiben soll: **Standalone**.
-- Wenn Collection-basierte Isolation und spätere Skalierung zentral sind: **SolrCloud**.
 
 Wichtig: `SOLR_PORT` bleibt in beiden Modi dynamisch, damit mehrere Instanzen parallel möglich sind.
 
@@ -134,6 +130,44 @@ Wichtig: `SOLR_PORT` bleibt in beiden Modi dynamisch, damit mehrere Instanzen pa
 ./scripts/run-tests.sh --mode-switch
 ```
 
+## Bare-Metal 8/9/10/11 -> Docker Upgrade (einseitig)
+
+Wichtig: Dieser Pfad ist bewusst **nur Upgrade**, kein Downgrade/Back-Switch.
+
+```bash
+# Beispiel: Instanz "kunde1", alter systemd-Service "solr", Domain für Naming-Schema
+sudo ./scripts/upgrade-docker.sh \
+  --instance kunde1 \
+  --legacy-service solr \
+  --customer-domain kunde1.example.de
+```
+
+Was das Skript macht:
+- exportiert vorhandene Bare-Metal-Cores (aus erkanntem/gesetztem SOLR_HOME)
+- stoppt und deaktiviert die alte systemd-Solr-Instanz
+- startet die Docker-Instanz idempotent (`INSTANCE_NAME`-basiert)
+- importiert Core-Daten in `solr_data_<INSTANCE_NAME>`
+- loggt mit Instanz-/Container-Kontext (`[instance:..][container:..]`)
+
+Core-Namensschema:
+- Standard: `core_<kundendomain>` (Domain wird zu lowercase + `_` normalisiert)
+- Wenn keine Domain/keine exportierten Cores vorhanden: `eledia_moodle_core`
+
+Mehrere Instanzen:
+- vollständig über `--instance` unterstützt
+- erkennbare Runtime-Namen bleiben konsistent:
+  - Container: `<instance>-solr`, `<instance>-init`
+  - Volume: `solr_data_<instance>`
+  - Network: `<instance>-network`
+
+Optional systemd-Integration (oneshot template):
+
+```bash
+sudo cp systemd/upgrade-docker@.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start upgrade-docker@kunde1.service
+```
+
 Zusätzlich für kontrollierte Migrationen:
 
 ```bash
@@ -147,39 +181,6 @@ Zusätzlich für kontrollierte Migrationen:
 ./scripts/solr-mode-portability.sh switch --to solrcloud
 ./scripts/solr-mode-portability.sh switch --to standalone
 ```
-
----
-
-## Release-, Upgrade- und EOL-Branch-Strategie
-
-Damit Upgrades reproduzierbar bleiben und alte Hauptstände nachvollziehbar archiviert sind,
-verwenden wir folgende Branch-Namen:
-
-- Feature/Upgrade-Branch:
-  - `feature/solr-<major>-<minor>-upgrade` (z. B. `feature/solr-10-0-upgrade`)
-- EOL-Archiv-Branch für den bisherigen Main-Stand:
-  - `main_eol_solr-<major>-<minor>_<YYYY-MM-DD>`
-  - Beispiel: `main_eol_solr-9-10_2026-05-27`
-
-Warum ein EOL-Archiv-Branch?
-
-- Der alte `main` repräsentiert eine produktiv genutzte Solr-Generation, die mit dem Upgrade
-  bewusst verlassen wird.
-- Für Audits, Rollback-Szenarien und Kunden-/Betriebsnachweise muss dieser Zustand
-  unverändert und eindeutig benannt erhalten bleiben.
-- `main_eol_*` macht auf einen Blick sichtbar:
-  - welche Solr-Linie beendet wurde,
-  - wann der Stand eingefroren wurde,
-  - dass auf diesem Branch keine Feature-Weiterentwicklung mehr stattfindet
-    (nur Notfall-/Dokufixes nach expliziter Freigabe).
-
-Empfohlener Upgrade-Ablauf:
-
-1. Upgrade-Arbeit auf `feature/solr-<major>-<minor>-upgrade`.
-2. CI muss auf dem Feature-Branch vollständig grün sein.
-3. Vor Merge: aktuellen `main` als `main_eol_*` branch/taggen und pushen.
-4. Merge Request von Feature -> `main` erstellen.
-5. Nach Merge: Release Notes/CHANGELOG finalisieren.
 
 ---
 

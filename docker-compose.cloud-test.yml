@@ -13,7 +13,7 @@ services:
     volumes:
       - solr_cloud_test_data:/var/solr/data
       - ./.env:/.env:ro,z
-      - ./tenants.env:/opt/solr/tenants.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:ro
     env_file:
       - .env
     environment:

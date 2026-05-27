@@ -21,7 +21,7 @@ services:
     volumes:
       - solr_data:/var/solr/data
       - ./.env:/.env:ro,z
-      - ./tenants.env:/opt/solr/tenants.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:ro
       - ${SOLR_LOG_INSTANCES_ROOT:-/var/log/solr/instances}/${INSTANCE_NAME:-solr}-init:/var/log/solr:z
     env_file:
       - .env
@@ -61,7 +61,7 @@ services:
       - solr_data:/var/solr/data
       # Runtime helper scripts are baked into Dockerfile.solr at /opt/solr/scripts.
       # Keep tenants.env mounted as mutable tenant source-of-truth.
-      - ./tenants.env:/opt/solr/tenants.env:z
+      - ./tenants.env:/opt/solr/tenants.env:rw
       - ${SOLR_LOG_INSTANCES_ROOT:-/var/log/solr/instances}/${INSTANCE_NAME:-solr}-solr:/var/log/solr:z
     env_file:
       - .env
