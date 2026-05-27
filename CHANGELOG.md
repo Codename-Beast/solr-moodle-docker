@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **SolrCloud Bootstrap**: Automatic security.json upload to ZooKeeper, configset upload, and collection creation via `solr-tenant.sh apply` on first startup.
+- `docker-compose.cloud-test.yml` for isolated SolrCloud integration testing.
+
+### Fixed
+- `powerinit.sh`: `SOLR_MODE` no longer overwritten by `load_env()` — value from compose `environment:` is preserved.
+- `powerinit.sh`: `tenant-read`/`tenant-write` permissions now inserted **before** `all` permission in standalone mode (Solr evaluates top-down; `all` must be last).
+- `solr-cloud-entrypoint.sh`: Uploads `moodle-tenant` configset to ZooKeeper and runs `solr-tenant.sh apply` to create collections + permissions on startup.
+- `tenants.env` bind-mount: File must be world-readable (`chmod 644`) on host for solr user (uid 8983) access inside container.
+
+### Changed
+- `solr-cloud-entrypoint.sh`: Tenant application runs in subshell with error tolerance — single tenant failure does not kill the entrypoint.
+
+### Tested
+- SolrCloud mode: 8 collections created, 37 credentials (admin, support, 5 active + 30 inactive tenants), security active (401 anonymous), moodle-tenant configset in ZK.
+
 ### Fixed
 - GitLab-Job `feature-full-test` startet den Stack jetzt explizit vor den Tests (`docker compose build`, `docker compose up -d`, Health-Wait bis `healthy`).
 - Damit werden HTTP-000-Fehler durch nicht gestartete Container in `scripts/run-tests.sh --unit-only` vermieden.
