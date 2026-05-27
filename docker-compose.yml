@@ -1,39 +1,27 @@
 # =========================================
-# Solr for Moodle — Multi-Tenant
-# Developer: Bernd Schreistetter
-# Company: Eledia.de
-# Version: v3.0.1
+# Solr for Moodle — Multi-Tenant SolrCloud
+# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+# Version: v3.4.0
+# =========================================
+# SolrCloud is the only supported mode since Solr 10.1.
+# The former one-shot init container has been removed — security.json,
+# configset upload and collection bootstrap are handled by
+# solr-cloud-entrypoint.sh on every container start.
+#
+# Log path: /var/log/eledia/<INSTANCE_NAME>/  (bind-mounted from host)
+#   All Docker instance logs land there for Promtail/syslog scraping.
 # =========================================
 
 services:
   # =================================
-  # [BOOTSTRAP] Init container
-  # Builds security.json from .env + tenants.env
-  # Exits 0 on success, Solr only starts if init succeeds
-  # =================================
-  solr-init:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: solr-init:v3.0.0
-    container_name: ${INSTANCE_NAME:-solr}-init
-    user: "0:0"
-    volumes:
-      - solr_data:/var/solr/data
-      - ./.env:/.env:ro,z
-      - ./tenants.env:/opt/solr/tenants.env:ro
-      - ${SOLR_LOG_INSTANCES_ROOT:-/var/log/solr/instances}/${INSTANCE_NAME:-solr}-init:/var/log/solr:z
-    env_file:
-      - .env
-    environment:
-      ENV_FILE_PATH: /.env
-      SOLR_MODE: ${SOLR_MODE:-}
-    networks:
-      - solr_network
-    restart: "no"
-
-  # =================================
-  # Main service
+  # Solr SolrCloud
+  # solr-cloud-entrypoint.sh handles on every start:
+  #   1. Wait for ZooKeeper readiness
+  #   2. Upload security.json → ZK
+  #   3. Upload eLeDia-moodle-tenant configset → ZK
+  #   4. Run solr-tenant.sh apply (idempotent)
+  #   5. Hand off to solr-foreground
   # =================================
   solr:
     build:
@@ -43,40 +31,32 @@ services:
         SOLR_VERSION: ${SOLR_VERSION:-9.10.1}
     image: solr-eledia:${SOLR_VERSION:-9.10.1}
     container_name: ${INSTANCE_NAME:-solr}-solr
-    depends_on:
-      solr-init:
-        condition: service_completed_successfully
-    ports:
-      # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
-      # External access goes through the reverse proxy (nginx/apache) with TLS.
-      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
-    # SolrCloud mode needs a short bootstrap after Solr starts: embedded
-    # ZooKeeper is only available at runtime, but Cloud security must live in
-    # ZK (/security.json), not only as /var/solr/data/security.json on disk.
-    # The shell entrypoint uploads security.json to ZK before healthcheck turns
-    # green. Standalone mode falls through to plain solr-foreground.
     command: ["/opt/solr/docker/scripts/solr-cloud-entrypoint.sh"]
     user: "8983:8983"
+    ports:
+      # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
+      # External access goes through the reverse proxy (Apache/Caddy) with TLS.
+      - "${SOLR_BIND:-127.0.0.1}:${SOLR_PORT:-8983}:${SOLR_PORT:-8983}"
     volumes:
       - solr_data:/var/solr/data
-      # Runtime helper scripts are baked into Dockerfile.solr at /opt/solr/scripts.
-      # Keep tenants.env mounted as mutable tenant source-of-truth.
+      # tenants.env: source of truth for tenant CRUD operations
       - ./tenants.env:/opt/solr/tenants.env:rw
-      - ${SOLR_LOG_INSTANCES_ROOT:-/var/log/solr/instances}/${INSTANCE_NAME:-solr}-solr:/var/log/solr:z
+      # eLeDia-config: schema + solrconfig source for configset upload
+      - ./eLeDia-config:/opt/solr/eledia-config:ro
+      # Host log mount — all Solr logs go to /var/log/eledia/<instance>/
+      # so Promtail, syslog, and ops tooling can scrape them directly.
+      - ${ELEDIA_LOG_ROOT:-/var/log/eledia}/${INSTANCE_NAME:-solr}:/var/log/solr:z
     env_file:
       - .env
     environment:
       SOLR_HEAP: ${SOLR_HEAP:-2g}
       SOLR_LOG_LEVEL: ${SOLR_LOG_LEVEL:-INFO}
-      # SolrCloud: set SOLR_MODE=solrcloud in .env — enables embedded ZooKeeper.
-      # Leave empty (default) for standalone mode.
-      SOLR_MODE: ${SOLR_MODE:-}
-      # Enable Tika extraction module (Moodle file indexing via /update/extract)
+      # SolrCloud is the default. Leave SOLR_MODE unset or set to solrcloud.
+      SOLR_MODE: ${SOLR_MODE:-solrcloud}
+      # Tika extraction for Moodle file indexing (/update/extract)
       SOLR_MODULES: ${SOLR_MODULES:-extraction}
-      # Optional Solr 9.10 hardening/ops toggles from .env
       SOLR_JETTY_GRACEFUL: ${SOLR_JETTY_GRACEFUL:-true}
       SOLR_LOGS_REQUESTLOG_ENABLED: ${SOLR_LOGS_REQUESTLOG_ENABLED:-false}
-      # Disable usage analytics + explicit security defaults for 9.10
       SOLR_SECURITY_MANAGER_ENABLED: ${SOLR_SECURITY_MANAGER_ENABLED:-false}
       SOLR_OPTS: >-
         -XX:-UseLargePages
@@ -110,8 +90,7 @@ services:
         - >-
           curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
           http://localhost:${SOLR_PORT:-8983}/solr/admin/info/system >/dev/null &&
-          { [ "$${SOLR_MODE:-}" != "solrcloud" ] ||
-          [ "$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${SOLR_PORT:-8983}/solr/admin/authentication)" = "401" ]; }
+          [ "$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${SOLR_PORT:-8983}/solr/admin/authentication)" = "401" ]
       interval: 15s
       timeout: 10s
       retries: 5

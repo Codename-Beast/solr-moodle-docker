@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-05-27
+
+### Changed
+- Removed one-shot init container (`solr-init` / `Dockerfile` / `powerinit.sh`) — SolrCloud
+  bootstrap is fully handled by `solr-cloud-entrypoint.sh` on every container start.
+  No more dead init container leaking per instance after first deploy.
+- `docker-compose.yml`: `solr-init` service and `depends_on` removed; `SOLR_MODE` default
+  changed to `solrcloud`; log volume updated to `ELEDIA_LOG_ROOT`.
+- `SOLR_MODE` default changed to `solrcloud` in `docker-compose.yml` (SolrCloud is the
+  only supported mode since Solr 10.1).
+- Host log path changed from `/var/log/solr/instances/<name>/` to `/var/log/eledia/<name>/`
+  — all Docker container logs of every instance land there for Promtail / syslog scraping.
+  Controlled via `ELEDIA_LOG_ROOT` env var (default `/var/log/eledia`).
+- Architecture diagram (`docs/architecture-runtime.svg`) updated: standalone mode removed,
+  ZooKeeper / Collections layout and new log path documented.
+
+### Added
+- `ansible-role-solr` — `tasks/config.yml`: new `solr_config` task for rolling out updated
+  Solr configs (managed-schema, solrconfig.xml) without container restart:
+  - Detects changed files via checksum (`solr_config_new_dir` on control node)
+  - Stages files to deploy dir, `docker cp` into container's `eLeDia-config/`
+  - Re-uploads configset to ZooKeeper via `solr zk upconfig`
+  - Reloads all (or a specific) collection via Collections API
+  - Trigger: `--tags solr_config` or `solr_config_enabled: true`
+- `ansible-role-solr` — `defaults/main.yml`: `solr_config_enabled`, `solr_config_new_dir`,
+  `solr_config_collection`, `solr_config_zk_configset` defaults.
+- `ansible-role-solr` — `defaults/main.yml`: `solr_eledia_log_root: /var/log/eledia`.
+- `ansible-role-solr` — `templates/env.j2`: `ELEDIA_LOG_ROOT` written to `.env`.
+
+### Fixed
+- `ansible-role-solr` — `defaults/main.yml`: `solr_mode` default corrected to `solrcloud`.
+- `ansible-role-solr` — `defaults/main.yml`: `solr_repo_version` updated to `feature/3.4.0`.
+- `ansible-role-solr` — `tasks/setup.yml`: log dir and logrotate target changed from
+  `/var/log/solr/` to `/var/log/eledia/*/` to match new host log layout.
+- `ansible-role-solr` — `tasks/setup.yml`: logrotate config renamed to `eledia-solr`.
+
 ## [3.3.1] - 2026-05-27
 
 ### Refactored
