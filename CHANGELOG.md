@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - `.github/workflows/solr-testing.yml` erweitert:
   - Push-Trigger auf `feature/**` und `fix/**` ergänzt (inkl. `feature/3.3.x`).
   - Neuer Job `mode-switch-test` für die neue Portability-Schnittstelle (`scripts/test-mode-switch.sh`).
+  - Mode-Switch-Job korrigiert (`SOLR_ADMIN_PASSWORD`/`SOLR_SUPPORT_PASSWORD` in `.env` vollständig gesetzt; Fix für Exit 127).
+  - JS-Action-Warnungen reduziert: hadolint/trivy/buildx-Setup auf containerisierte bzw. CLI-basierte Steps umgestellt.
 
 ### Tested
 - SolrCloud mode: 8 collections created, 37 credentials (admin, support, 5 active + 30 inactive tenants), security active (401 anonymous), moodle-tenant configset in ZK.

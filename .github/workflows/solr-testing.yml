@@ -39,11 +39,10 @@ jobs:
         find . -name "*.sh" -type f -exec shellcheck -x {} +
 
         '
-    - name: Run hadolint on Dockerfiles
-      uses: hadolint/hadolint-action@v3.1.0
-      with:
-        dockerfile: Dockerfile
-        failure-threshold: warning
+    - name: Run hadolint on Dockerfiles (containerized, no JS action runtime)
+      run: |
+        docker run --rm -i hadolint/hadolint < Dockerfile
+        docker run --rm -i hadolint/hadolint < Dockerfile.solr
     - name: Validate YAML files
       run: |
         sudo apt-get install -y yamllint
@@ -58,20 +57,10 @@ jobs:
       uses: actions/checkout@v6
     - name: Build init container
       run: docker build -f Dockerfile -t solr-init:test .
-    - name: Run Trivy vulnerability scanner on init image
-      uses: aquasecurity/trivy-action@v0.35.0
-      with:
-        image-ref: solr-init:test
-        format: table
-        severity: CRITICAL,HIGH
-        exit-code: '0'
-    - name: Run Trivy on Solr base image
-      uses: aquasecurity/trivy-action@v0.35.0
-      with:
-        image-ref: solr:9.10.1
-        format: table
-        severity: CRITICAL,HIGH
-        exit-code: '0'
+    - name: Run Trivy vulnerability scanner (containerized, no JS action runtime)
+      run: |
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr-init:test
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr:9.10.1
   solr-test:
     name: Solr Tests
     runs-on: ubuntu-latest
@@ -80,16 +69,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Cache Docker layers
-      uses: actions/cache@v4
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: '${{ runner.os }}-buildx-
-
-          '
+    - name: Show Docker version (Buildx via Docker CLI)
+      run: |
+        docker version
+        docker buildx version || true
     - name: Create .env for testing
       run: "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
         \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
@@ -226,8 +209,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Show Docker version (Buildx via Docker CLI)
+      run: |
+        docker version
+        docker buildx version || true
     - name: Create .env for SolrCloud testing
       run: |
         cat > .env <<'EOF'
@@ -360,8 +345,8 @@ jobs:
         sed -i 's/^SOLR_PORT=.*/SOLR_PORT=8983/' .env || true
         sed -i 's/^SOLR_BIND=.*/SOLR_BIND=127.0.0.1/' .env || true
         sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/' .env || true
-        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/CI_AdminPass_1234567890/' .env || true
-        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/CI_SupportPass_1234567890/' .env || true
+        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890/' .env || true
+        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890/' .env || true
         : > tenants.env
         chmod 666 tenants.env
     - name: Run mode switch continuity test
