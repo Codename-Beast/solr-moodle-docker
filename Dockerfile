@@ -23,7 +23,7 @@ RUN apk add --no-cache \
     mkdir -p /config /workspace /var/solr/data /init
 
 # Copy configuration files
-COPY config/ /config/
+COPY eLeDia-config/ /config/
 COPY init/security.json.template /init/security.json.template
 COPY init/powerinit.sh /init/powerinit.sh
 COPY scripts/ /opt/solr/scripts/

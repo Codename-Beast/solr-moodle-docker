@@ -163,7 +163,7 @@ ensure_default_core_name() {
   if [ -n "$CUSTOMER_DOMAIN" ]; then
     core_name="core_$(sanitize_domain "$CUSTOMER_DOMAIN")"
   else
-    core_name="eledia_moodle_core"
+    core_name="eLeDia_core"
   fi
   printf '%s' "$core_name"
 }
@@ -190,8 +190,8 @@ import_cores_into_volume() {
     fallback="$(ensure_default_core_name)"
     log "No exported cores. Creating Moodle-optimized default core: ${fallback}"
     local container="${INSTANCE_NAME}-solr"
-    logc "$container" "create core ${fallback} with configSet=moodle-tenant"
-    run "docker exec '${container}' curl -sS -u admin:${SOLR_ADMIN_PASSWORD:-admin} 'http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/cores?action=CREATE&name=${fallback}&configSet=moodle-tenant&wt=json' >/dev/null"
+    logc "$container" "create core ${fallback} with configSet=eLeDia-moodle-tenant"
+    run "docker exec '${container}' curl -sS -u admin:${SOLR_ADMIN_PASSWORD:-admin} 'http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/cores?action=CREATE&name=${fallback}&configSet=eLeDia-moodle-tenant&wt=json' >/dev/null"
     return 0
   fi
 
@@ -268,7 +268,7 @@ main() {
   # Checksum file tracks the last built state.
   local build_checksum_file="${MIGRATION_ROOT}/${INSTANCE_NAME}/.build-checksum"
   local current_checksum
-  current_checksum="$({ sha256sum "${ROOT_DIR}/Dockerfile.solr" "${ROOT_DIR}/docker-compose.yml" "${ROOT_DIR}/config/managed-schema" "${ROOT_DIR}/config/solrconfig.xml" "${ROOT_DIR}/init/powerinit.sh" "${ROOT_DIR}/scripts/solr-cloud-entrypoint.sh" 2>/dev/null; } | sort | sha256sum | cut -d' ' -f1)"
+  current_checksum="$({ sha256sum "${ROOT_DIR}/Dockerfile.solr" "${ROOT_DIR}/docker-compose.yml" "${ROOT_DIR}/eLeDia-config/managed-schema" "${ROOT_DIR}/eLeDia-config/solrconfig.xml" "${ROOT_DIR}/init/powerinit.sh" "${ROOT_DIR}/scripts/solr-cloud-entrypoint.sh" 2>/dev/null; } | sort | sha256sum | cut -d' ' -f1)"
   local needs_build="yes"
   if [ -f "$build_checksum_file" ] && [ -f "$state_file" ]; then
     local last_checksum

@@ -271,7 +271,7 @@ _hash_password() {
 }
 
 # _create_core: Create a Solr core (standalone) or collection (SolrCloud).
-# Standalone: uses the Core Admin API with configSet=moodle-tenant.
+# Standalone: uses the Core Admin API with configSet=eLeDia-moodle-tenant.
 # SolrCloud:  delegates to _create_collection which uses the Collections API.
 # Args: $1 - core/collection name
 # Returns: 0 on success or if already exists; 1 on API failure

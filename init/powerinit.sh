@@ -48,7 +48,7 @@ _setup_logging
 # ---------------------------------------------------------------------------
 DATA_DIR="/var/solr/data"
 CONFIGSET_SRC="/config"
-CONFIGSET_DST="${DATA_DIR}/configsets/moodle-tenant/conf"
+CONFIGSET_DST="${DATA_DIR}/configsets/eLeDia-moodle-tenant/conf"
 DEFAULT_CONFIGSET_DST="${DATA_DIR}/configsets/_default/conf"
 TENANTS_ENV="/opt/solr/tenants.env"
 ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
@@ -233,23 +233,23 @@ _log "  Found $TENANT_COUNT tenant(s)"
 # ---------------------------------------------------------------------------
 # Step 2: Create configsets (idempotent)
 # ---------------------------------------------------------------------------
-_log "Step 2: Configset moodle-tenant + _default"
+_log "Step 2: Configset eLeDia-moodle-tenant + _default"
 
 if [ -d "$CONFIGSET_DST" ]; then
-  _log "  Configset moodle-tenant already exists — skipping"
+  _log "  Configset eLeDia-moodle-tenant already exists — skipping"
 else
-  _log "  Creating configset moodle-tenant from $CONFIGSET_SRC"
+  _log "  Creating configset eLeDia-moodle-tenant from $CONFIGSET_SRC"
   mkdir -p "$CONFIGSET_DST"
   if ! cp -a "${CONFIGSET_SRC}/." "${CONFIGSET_DST}/"; then
-    _log "ERROR: Failed to copy config files to moodle-tenant configset"
+    _log "ERROR: Failed to copy config files to eLeDia-moodle-tenant configset"
     exit 2
   fi
-  _log "  Configset moodle-tenant created at $CONFIGSET_DST"
+  _log "  Configset eLeDia-moodle-tenant created at $CONFIGSET_DST"
 fi
 
 # Also enforce Moodle-capable _default so plain Core CREATE without explicit
 # configSet stays Moodle-compatible.
-# Always refresh: _default must stay in sync with moodle-tenant schema.
+# Always refresh: _default must stay in sync with eLeDia-moodle-tenant schema.
 if [ -d "$DEFAULT_CONFIGSET_DST" ]; then
   _log "  Configset _default already exists — refreshing managed-schema + solrconfig.xml"
   cp -f "${CONFIGSET_SRC}/managed-schema" "${DEFAULT_CONFIGSET_DST}/managed-schema"

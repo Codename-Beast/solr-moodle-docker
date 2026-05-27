@@ -42,7 +42,7 @@ if [ -f ".env" ]; then
     source .env
 fi
 SOLR_PORT="${SOLR_PORT:-8983}"
-SOLR_CORE="${SOLR_CORE_NAME:-moodle_core}"
+SOLR_CORE="${SOLR_CORE_NAME:-eLeDia_core}"
 
 # Counters
 TESTS_RUN=0
@@ -328,7 +328,7 @@ if ! curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
   | grep -q '"instanceDir"'; then
   print_info "Core '${SOLR_CORE}' fehlt — erstelle Test-Core via Core Admin API"
   curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
-    "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=CREATE&name=${SOLR_CORE}&configSet=moodle-tenant&wt=json" >/dev/null
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=CREATE&name=${SOLR_CORE}&configSet=eLeDia-moodle-tenant&wt=json" >/dev/null
   sleep 2
 fi
 

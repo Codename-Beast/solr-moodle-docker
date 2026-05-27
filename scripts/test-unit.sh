@@ -36,7 +36,7 @@ SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="${SOLR_PORT:-8983}"
-SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
+SOLR_CORE_NAME=${SOLR_CORE_NAME:-eLeDia_core}
 SOLR_MODE="${SOLR_MODE:-}"
 if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
     echo "ERROR: SOLR_HEAP='${SOLR_HEAP:-}' ist ungültig. Erwartet z.B. 2g oder 1024m." >&2
@@ -82,8 +82,8 @@ unit_tests() {
     local required_files=(
         "docker-compose.yml"
         "init/powerinit.sh"
-        "config/managed-schema"
-        "config/solrconfig.xml"
+        "eLeDia-config/managed-schema"
+        "eLeDia-config/solrconfig.xml"
         "init/security.json.template"
         "scripts/solr-cloud-entrypoint.sh"
         "scripts/solr-tenant.sh"

@@ -746,28 +746,6 @@ Logs: /var/log/solr/tenant.log
 EOF
 }
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-COMMAND="${1:-}"
-shift || true
 
-case "$COMMAND" in
-  create)       cmd_create "$@" ;;
-  delete)       cmd_delete "$@" ;;
-  enable)       cmd_enable "$@" ;;
-  passwd)       cmd_passwd "$@" ;;
-  list)         cmd_list "$@" ;;
-  info)         cmd_info "$@" ;;
-  core-add)     cmd_core_add "$@" ;;
-  core-remove)  cmd_core_remove "$@" ;;
-  apply)        cmd_apply "$@" ;;
-  sync-sot)     cmd_sync_sot "$@" ;;
-  export)       cmd_export "$@" ;;
-  caddy-config) cmd_caddy_config "$@" ;;
-  --help|-h|help) usage ;;
-  '')           usage; exit 1 ;;
-  *)            printf 'Unknown command: %s\nRun: solr-tenant.sh --help\n' "$COMMAND" >&2; exit 1 ;;
-esac
 
 

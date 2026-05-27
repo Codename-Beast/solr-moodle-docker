@@ -50,7 +50,7 @@ _create_core() {
       return 0
     fi
     local create_resp
-    create_resp="$(_solr_api GET "/admin/cores?action=CREATE&name=${core}&configSet=moodle-tenant&wt=json" 2>/dev/null)" || true
+    create_resp="$(_solr_api GET "/admin/cores?action=CREATE&name=${core}&configSet=eLeDia-moodle-tenant&wt=json" 2>/dev/null)" || true
     if echo "$create_resp" | grep -q '"status":0'; then
       _log "INFO" "Core '$core' created"
     elif echo "$create_resp" | grep -q "coreNodeName"; then
@@ -211,23 +211,23 @@ _collection_exists() {
 
 # --- _ensure_configset_zk ---
 _ensure_configset_zk() {
-  local conf_dir="/var/solr/data/configsets/moodle-tenant/conf"
+  local conf_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
   local resp
   resp="$(_solr_api GET "/admin/configs?action=LIST&wt=json" 2>/dev/null)"
-  if printf '%s' "$resp" | jq -e '.configSets | index("moodle-tenant") != null' > /dev/null 2>&1; then
-    _log "INFO" "Configset 'moodle-tenant' already in ZooKeeper"
+  if printf '%s' "$resp" | jq -e '.configSets | index("eLeDia-moodle-tenant") != null' > /dev/null 2>&1; then
+    _log "INFO" "Configset 'eLeDia-moodle-tenant' already in ZooKeeper"
     return 0
   fi
-  _log "INFO" "Uploading configset 'moodle-tenant' to ZooKeeper ($ZK_HOST)"
+  _log "INFO" "Uploading configset 'eLeDia-moodle-tenant' to ZooKeeper ($ZK_HOST)"
   if [ ! -d "$conf_dir" ]; then
     _log "ERROR" "Configset source not found: $conf_dir"
     return 1
   fi
   /opt/solr/bin/solr zk upconfig \
-    -n moodle-tenant \
+    -n eLeDia-moodle-tenant \
     -d "$conf_dir" \
     -z "$ZK_HOST" 2>&1 | while IFS= read -r line; do _log "INFO" "[zk] $line"; done
-  _log "INFO" "Configset 'moodle-tenant' uploaded"
+  _log "INFO" "Configset 'eLeDia-moodle-tenant' uploaded"
 }
 
 
@@ -244,7 +244,7 @@ _create_collection() {
     return 0
   fi
   _ensure_configset_zk
-  _solr_api GET "/admin/collections?action=CREATE&name=${name}&numShards=1&replicationFactor=1&collection.configName=moodle-tenant&wt=json" > /dev/null
+  _solr_api GET "/admin/collections?action=CREATE&name=${name}&numShards=1&replicationFactor=1&collection.configName=eLeDia-moodle-tenant&wt=json" > /dev/null
   _log "INFO" "Collection '$name' created"
 }
 

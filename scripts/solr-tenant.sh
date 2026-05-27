@@ -1,10 +1,11 @@
 #!/bin/bash
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
 # SPDX-License-Identifier: MIT
 # Version: v3.1.0
 #
-# solr-tenant.sh — Main dispatcher
+# eLeDia Solr Tenant Dispatcher
 # Sources modular sub-scripts and dispatches commands.
+# Part of the eLeDia Solr Multi-Tenant Docker Stack.
 #
 # Usage: solr-tenant.sh <command> [options]
 # Run 'solr-tenant.sh usage' for full command list.
@@ -20,7 +21,7 @@ source "${SCRIPT_DIR}/solr-tenant-security.sh"
 source "${SCRIPT_DIR}/solr-tenant-cmd.sh"
 
 # ---------------------------------------------------------------------------
-# Dispatch
+# eLeDia Dispatcher
 # ---------------------------------------------------------------------------
 cmd="${1:-}"; shift || true
 case "$cmd" in

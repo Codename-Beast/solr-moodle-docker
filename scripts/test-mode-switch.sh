@@ -60,10 +60,10 @@ assert_moodle_api_path() {
   return 1
 }
 
-ensure_moodle_core_exists() {
+ensure_eLeDia_core_exists() {
   local container="$1"
   local tenant_cmd="docker exec ${container} /opt/solr/scripts/solr-tenant.sh"
-  $tenant_cmd create switch_ci --cores moodle_core >/dev/null 2>&1 || true
+  $tenant_cmd create switch_ci --cores eLeDia_core >/dev/null 2>&1 || true
   $tenant_cmd enable switch_ci >/dev/null 2>&1 || true
 }
 
@@ -74,25 +74,25 @@ log "Start stack"
 docker compose up -d --build
 wait_ready || fail "Solr not ready in initial mode"
 container="${INSTANCE_NAME:-solr}-solr"
-ensure_moodle_core_exists "$container"
+ensure_eLeDia_core_exists "$container"
 
-assert_moodle_api_path "$API_USER" "$API_PASS" "moodle_core" || fail "Moodle API failed in baseline"
+assert_moodle_api_path "$API_USER" "$API_PASS" "eLeDia_core" || fail "Moodle API failed in baseline"
 log "Baseline API check OK"
 
 log "Switch to SolrCloud"
 ./scripts/solr-mode-portability.sh switch --to solrcloud --no-build
 wait_ready || fail "Solr not ready after switch to SolrCloud"
 container="${INSTANCE_NAME:-solr}-solr"
-ensure_moodle_core_exists "$container"
-assert_moodle_api_path "$API_USER" "$API_PASS" "moodle_core"
+ensure_eLeDia_core_exists "$container"
+assert_moodle_api_path "$API_USER" "$API_PASS" "eLeDia_core"
 log "API check after standalone -> solrcloud OK"
 
 log "Switch back to standalone"
 ./scripts/solr-mode-portability.sh switch --to standalone --no-build
 wait_ready || fail "Solr not ready after switch back to standalone"
 container="${INSTANCE_NAME:-solr}-solr"
-ensure_moodle_core_exists "$container"
-assert_moodle_api_path "$API_USER" "$API_PASS" "moodle_core"
+ensure_eLeDia_core_exists "$container"
+assert_moodle_api_path "$API_USER" "$API_PASS" "eLeDia_core"
 log "API check after solrcloud -> standalone OK"
 
 log "PASS: Mode switch continuity validated"

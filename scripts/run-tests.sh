@@ -39,7 +39,7 @@ SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="${SOLR_PORT:-8983}"
-SOLR_CORE_NAME="${SOLR_CORE_NAME:-moodle_core}"
+SOLR_CORE_NAME="${SOLR_CORE_NAME:-eLeDia_core}"
 SOLR_MODE="${SOLR_MODE:-}"
 
 if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then

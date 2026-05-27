@@ -36,7 +36,7 @@ SOLR_CONTAINER="${INSTANCE_NAME}-solr"
 INIT_CONTAINER="${INSTANCE_NAME}-init"
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="${SOLR_PORT:-8983}"
-SOLR_CORE_NAME=${SOLR_CORE_NAME:-moodle_core}
+SOLR_CORE_NAME=${SOLR_CORE_NAME:-eLeDia_core}
 SOLR_MODE="${SOLR_MODE:-}"
 if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
     echo "ERROR: SOLR_HEAP='${SOLR_HEAP:-}' ist ungültig. Erwartet z.B. 2g oder 1024m." >&2
@@ -519,7 +519,7 @@ tenant_scale_tests() {
     print_test "Create ${tenant_count} tenants with dedicated cores"
     for i in $(seq 1 "$tenant_count"); do
         tname=$(printf 'moodle_%02d' "$i")
-        cname=$(printf 'moodle_core_%02d' "$i")
+        cname=$(printf 'eLeDia_core_%02d' "$i")
         if $tenant_cmd create "$tname" --cores "$cname" >/dev/null 2>&1; then
             created_ok=$((created_ok + 1))
         fi
@@ -542,16 +542,16 @@ tenant_scale_tests() {
     print_test "Sample tenant auth and core access work"
     tpass=$(docker exec "$container" sh -lc "grep '^TENANT_moodle_01_PASS=' /opt/solr/tenants.env | cut -d= -f2")
     code=$(curl -so /dev/null -w '%{http_code}' -u "solr_moodle_01:${tpass}" \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_core_01/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/eLeDia_core_01/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$code" = "200" ]; then
-        print_pass "Tenant solr_moodle_01 can access moodle_core_01"
+        print_pass "Tenant solr_moodle_01 can access eLeDia_core_01"
     else
-        print_fail "Tenant solr_moodle_01 cannot access moodle_core_01 (HTTP $code)"
+        print_fail "Tenant solr_moodle_01 cannot access eLeDia_core_01 (HTTP $code)"
     fi
 
     print_test "Wrong password for sample tenant is rejected"
     code=$(curl -so /dev/null -w '%{http_code}' -u "solr_moodle_01:wrong" \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_core_01/select?q=*:*&rows=0" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/eLeDia_core_01/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$code" = "401" ]; then
         print_pass "Wrong password rejected (HTTP 401)"
     else
