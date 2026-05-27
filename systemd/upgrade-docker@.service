@@ -1,0 +1,20 @@
+[Unit]
+Description=Eledia Solr one-way upgrade (bare-metal 8.x -> docker) for instance %i
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/solr-moodle-docker
+EnvironmentFile=-/etc/default/upgrade-docker-%i
+ExecStart=/opt/solr-moodle-docker/scripts/upgrade-docker.sh --instance %i --target-mode standalone
+TimeoutStartSec=0
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

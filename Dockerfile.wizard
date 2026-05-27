@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
+# SPDX-License-Identifier: MIT
+
+FROM debian:12-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       bash ca-certificates curl docker.io whiptail python3 python3-pip python3-venv \
+    && python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir textual rich \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/venv/bin:${PATH}"
+
+WORKDIR /workspace
+
+# Start in interactive shell by default; launcher overrides command.
+CMD ["bash"]
