@@ -4,41 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Added
-- **Modular architecture**: `solr-tenant.sh` split into focused modules (all < 800 lines):
-  - `scripts/solr-tenant-api.sh` — helpers: logging, auth, env, naming
-  - `scripts/solr-tenant-core.sh` — core/collection CRUD (standalone + SolrCloud)
-  - `scripts/solr-tenant-security.sh` — credentials, roles, permissions
-  - `scripts/solr-tenant-cmd.sh` — create, delete, enable, apply, export
-- **Modular test suite**: `run-tests.sh` split into focused modules (all < 800 lines):
-  - `scripts/test-lib.sh` — colors, counters, print helpers
-  - `scripts/test-unit.sh` — file checks, compose config, Dockerfile
-  - `scripts/test-integration.sh` — tenant lifecycle, scale, isolation
-  - `scripts/test-security.sh` — auth, isolation, negative, performance
-  - `scripts/test-moodle.sh` — document indexing, Tika extraction, cloud
-- `scripts/solr-mode-portability.sh`: `wait_solr_ready()` helper for post-switch verification.
-- `scripts/upgrade-docker.sh`: Conditional `--build` — only rebuilds when Dockerfile/config/scripts changed (sha256 checksum).
+### Refactored
+- **Modular architecture**: Split monolithic scripts into focused modules for readability and maintainability. All shell scripts are now under 800 lines:
+  - `solr-tenant.sh` (42 lines) — main dispatcher; sources 4 modules:
+    - `solr-tenant-api.sh` (279 lines) — logging, auth, env, naming helpers
+    - `solr-tenant-core.sh` (280 lines) — core/collection CRUD (standalone + SolrCloud)
+    - `solr-tenant-security.sh` (286 lines) — credentials, roles, permissions
+    - `solr-tenant-cmd.sh` (774 lines) — create, delete, enable, apply, export
+  - `run-tests.sh` (198 lines) — test orchestrator; sources 5 modules:
+    - `test-lib.sh` (140 lines) — colors, counters, print helpers
+    - `test-unit.sh` (162 lines) — file checks, compose config, Dockerfile
+    - `test-integration.sh` (590 lines) — tenant lifecycle, scale, isolation
+    - `test-security.sh` (363 lines) — auth, isolation, negative, performance
+    - `test-moodle.sh` (321 lines) — document indexing, Tika extraction, cloud
+- **Removed stale code**: Deleted old dispatch block from `solr-tenant-cmd.sh` that was still executed on `source()`, causing `Unknown command: <tenant_name>` errors after every operation.
+- `tests/solr-log-findings.md`: Documented historical `coreNodeName missing` error (harmless SolrCloud startup side-effect with stale standalone dirs).
+- **Documentation cleanup**: Removed `docs/SOLR-8-to-10-impact.md` and `docs/STATUS-2026-05-24.md` (consolidated into README/CHANGELOG). Updated `docs/architecture.md`.
 
-### Fixed
-- **Idempotency: `cmd_core_add`** — skips if core already assigned to tenant. Prevents duplicate core entries in `tenants.env` (was: `moodle_core,moodle_core,moodle_core` on repeated calls).
-- **Idempotency: `import_manifest`** — `enable`/`delete` only called when tenant active state actually changes. Prevents unnecessary password resets on repeated imports.
-- **Idempotency: `_create_core`** — Response body checked after CREATE. Handles `coreNodeName missing` gracefully (stale standalone dirs in SolrCloud mode) and verifies core existence instead of blind 200 OK.
-- **Idempotency: `powerinit.sh`** — `_default` configset always refreshed from `moodle-tenant` source. Ensures Moodle-optimized schema is never stale.
-- `setup.sh`: `tenants.env` permissions `644` (was `600`) — container solr user (uid 8983) can read the file.
-- `docker-compose.yml` / `docker-compose.cloud-test.yml`: Removed SELinux `:z` flag from `tenants.env` mount (not needed, causes warnings).
+### Fixed (Idempotency)
+- `cmd_core_add` — now skips if core is already assigned to tenant. Prevents duplicate core entries in `tenants.env` (was: `moodle_core,moodle_core,moodle_core` on repeated calls).
+- `import_manifest` — `enable`/`delete` only called when tenant active state actually changes. Prevents unnecessary password resets on repeated imports.
+- `_create_core` — response body checked after CREATE. Handles `coreNodeName missing` gracefully (stale standalone dirs in SolrCloud mode) and verifies core existence instead of relying on HTTP 200 alone.
+- `powerinit.sh` — `_default` configset always refreshed from `eLeDia-moodle-tenant` source. Ensures Moodle-optimized schema is never stale across restarts.
+- `setup.sh` — `tenants.env` permissions changed from `600` to `644` so container solr user (uid 8983) can read the file.
+- `docker-compose.yml` / `docker-compose.cloud-test.yml` — removed SELinux `:z` flag from `tenants.env` mount (unnecessary, caused warnings).
+
+### Performance
+- `upgrade-docker.sh` — conditional `--build`: only rebuilds Docker image when Dockerfile, config, or scripts changed (sha256 checksum comparison). Skips rebuild on repeated runs with no changes, reducingupgrade time from minutes to seconds.
 
 ### Changed
 - **eLeDia branding**: All module headers standardized with `eLeDia GmbH / Bernd Schreistetter (bsc)`.
-- `solr-tenant.sh`: Main dispatcher is now 42 lines (was 1429). Sources 4 modules.
-- `run-tests.sh`: Main orchestrator is now 198 lines (was 1459). Sources 5 modules.
-- `tests/solr-log-findings.md`: Documented historical `coreNodeName missing` error (harmless SolrCloud startup side-effect with stale standalone dirs).
-
-### Documentation
-- `README.md`: Bare-Metal 8/9/10/11 → Docker upgrade section added.
-- `docs/architecture.md`: Consolidated, removed outdated status docs.
-- Removed `docs/SOLR-8-to-10-impact.md` and `docs/STATUS-2026-05-24.md` (consolidated into README/CHANGELOG).
-
-### Added (previous, retained)
+- **Configset renamed**: `moodle-tenant` → `eLeDia-moodle-tenant` (all API references, ZooKeeper uploads, collection configs).
+- **Test core names**: `moodle_core` → `eLeDia_core`, `moodle_cloud_*` → `eLeDia_cloud_*`.
+- **Config directory**: `config/` → `eLeDia-config/` (host-side schema and solrconfig files).
 - **SolrCloud Bootstrap**: Automatic security.json upload to ZooKeeper, configset upload, and collection creation via `solr-tenant.sh apply` on first startup.
 - `docker-compose.cloud-test.yml` for isolated SolrCloud integration testing.
 - `scripts/solr-mode-portability.sh`: Import/Export/Switch-Schnittstelle für Core/Collection-/Tenant-Portabilität zwischen Standalone und SolrCloud.
