@@ -1,5 +1,11 @@
 #!/bin/bash
-# generate-test-tenants.sh — Generiert N Tenant-Einträge für tenants.env
+# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
+# SPDX-License-Identifier: MIT
+# Version: v3.1.0
+#
+# eLeDia Test Tenant Generator — Generiert N Tenant-Einträge für tenants.env
+# Part of the eLeDia Solr Multi-Tenant Docker Stack.
+#
 # Usage: ./generate-test-tenants.sh [ANZAHL] [AUSGABEDATEI]
 #
 # Beispiele:
@@ -39,11 +45,11 @@ for i in $(seq 1 "$COUNT"); do
 
   # Je 5. Tenant hat 2 Cores, je 10. hat 3, Rest hat 1
   if (( i % 10 == 0 )); then
-    CORES="moodle_core_${NAME}_a,moodle_core_${NAME}_b,moodle_core_${NAME}_c"
+    CORES="eLeDia_core_${NAME}_a,eLeDia_core_${NAME}_b,eLeDia_core_${NAME}_c"
   elif (( i % 5 == 0 )); then
-    CORES="moodle_core_${NAME}_a,moodle_core_${NAME}_b"
+    CORES="eLeDia_core_${NAME}_a,eLeDia_core_${NAME}_b"
   else
-    CORES="moodle_core_${NAME}"
+    CORES="eLeDia_core_${NAME}"
   fi
 
   USER="solr_${NAME}"
@@ -56,10 +62,12 @@ for i in $(seq 1 "$COUNT"); do
     ACTIVE="true"
   fi
 
-  echo "TENANT_${NAME}_CORES=${CORES}"   >> "$OUTPUT"
-  echo "TENANT_${NAME}_USER=${USER}"      >> "$OUTPUT"
-  echo "TENANT_${NAME}_PASS=${PASS}"      >> "$OUTPUT"
-  echo "TENANT_${NAME}_ACTIVE=${ACTIVE}"  >> "$OUTPUT"
+  {
+    echo "TENANT_${NAME}_CORES=${CORES}"
+    echo "TENANT_${NAME}_USER=${USER}"
+    echo "TENANT_${NAME}_PASS=${PASS}"
+    echo "TENANT_${NAME}_ACTIVE=${ACTIVE}"
+  } >> "$OUTPUT"
 done
 
 LINES=$(wc -l < "$OUTPUT")
