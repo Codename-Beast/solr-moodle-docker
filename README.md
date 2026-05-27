@@ -97,6 +97,25 @@ docker compose up -d --build
 
 Moodle konfiguriert Collections statt Cores — alles andere bleibt identisch.
 
+## Modusvergleich: Standalone vs. SolrCloud
+
+Beide Modi funktionieren mit derselben Moodle-API (`/solr/<core|collection>/...`).
+Die Unterschiede liegen im Betrieb, nicht in der Moodle-Anbindung.
+
+| Kriterium | Standalone | SolrCloud |
+|-----------|------------|-----------|
+| Setup-Komplexität | niedriger | höher |
+| Tenant-Isolation | über Security + Proxy-Regeln | nativ über Collections + Security API |
+| Skalierung | vertikal / einzelner Node | horizontal erweiterbar |
+| Betriebsaufwand | geringer | höher |
+| Empfehlung | kleine/mittlere Installationen | größere Multi-Tenant-Setups / Wachstumspfad |
+
+Praxisregel:
+- Wenn ein einzelner Node reicht und Betrieb simpel bleiben soll: **Standalone**.
+- Wenn Collection-basierte Isolation und spätere Skalierung zentral sind: **SolrCloud**.
+
+Wichtig: `SOLR_PORT` bleibt in beiden Modi dynamisch, damit mehrere Instanzen parallel möglich sind.
+
 ---
 
 ## Tests
@@ -110,7 +129,57 @@ Moodle konfiguriert Collections statt Cores — alles andere bleibt identisch.
 
 # Moodle-Dokument-Indexierung (Tika)
 ./scripts/test-moodle-documents.sh
+
+# Optional: Moduswechsel-Test (standalone <-> solrcloud)
+./scripts/run-tests.sh --mode-switch
 ```
+
+Zusätzlich für kontrollierte Migrationen:
+
+```bash
+# Tenant/Core-Mapping exportieren
+./scripts/solr-mode-portability.sh export --out /tmp/solr-portability.json
+
+# Manifest importieren
+./scripts/solr-mode-portability.sh import --in /tmp/solr-portability.json
+
+# Modus umschalten inkl. Export/Import-Replay
+./scripts/solr-mode-portability.sh switch --to solrcloud
+./scripts/solr-mode-portability.sh switch --to standalone
+```
+
+---
+
+## Release-, Upgrade- und EOL-Branch-Strategie
+
+Damit Upgrades reproduzierbar bleiben und alte Hauptstände nachvollziehbar archiviert sind,
+verwenden wir folgende Branch-Namen:
+
+- Feature/Upgrade-Branch:
+  - `feature/solr-<major>-<minor>-upgrade` (z. B. `feature/solr-10-0-upgrade`)
+- EOL-Archiv-Branch für den bisherigen Main-Stand:
+  - `main_eol_solr-<major>-<minor>_<YYYY-MM-DD>`
+  - Beispiel: `main_eol_solr-9-10_2026-05-27`
+
+Warum ein EOL-Archiv-Branch?
+
+- Der alte `main` repräsentiert eine produktiv genutzte Solr-Generation, die mit dem Upgrade
+  bewusst verlassen wird.
+- Für Audits, Rollback-Szenarien und Kunden-/Betriebsnachweise muss dieser Zustand
+  unverändert und eindeutig benannt erhalten bleiben.
+- `main_eol_*` macht auf einen Blick sichtbar:
+  - welche Solr-Linie beendet wurde,
+  - wann der Stand eingefroren wurde,
+  - dass auf diesem Branch keine Feature-Weiterentwicklung mehr stattfindet
+    (nur Notfall-/Dokufixes nach expliziter Freigabe).
+
+Empfohlener Upgrade-Ablauf:
+
+1. Upgrade-Arbeit auf `feature/solr-<major>-<minor>-upgrade`.
+2. CI muss auf dem Feature-Branch vollständig grün sein.
+3. Vor Merge: aktuellen `main` als `main_eol_*` branch/taggen und pushen.
+4. Merge Request von Feature -> `main` erstellen.
+5. Nach Merge: Release Notes/CHANGELOG finalisieren.
 
 ---
 

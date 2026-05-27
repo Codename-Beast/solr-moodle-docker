@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **SolrCloud Bootstrap**: Automatic security.json upload to ZooKeeper, configset upload, and collection creation via `solr-tenant.sh apply` on first startup.
 - `docker-compose.cloud-test.yml` for isolated SolrCloud integration testing.
+- `scripts/solr-mode-portability.sh`: neue Import/Export/Switch-Schnittstelle für Core/Collection-/Tenant-Portabilität zwischen Standalone und SolrCloud.
+- `scripts/test-mode-switch.sh`: dedizierter Kontinuitätstest für `standalone -> solrcloud -> standalone` mit Moodle-API-Verifikation.
+- `docs/SOLR-8-to-10-impact.md`: komprimierte Impact-Analyse Solr 8.x bis 10.0 für dieses Repository inkl. Lessons Learned.
 
 ### Fixed
 - `powerinit.sh`: `SOLR_MODE` no longer overwritten by `load_env()` — value from compose `environment:` is preserved.
@@ -16,6 +19,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `solr-cloud-entrypoint.sh`: Tenant application runs in subshell with error tolerance — single tenant failure does not kill the entrypoint.
+- `.github/workflows/solr-testing.yml` erweitert:
+  - Push-Trigger auf `feature/**` und `fix/**` ergänzt (inkl. `feature/3.3.x`).
+  - Neuer Job `mode-switch-test` für die neue Portability-Schnittstelle (`scripts/test-mode-switch.sh`).
 
 ### Tested
 - SolrCloud mode: 8 collections created, 37 credentials (admin, support, 5 active + 30 inactive tenants), security active (401 anonymous), moodle-tenant configset in ZK.
@@ -26,6 +32,27 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 - `docs/CI-CD.md` präzisiert Trigger (Push/PR) und manuellen Start für GitHub/GitLab.
+- `README.md` erweitert um Release-/Upgrade-/EOL-Branch-Strategie:
+  - Upgrade-Feature-Branch-Schema `feature/solr-<major>-<minor>-upgrade`
+  - Aussagekräftiger EOL-Archiv-Branch `main_eol_solr-<major>-<minor>_<YYYY-MM-DD>`
+  - Begründung für EOL-Archivierung (Audit, Rollback, Nachvollziehbarkeit)
+
+### Fixed
+- `scripts/run-tests.sh`: HTTP-000 Root Cause beseitigt.
+  - Ursache: fehlerhafte Portauflösung (`docker compose port solr 8983` -> `invalid IP:0`) bei dynamischer Portbelegung.
+  - Fix: Auflösung wieder über `${SOLR_PORT}` + numerische Validierung vor Port-Override.
+- `docker-compose.yml`: dynamische Solr-Portstrategie vollständig wiederhergestellt (`${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`) inkl. Healthcheck auf `${SOLR_PORT}`.
+- `scripts/run-tests.sh`: SolrCloud-/Tenant-Restart-Tests robuster gemacht (`wait_for_solr_ready` + Retry), damit Recovery-Phasen nicht als False-Negative enden.
+- `scripts/run-tests.sh`: Tenant-/Collection-Create in Tests idempotent gemacht ("already exists" wird korrekt als gültiger Zustand behandelt).
+- `scripts/run-tests.sh`: SolrCloud-Testfluss stabilisiert:
+  - `cloud_tenant` vor Auth-Checks re-aktiviert,
+  - Core-Zuordnung für `cloud_test_c1` vor Collections/Auth verifiziert,
+  - Persistenz-Auth nach Restart über tenant-lesbaren `select`-Pfad (statt Admin-Ping) geprüft.
+
+### Verified
+- Lokaler Lauf: `./scripts/run-tests.sh --unit-only --tenant --cloud` -> **46/46 PASS**, 0 Failures.
+- Syntaxchecks erfolgreich: `bash -n scripts/run-tests.sh scripts/solr-mode-portability.sh scripts/test-mode-switch.sh`.
+- Moduswechsel-Test erfolgreich: `./scripts/test-mode-switch.sh` -> PASS (API-Kontinuität über `solrcloud -> standalone`).
 
 ## [3.1.0] - 2026-05-26
 
@@ -484,3 +511,13 @@ Versioning: Semantic Versioning
 - `docker-compose.yml`: Version auf v2.5.0 aktualisiert
 
 ---
+
+## Operational Note (Upgrade-Prozess, bewusst am Ende)
+
+Der verbindliche Upgrade-Ablauf ist in `README.md` und `docs/SOLR-8-to-10-impact.md` dokumentiert,
+inklusive EOL-Archivbranch für den alten Main-Stand:
+
+- Feature-Upgrade nur auf `feature/solr-<major>-<minor>-upgrade`
+- Vor Merge: `main` als `main_eol_solr-<major>-<minor>_<YYYY-MM-DD>` sichern
+- Pflichtnachweise: Testläufe grün (inkl. optional `--mode-switch` bei Modusänderungen)
+- Danach MR auf `main`

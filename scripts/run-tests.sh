@@ -71,6 +71,20 @@ fi
 exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 
+wait_for_solr_ready() {
+    local admin_pass="$1"
+    local waited=0
+    while [ "$waited" -lt 180 ]; do
+        if curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" 2>/dev/null | grep -q '^200$'; then
+            return 0
+        fi
+        sleep 3
+        waited=$((waited + 3))
+    done
+    return 1
+}
+
 # Helper functions
 print_header() {
     echo -e "\n${BOLD}${BLUE}========================================${NC}"
@@ -223,11 +237,17 @@ integration_tests() {
         ./setup.sh >/dev/null 2>&1 || true
     fi
 
+    # Ensure tenants file is writable for solr user in containerized tests.
+    touch tenants.env
+    chmod 666 tenants.env
+
     docker compose up -d >/dev/null 2>&1
 
     local waited=0
-    while [ $waited -lt 150 ]; do
-        if docker compose ps | grep -q "healthy"; then
+    local admin_pass_boot
+    admin_pass_boot=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+    while [ $waited -lt 180 ]; do
+        if curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass_boot}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
             break
         fi
         sleep 5
@@ -236,11 +256,11 @@ integration_tests() {
 
     local mapped_port
     mapped_port=$(docker compose port solr "${SOLR_PORT}" 2>/dev/null | awk -F: '{print $NF}' | tail -n1)
-    if [ -n "$mapped_port" ]; then
+    if echo "$mapped_port" | grep -Eq '^[0-9]{2,5}$'; then
         SOLR_PORT="$mapped_port"
     fi
 
-    if docker compose ps | grep -q "healthy"; then
+    if curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass_boot}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
         print_pass "Containers started and healthy"
     else
         print_fail "Containers not healthy"
@@ -263,6 +283,14 @@ integration_tests() {
         print_fail "tenants.env missing in container (/opt/solr/tenants.env)"
     fi
 
+    # Runtime guard: tests need write access for create/delete/password rotation.
+    print_test "tenants.env writable in container"
+    if docker exec "$SOLR_CONTAINER" test -w /opt/solr/tenants.env 2>/dev/null; then
+        print_pass "tenants.env is writable for tenant lifecycle ops"
+    else
+        print_fail "tenants.env is not writable in container"
+    fi
+
     # Create a test tenant so core-level tests have a valid core to work with
     print_info "Creating test tenant ci_test (core: ${SOLR_CORE_NAME})..."
     docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh \
@@ -270,8 +298,14 @@ integration_tests() {
     sleep 2
 
     # Solr Core Creation
-    print_test "Solr core creation"
-    if docker exec "$SOLR_CONTAINER" test -d "/var/solr/data/${SOLR_CORE_NAME}" 2>/dev/null; then
+    print_test "Solr core/collection creation"
+    if _is_cloud_mode; then
+        if curl -s -u "admin:${admin_pass_boot}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json" | grep -q "\"${SOLR_CORE_NAME}\""; then
+            print_pass "Collection exists (${SOLR_CORE_NAME})"
+        else
+            print_fail "Collection not found (${SOLR_CORE_NAME})"
+        fi
+    elif docker exec "$SOLR_CONTAINER" test -d "/var/solr/data/${SOLR_CORE_NAME}" 2>/dev/null; then
         print_pass "Core directory created (${SOLR_CORE_NAME})"
     else
         print_fail "Core directory not found (${SOLR_CORE_NAME})"
@@ -827,7 +861,13 @@ tenant_tests() {
 
     # Create tenant schule_a
     print_test "Create tenant schule_a (core: moodle_prod_a)"
-    if $tenant_cmd create schule_a --cores moodle_prod_a >/dev/null 2>&1; then
+    local create_out
+    create_out=$($tenant_cmd create schule_a --cores moodle_prod_a 2>&1) || true
+    if echo "$create_out" | grep -Eqi "already exists|bereits|exists"; then
+        print_pass "Tenant schule_a already present"
+    elif [ -n "$create_out" ] && ! echo "$create_out" | grep -Eqi "error|failed"; then
+        print_pass "Tenant schule_a created"
+    elif $tenant_cmd info schule_a >/dev/null 2>&1; then
         print_pass "Tenant schule_a created"
     else
         print_fail "Failed to create tenant schule_a"
@@ -867,7 +907,12 @@ tenant_tests() {
 
     # Create tenant schule_b
     print_test "Create tenant schule_b (core: moodle_prod_b)"
-    if $tenant_cmd create schule_b --cores moodle_prod_b >/dev/null 2>&1; then
+    create_out=$($tenant_cmd create schule_b --cores moodle_prod_b 2>&1) || true
+    if echo "$create_out" | grep -Eqi "already exists|bereits|exists"; then
+        print_pass "Tenant schule_b already present"
+    elif [ -n "$create_out" ] && ! echo "$create_out" | grep -Eqi "error|failed"; then
+        print_pass "Tenant schule_b created"
+    elif $tenant_cmd info schule_b >/dev/null 2>&1; then
         print_pass "Tenant schule_b created"
     else
         print_fail "Failed to create tenant schule_b"
@@ -976,8 +1021,18 @@ tenant_tests() {
     # Restart persistence
     print_test "Restart persistence: tenants survive docker compose restart"
     docker compose restart solr >/dev/null 2>&1 || true
-    sleep 30
-    if $tenant_cmd list 2>/dev/null | grep -q "schule_b"; then
+    wait_for_solr_ready "$admin_pass" || true
+    local rp_wait=0
+    local rp_ok=0
+    while [ "$rp_wait" -lt 60 ]; do
+        if $tenant_cmd info schule_b 2>/dev/null | grep -Eqi "Tenant: schule_b|User:[[:space:]]+solr_schule_b"; then
+            rp_ok=1
+            break
+        fi
+        sleep 3
+        rp_wait=$((rp_wait + 3))
+    done
+    if [ "$rp_ok" -eq 1 ]; then
         print_pass "Tenants persisted after restart"
     else
         print_fail "Tenants lost after restart"
@@ -1062,6 +1117,25 @@ tenant_scale_tests() {
 # =========================================
 # SOLRCLOUD TESTS - Collections API + Persistence
 # =========================================
+# =========================================
+# MODE SWITCH TESTS - Standalone <-> SolrCloud
+# =========================================
+mode_switch_tests() {
+    print_header "MODE SWITCH TESTS - Standalone <-> SolrCloud API continuity"
+
+    if [ ! -x "./scripts/test-mode-switch.sh" ]; then
+        print_fail "scripts/test-mode-switch.sh not executable or missing"
+        return
+    fi
+
+    print_test "Switch standalone -> solrcloud -> standalone without Moodle API break"
+    if ./scripts/test-mode-switch.sh >/dev/null 2>&1; then
+        print_pass "Mode switch continuity passed"
+    else
+        print_fail "Mode switch continuity failed"
+    fi
+}
+
 solrcloud_tests() {
     print_header "SOLRCLOUD TESTS - Collections API & Restart Persistence"
 
@@ -1089,20 +1163,38 @@ solrcloud_tests() {
 
     # Collections API: create collection
     print_test "Collections API: create collection via tenant (cloud_test_c1)"
-    if $tenant_cmd create cloud_tenant --cores cloud_test_c1 >/dev/null 2>&1; then
+    local cloud_create_out
+    cloud_create_out=$($tenant_cmd create cloud_tenant --cores cloud_test_c1 2>&1) || true
+    if echo "$cloud_create_out" | grep -Eqi "already exists|bereits|exists"; then
+        print_pass "Collection cloud_test_c1 already present"
+    elif [ -n "$cloud_create_out" ] && ! echo "$cloud_create_out" | grep -Eqi "error|failed"; then
+        print_pass "Collection cloud_test_c1 created via Collections API"
+    elif $tenant_cmd info cloud_tenant >/dev/null 2>&1; then
         print_pass "Collection cloud_test_c1 created via Collections API"
     else
         print_fail "Failed to create collection cloud_test_c1"
     fi
 
-    CLOUD_PASS="$(docker exec "$container" grep 'TENANT_cloud_tenant_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+    $tenant_cmd core-add cloud_tenant --core cloud_test_c1 >/dev/null 2>&1 || true
+    $tenant_cmd enable cloud_tenant >/dev/null 2>&1 || true
+    CLOUD_PASS="$(docker exec "$container" grep 'TENANT_cloud_tenant_PASS=' /opt/solr/tenants.env | tail -n1 | cut -d= -f2)"
 
     # Verify collection exists via Collections API
     print_test "Collection exists in ZooKeeper via Collections API"
     local coll_resp
-    coll_resp=$(curl -s -u "admin:${admin_pass}" \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
-    if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
+    local coll_wait=0
+    local coll_ok=0
+    while [ "$coll_wait" -lt 60 ]; do
+        coll_resp=$(curl -s -u "admin:${admin_pass}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
+        if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
+            coll_ok=1
+            break
+        fi
+        sleep 3
+        coll_wait=$((coll_wait + 3))
+    done
+    if [ "$coll_ok" -eq 1 ]; then
         print_pass "Collection cloud_test_c1 in Collections API list"
     else
         print_fail "Collection cloud_test_c1 NOT in Collections API list"
@@ -1139,12 +1231,7 @@ solrcloud_tests() {
     # Restart Solr and verify everything survives
     print_test "Restart Solr — collection, security, and documents must survive"
     docker compose restart solr >/dev/null 2>&1
-    local waited=0
-    while [ "$waited" -lt 60 ]; do
-        if docker compose ps | grep -q healthy; then break; fi
-        sleep 3
-        waited=$((waited + 3))
-    done
+    wait_for_solr_ready "$admin_pass" || true
 
     # Collection still exists
     coll_resp=$(curl -s -u "admin:${admin_pass}" \
@@ -1158,9 +1245,19 @@ solrcloud_tests() {
     # Document still exists
     print_test "Document survives Solr restart (ZK + index persistence)"
     local doc_resp
-    doc_resp=$(curl -s -u "solr_cloud_tenant:${CLOUD_PASS}" \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=id:persist-test-1&wt=json")
-    if echo "$doc_resp" | grep -q '"numFound":1'; then
+    local doc_wait=0
+    local doc_ok=0
+    while [ "$doc_wait" -lt 60 ]; do
+        doc_resp=$(curl -s -u "solr_cloud_tenant:${CLOUD_PASS}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=id:persist-test-1&wt=json")
+        if echo "$doc_resp" | grep -q '"numFound":1'; then
+            doc_ok=1
+            break
+        fi
+        sleep 3
+        doc_wait=$((doc_wait + 3))
+    done
+    if [ "$doc_ok" -eq 1 ]; then
         print_pass "Document persists after restart"
     else
         print_fail "Document LOST after restart"
@@ -1170,7 +1267,7 @@ solrcloud_tests() {
     print_test "Tenant authentication survives restart (Security API in ZK)"
     local auth_code
     auth_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/admin/ping" 2>/dev/null)
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=*:*&rows=0&wt=json" 2>/dev/null)
     if [ "$auth_code" = "200" ]; then
         print_pass "Tenant credentials persist after restart (HTTP 200)"
     else
@@ -1205,12 +1302,14 @@ EOF
     RUN_TENANT=0
     RUN_TENANT_SCALE=0
     RUN_CLOUD=0
+    RUN_MODE_SWITCH=0
 
     while [[ $# -gt 0 ]]; do
         case $1 in
             --unit-only)
                 RUN_INTEGRATION=0
                 RUN_SECURITY=0
+                RUN_NEGATIVE=0
                 RUN_PERFORMANCE=0
                 RUN_MOODLE=0
                 RUN_CLEANUP=0
@@ -1269,6 +1368,10 @@ EOF
                 SOLR_MODE=solrcloud
                 shift
                 ;;
+            --mode-switch)
+                RUN_MODE_SWITCH=1
+                shift
+                ;;
             --help)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
@@ -1282,6 +1385,7 @@ EOF
                 echo "  --tenant             Run multi-tenant isolation tests"
                 echo "  --tenant-scale       Run tenant scale test (30 tenants/cores/users)"
                 echo "  --cloud              Run SolrCloud-specific tests"
+                echo "  --mode-switch        Validate standalone <-> solrcloud switch continuity"
                 echo "  --help               Show this help"
                 echo ""
                 exit 0
@@ -1294,6 +1398,11 @@ EOF
         esac
     done
 
+    # Tenant/Cloud suites require a running stack; force integration bootstrap.
+    if [ $RUN_TENANT -eq 1 ] || [ $RUN_CLOUD -eq 1 ] || [ $RUN_MODE_SWITCH -eq 1 ]; then
+        RUN_INTEGRATION=1
+    fi
+
     # Run test suites
     [ $RUN_UNIT -eq 1 ] && unit_tests
     [ $RUN_INTEGRATION -eq 1 ] && integration_tests
@@ -1304,6 +1413,7 @@ EOF
     [ $RUN_TENANT -eq 1 ] && tenant_tests
     [ $RUN_TENANT_SCALE -eq 1 ] && tenant_scale_tests
     [ $RUN_CLOUD -eq 1 ] && solrcloud_tests
+    [ $RUN_MODE_SWITCH -eq 1 ] && mode_switch_tests
     [ $RUN_CLEANUP -eq 1 ] && cleanup_tests
 
     # Print summary

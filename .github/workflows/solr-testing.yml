@@ -2,7 +2,9 @@ name: Solr Test Suite
 on:
   push:
     branches:
+    - feature/**
     - feature/v*
+    - fix/**
     - release*
     paths-ignore:
     - docs/**
@@ -11,6 +13,7 @@ on:
   pull_request:
     branches:
     - main
+    - feature/**
     paths-ignore:
     - docs/**
     - '**.md'
@@ -226,29 +229,29 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     - name: Create .env for SolrCloud testing
-      run: "printf '%s\n' \\
-  'INSTANCE_NAME=solr' \\
-  'SOLR_VERSION=9.10.1' \\
-  'SOLR_PORT=8983' \\
-  'SOLR_BIND=127.0.0.1' \\
-  'SOLR_HEAP=2g' \\
-  'SOLR_LOG_LEVEL=INFO' \\
-  'SOLR_NETWORK_NAME=solr_network' \\
-  'SOLR_ADMIN_USER=admin' \\
-  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\
-  'SOLR_SUPPORT_USER=support' \\
-  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890' \\
-  'SOLR_CPU_LIMIT=2' \\
-  'SOLR_MEMORY_LIMIT=4G' \\
-  'SOLR_CPU_RESERVATION=0.5' \\
-  'SOLR_MEMORY_RESERVATION=2G' \\
-  'SOLR_MODE=solrcloud' \\
-  > .env
-touch tenants.env
-chmod 666 tenants.env
-sudo mkdir -p /var/log/solr/instances/solr-solr /var/log/solr/instances/solr-init
-sudo chmod -R 777 /var/log/solr/instances
-"
+      run: |
+        cat > .env <<'EOF'
+        INSTANCE_NAME=solr
+        SOLR_VERSION=9.10.1
+        SOLR_PORT=8983
+        SOLR_BIND=127.0.0.1
+        SOLR_HEAP=2g
+        SOLR_LOG_LEVEL=INFO
+        SOLR_NETWORK_NAME=solr_network
+        SOLR_ADMIN_USER=admin
+        SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890
+        SOLR_SUPPORT_USER=support
+        SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890
+        SOLR_CPU_LIMIT=2
+        SOLR_MEMORY_LIMIT=4G
+        SOLR_CPU_RESERVATION=0.5
+        SOLR_MEMORY_RESERVATION=2G
+        SOLR_MODE=solrcloud
+        EOF
+        touch tenants.env
+        chmod 666 tenants.env
+        sudo mkdir -p /var/log/solr/instances/solr-solr /var/log/solr/instances/solr-init
+        sudo chmod -R 777 /var/log/solr/instances
     - name: Build and start SolrCloud
       run: 'docker compose build solr-init solr
 
@@ -342,3 +345,44 @@ sudo chmod -R 777 /var/log/solr/instances
         rm -f .env tenants.env || true
 
         '
+  mode-switch-test:
+    name: Mode Switch Portability Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: security-scan
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+    - name: Create .env for mode-switch tests
+      run: |
+        cp -f .env.example .env
+        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
+        sed -i 's/^SOLR_PORT=.*/SOLR_PORT=8983/' .env || true
+        sed -i 's/^SOLR_BIND=.*/SOLR_BIND=127.0.0.1/' .env || true
+        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/' .env || true
+        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/CI_AdminPass_1234567890/' .env || true
+        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/CI_SupportPass_1234567890/' .env || true
+        : > tenants.env
+        chmod 666 tenants.env
+    - name: Run mode switch continuity test
+      run: |
+        chmod +x scripts/solr-mode-portability.sh scripts/test-mode-switch.sh
+        ./scripts/test-mode-switch.sh
+    - name: Collect logs on failure
+      if: failure()
+      run: |
+        mkdir -p logs
+        docker compose logs > logs/docker-compose-mode-switch.log 2>&1 || true
+        docker compose ps > logs/container-status.log 2>&1 || true
+    - name: Upload logs as artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mode-switch-test-logs-${{ github.run_id }}
+        path: logs/
+        retention-days: 7
+    - name: Cleanup
+      if: always()
+      run: |
+        docker compose down -v || true
+        rm -f .env tenants.env || true
