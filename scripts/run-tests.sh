@@ -70,8 +70,6 @@ if ! touch "${RUN_LOG_FILE}" 2>/dev/null; then
 fi
 exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
 
-_is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
-
 # Parse arguments
 RUN_UNIT=1
 RUN_INTEGRATION=1

@@ -65,6 +65,7 @@ run() {
   if [ "$DRY_RUN" = "true" ]; then
     printf '[dry-run] %s\n' "$*"
   else
+    # shellcheck disable=SC2294
     eval "$@"
   fi
 }
