@@ -1,0 +1,68 @@
+# SolrCloud Test — Isoliert, berührt das bestehende Setup nicht
+# Usage: docker compose -f docker-compose.cloud-test.yml up -d
+#        docker compose -f docker-compose.cloud-test.yml down -v
+
+services:
+  solr-cloud-test-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: solr-init:v3.0.0-cloudtest
+    container_name: solr-cloud-test-init
+    user: "0:0"
+    volumes:
+      - solr_cloud_test_data:/var/solr/data
+      - ./.env:/.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:ro,z
+    env_file:
+      - .env
+    environment:
+      ENV_FILE_PATH: /.env
+      SOLR_MODE: solrcloud
+    networks:
+      - solr_cloud_test_net
+    restart: "no"
+
+  solr-cloud-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.solr
+      args:
+        SOLR_VERSION: ${SOLR_VERSION:-9.10.1}
+    image: solr-eledia:${SOLR_VERSION:-9.10.1}
+    container_name: solr-cloud-test
+    depends_on:
+      solr-cloud-test-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:28984:8983"
+    user: "8983:8983"
+    command: ["/opt/solr/docker/scripts/solr-cloud-entrypoint.sh"]
+    volumes:
+      - solr_cloud_test_data:/var/solr/data
+      - ./tenants.env:/opt/solr/tenants.env:rw
+    env_file:
+      - .env
+    environment:
+      SOLR_HEAP: 1g
+      SOLR_LOG_LEVEL: DEBUG
+      SOLR_MODE: solrcloud
+      SOLR_MODULES: extraction
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
+      SOLR_OPTS: >-
+        -XX:-UseLargePages
+        -Dsolr.usage.analytics.enabled=false
+        -Dsolr.responses.stacktrace.enabled=false
+        -Dsolr.security.allow.urls.enabled=false
+    networks:
+      - solr_cloud_test_net
+    restart: "no"
+
+volumes:
+  solr_cloud_test_data:
+    name: solr_cloud_test_data
+
+networks:
+  solr_cloud_test_net:
+    name: solr-cloud-test-net
+    driver: bridge

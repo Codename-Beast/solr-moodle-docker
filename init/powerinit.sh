@@ -69,11 +69,22 @@ load_env() {
   fi
 }
 
+# Save SOLR_MODE before load_env — the .env file does not contain SOLR_MODE
+# (it is set via compose environment: or left empty for standalone default).
+# Without this, load_env would overwrite the inherited value with empty.
+_SOLR_MODE_BEFORE="$SOLR_MODE"
+
 if [ -f "$ENV_FILE_PATH" ]; then
   load_env "$ENV_FILE_PATH"
 else
   _log "WARNING: No .env found at $ENV_FILE_PATH"
 fi
+
+# Restore SOLR_MODE if it was set before load_env
+if [ -n "$_SOLR_MODE_BEFORE" ]; then
+  SOLR_MODE="$_SOLR_MODE_BEFORE"
+fi
+unset _SOLR_MODE_BEFORE
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -406,23 +417,25 @@ done
 # Standalone: one shared tenant-read + tenant-write permission covers ALL tenant users.
 # No collection field → Solr evaluates path match only → blocks support from /update.
 # Per-URL tenant isolation (which core each Moodle instance can reach) is enforced by Caddy.
+# IMPORTANT: tenant-read/write MUST come BEFORE the "all" permission in the list.
+# Solr evaluates permissions top-down; "all" for admin must be last.
 if [ "${SOLR_MODE:-}" != "solrcloud" ] && [ "$TENANT_COUNT" -gt 0 ]; then
-  _log "  Adding standalone shared tenant-read and tenant-write permissions"
+  _log "  Adding standalone shared tenant-read and tenant-write permissions (before 'all')"
+
+  # Insert tenant-read and tenant-write BEFORE the "all" permission.
+  # Build two proper permission objects and insert them before "all".
+  tenant_read='{"name":"tenant-read","role":["admin","support","tenant"],"path":["/select","/admin/ping","/schema","/schema/*","/replication"]}'
+  tenant_write='{"name":"tenant-write","role":["admin","tenant"],"path":["/update","/update/extract"]}'
 
   TMP2="$(mktemp)"; chmod 600 "$TMP2"
-  jq '.authorization.permissions += [{
-    "name": "tenant-read",
-    "role": ["admin","support","tenant"],
-    "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
-  }]' "$TMP_SEC" > "$TMP2"
-  mv "$TMP2" "$TMP_SEC"
-
-  TMP2="$(mktemp)"; chmod 600 "$TMP2"
-  jq '.authorization.permissions += [{
-    "name": "tenant-write",
-    "role": ["admin","tenant"],
-    "path": ["/update","/update/extract"]
-  }]' "$TMP_SEC" > "$TMP2"
+  jq --argjson tr "$tenant_read" --argjson tw "$tenant_write" '
+    .authorization.permissions |= (
+      map(select(.name == "all")) as $all
+      | map(select(.name != "all"))
+      | . + [$tr, $tw]
+      | . + $all
+    )
+  ' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 fi
 

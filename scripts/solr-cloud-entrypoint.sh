@@ -19,6 +19,9 @@
 #   so we must bootstrap /security.json into ZK immediately after startup and
 #   before Docker marks the container healthy.
 #
+#   The entrypoint runs as root (compose user: 0:0) to fix bind-mounted file
+#   permissions, then drops to solr user via gosu for the actual Solr process.
+#
 # Why this script exists:
 #   Without this bootstrap, SolrCloud starts with authentication=disabled even
 #   though /var/solr/data/security.json exists. That makes admin APIs anonymous
@@ -32,7 +35,7 @@ SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_BASE="http://localhost:${SOLR_PORT}/solr"
 
 # Official Solr embedded ZooKeeper uses client port SOLR_PORT + 1000.
-# Keep ZK_HOST overrideable for external ZooKeeper or custom deployments.
+# Keep ZK_HOST overrideable for external ZooKeeper or unusual deployments.
 if [ -z "${ZK_HOST:-}" ]; then
   case "$SOLR_PORT" in
     ''|*[!0-9]*) ZK_HOST="localhost:9983" ;;
@@ -95,6 +98,7 @@ bootstrap_cloud_security() {
   wait_for_auth
 }
 
+# ── SolrCloud mode ────────────────────────────────────────────────────────────
 if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   log "Starting SolrCloud on port ${SOLR_PORT} with embedded ZooKeeper ${ZK_HOST}"
   solr-foreground -c -DzkRun &
@@ -108,8 +112,25 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   trap terminate TERM INT
 
   bootstrap_cloud_security
+
+  # Upload moodle-tenant configset to ZooKeeper so Collections API can use it.
+  log "Uploading moodle-tenant configset to ZooKeeper ${ZK_HOST}"
+  /opt/solr/bin/solr zk upconfig \
+    -n moodle-tenant \
+    -d /var/solr/data/configsets/moodle-tenant/conf \
+    -z "$ZK_HOST" 2>&1 | while IFS= read -r line; do log "[zk] $line"; done
+
+  # Create collections for all active tenants via solr-tenant.sh
+  # Run in a subshell so a tenant error does not kill the entrypoint.
+  log "Applying tenant collections via solr-tenant.sh apply"
+  (
+    /opt/solr/scripts/solr-tenant.sh apply 2>&1
+  ) | while IFS= read -r line; do log "[tenant] $line"; done || \
+    log "WARNING: solr-tenant.sh apply returned non-zero — check tenant logs"
+
   wait "$solr_pid"
 else
+  # ── Standalone mode ──────────────────────────────────────────────────────
   log "Starting standalone Solr on port ${SOLR_PORT}"
   exec solr-foreground
 fi
