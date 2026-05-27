@@ -5,85 +5,52 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Refactored
-- **Modular architecture**: Split monolithic scripts into focused modules for readability and maintainability. All shell scripts are now under 800 lines:
-  - `solr-tenant.sh` (42 lines) — main dispatcher; sources 4 modules:
-    - `solr-tenant-api.sh` (279 lines) — logging, auth, env, naming helpers
-    - `solr-tenant-core.sh` (280 lines) — core/collection CRUD (standalone + SolrCloud)
-    - `solr-tenant-security.sh` (286 lines) — credentials, roles, permissions
-    - `solr-tenant-cmd.sh` (774 lines) — create, delete, enable, apply, export
-  - `run-tests.sh` (198 lines) — test orchestrator; sources 5 modules:
-    - `test-lib.sh` (140 lines) — colors, counters, print helpers
-    - `test-unit.sh` (162 lines) — file checks, compose config, Dockerfile
-    - `test-integration.sh` (590 lines) — tenant lifecycle, scale, isolation
-    - `test-security.sh` (363 lines) — auth, isolation, negative, performance
-    - `test-moodle.sh` (321 lines) — document indexing, Tika extraction, cloud
-- **Removed stale code**: Deleted old dispatch block from `solr-tenant-cmd.sh` that was still executed on `source()`, causing `Unknown command: <tenant_name>` errors after every operation.
-- `tests/solr-log-findings.md`: Documented historical `coreNodeName missing` error (harmless SolrCloud startup side-effect with stale standalone dirs).
-- **Documentation cleanup**: Removed `docs/SOLR-8-to-10-impact.md` and `docs/STATUS-2026-05-24.md` (consolidated into README/CHANGELOG). Updated `docs/architecture.md`.
+- Modular architecture: monolithic scripts split into focused modules, all under 800 lines.
+  - `solr-tenant.sh` (42 lines) — dispatcher; sources `solr-tenant-api.sh`, `solr-tenant-core.sh`, `solr-tenant-security.sh`, `solr-tenant-cmd.sh`
+  - `run-tests.sh` (198 lines) — test orchestrator; sources `test-lib.sh`, `test-unit.sh`, `test-integration.sh`, `test-security.sh`, `test-moodle.sh`
+- Removed stale dispatch block from `solr-tenant-cmd.sh` (caused `Unknown command: <tenant_name>` on every `source()`).
+- Removed `docs/SOLR-8-to-10-impact.md` and `docs/STATUS-2026-05-24.md` (consolidated into README/CHANGELOG).
+- Architecture diagrams replaced: stale `.d2` prototypes removed, clean SVG diagrams added (`docs/architecture-install.svg`, `docs/architecture-runtime.svg`).
 
-### Fixed (Idempotency)
-- `cmd_core_add` — now skips if core is already assigned to tenant. Prevents duplicate core entries in `tenants.env` (was: `moodle_core,moodle_core,moodle_core` on repeated calls).
-- `import_manifest` — `enable`/`delete` only called when tenant active state actually changes. Prevents unnecessary password resets on repeated imports.
-- `_create_core` — response body checked after CREATE. Handles `coreNodeName missing` gracefully (stale standalone dirs in SolrCloud mode) and verifies core existence instead of relying on HTTP 200 alone.
-- `powerinit.sh` — `_default` configset always refreshed from `eLeDia-moodle-tenant` source. Ensures Moodle-optimized schema is never stale across restarts.
-- `setup.sh` — `tenants.env` permissions changed from `600` to `644` so container solr user (uid 8983) can read the file.
-- `docker-compose.yml` / `docker-compose.cloud-test.yml` — removed SELinux `:z` flag from `tenants.env` mount (unnecessary, caused warnings).
-- `scripts/solr-tenant-core.sh` — added SolrCloud configset source fallback (`/var/solr/data/configsets/moodle-tenant/conf`) when `eLeDia-moodle-tenant` is missing in runtime containers.
-- `scripts/solr-cloud-entrypoint.sh` — added configset upload fallback path detection for mixed legacy/new configset directory layouts.
+### Fixed
+- `cmd_core_add` — skips if core already assigned; prevents duplicate entries in `tenants.env`.
+- `import_manifest` — `enable`/`delete` only triggered when tenant active state actually changes.
+- `_create_core` — handles `coreNodeName missing` gracefully and verifies existence instead of relying on HTTP 200.
+- `powerinit.sh` — `_default` configset always refreshed from `eLeDia-moodle-tenant` source on restart.
+- `powerinit.sh` — `SOLR_MODE` no longer overwritten by `load_env()`.
+- `powerinit.sh` — `tenant-read`/`tenant-write` permissions inserted before `all`.
+- `setup.sh` — `tenants.env` permissions set to `644` so container solr user (uid 8983) can read the file.
+- `docker-compose.yml` / `docker-compose.cloud-test.yml` — removed unnecessary SELinux `:z` flag from `tenants.env` mount.
+- `scripts/solr-tenant-core.sh` — SolrCloud configset fallback to legacy `moodle-tenant/conf` path when `eLeDia-moodle-tenant` is missing.
+- `scripts/solr-cloud-entrypoint.sh` — same configset path fallback for mixed legacy/new layouts.
+- `scripts/run-tests.sh` — HTTP-000 root cause fixed (port resolution via `${SOLR_PORT}`, not `docker compose port`).
+- `docker-compose.yml` — dynamic Solr port strategy restored (`${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`).
+- `scripts/run-tests.sh` — SolrCloud restart tests hardened with `wait_for_solr_ready` + retry.
+- `scripts/run-tests.sh` — tenant/collection create idempotent ("already exists" treated as valid state).
+- GitLab `feature-full-test` — stack started explicitly before tests; fixes HTTP-000 on cold runner.
 
 ### Performance
-- `upgrade-docker.sh` — conditional `--build`: only rebuilds Docker image when Dockerfile, config, or scripts changed (sha256 checksum comparison). Skips rebuild on repeated runs with no changes, reducingupgrade time from minutes to seconds.
+- `upgrade-docker.sh` — conditional `--build`: skips image rebuild when Dockerfile/config/scripts unchanged (sha256 comparison).
 
 ### Changed
-- **eLeDia branding**: All module headers standardized with `eLeDia GmbH / Bernd Schreistetter (bsc)`.
-- **Configset renamed**: `moodle-tenant` → `eLeDia-moodle-tenant` (all API references, ZooKeeper uploads, collection configs).
-- **Test core names**: `moodle_core` → `eLeDia_core`, `moodle_cloud_*` → `eLeDia_cloud_*`.
-- **Config directory**: `config/` → `eLeDia-config/` (host-side schema and solrconfig files).
-- **SolrCloud Bootstrap**: Automatic security.json upload to ZooKeeper, configset upload, and collection creation via `solr-tenant.sh apply` on first startup.
-- `docker-compose.cloud-test.yml` for isolated SolrCloud integration testing.
-- `scripts/solr-mode-portability.sh`: Import/Export/Switch-Schnittstelle für Core/Collection-/Tenant-Portabilität zwischen Standalone und SolrCloud.
-- `scripts/test-mode-switch.sh`: Kontinuitätstest für `standalone -> solrcloud -> standalone` mit Moodle-API-Verifikation.
-- `scripts/upgrade-docker.sh`: Upgrade-Skript für Bare-Metal Solr 8/9/10/11 nach Docker.
-- `systemd/upgrade-docker@.service`: systemd oneshot-template für instance-basiertes Upgrade.
-- Added prototype Moodle plugin scaffold at `prototypes/local_eledia_solrplus/` (settings + health probe around core `search_solr`) to supersede legacy ideas from `tool_coursesearch`/`mod_tagsearch`.
-
-### Fixed (previous, retained)
-- `powerinit.sh`: `SOLR_MODE` no longer overwritten by `load_env()`.
-- `powerinit.sh`: `tenant-read`/`tenant-write` permissions inserted before `all` permission.
-- `solr-cloud-entrypoint.sh`: Uploads `moodle-tenant` configset to ZK, runs `solr-tenant.sh apply`.
-- `tenants.env` bind-must be world-readable (`chmod 644`) on host.
-
-### Changed (previous, retained)
-- `solr-cloud-entrypoint.sh`: Tenant application runs in subshell with error tolerance.
-- Upgrade-Flow auf Einbahnstraße: 8.x Bare-Metal → Docker ohne Downgrade-Path.
-- `.github/workflows/solr-testing.yml`: Push-Trigger, mode-switch job, containerized linting.
-
-### Tested
-- SolrCloud mode: 8 collections created, 37 credentials (admin, support, 5 active + 30 inactive tenants), security active (401 anonymous), moodle-tenant configset in ZK.
-
-### Fixed
-- GitLab-Job `feature-full-test` startet den Stack jetzt explizit vor den Tests (`docker compose build`, `docker compose up -d`, Health-Wait bis `healthy`).
-- Damit werden HTTP-000-Fehler durch nicht gestartete Container in `scripts/run-tests.sh --unit-only` vermieden.
-
-### Documentation
-- `docs/CI-CD.md` präzisiert Trigger (Push/PR) und manuellen Start für GitHub/GitLab.
-
-### Fixed
-- `scripts/run-tests.sh`: HTTP-000 Root Cause beseitigt.
-  - Ursache: fehlerhafte Portauflösung (`docker compose port solr 8983` -> `invalid IP:0`) bei dynamischer Portbelegung.
-  - Fix: Auflösung wieder über `${SOLR_PORT}` + numerische Validierung vor Port-Override.
-- `docker-compose.yml`: dynamische Solr-Portstrategie vollständig wiederhergestellt (`${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`) inkl. Healthcheck auf `${SOLR_PORT}`.
-- `scripts/run-tests.sh`: SolrCloud-/Tenant-Restart-Tests robuster gemacht (`wait_for_solr_ready` + Retry), damit Recovery-Phasen nicht als False-Negative enden.
-- `scripts/run-tests.sh`: Tenant-/Collection-Create in Tests idempotent gemacht ("already exists" wird korrekt als gültiger Zustand behandelt).
-- `scripts/run-tests.sh`: SolrCloud-Testfluss stabilisiert:
-  - `cloud_tenant` vor Auth-Checks re-aktiviert,
-  - Core-Zuordnung für `cloud_test_c1` vor Collections/Auth verifiziert,
-  - Persistenz-Auth nach Restart über tenant-lesbaren `select`-Pfad (statt Admin-Ping) geprüft.
+- eLeDia branding: all module headers standardized (`eLeDia GmbH / Bernd Schreistetter (bsc)`).
+- Configset renamed: `moodle-tenant` → `eLeDia-moodle-tenant` (ZooKeeper, Collections API, all references).
+- Core/collection names: `moodle_core` → `eLeDia_core`, `moodle_cloud_*` → `eLeDia_cloud_*`.
+- Config directory: `config/` → `eLeDia-config/` (host-side schema and solrconfig).
+- SolrCloud bootstrap: automatic `security.json` + configset upload to ZooKeeper + collection creation on first start.
+- `docker-compose.cloud-test.yml` added for isolated SolrCloud integration testing.
+- `scripts/solr-mode-portability.sh` — import/export/switch interface for standalone ↔ SolrCloud migration.
+- `scripts/test-mode-switch.sh` — continuity test for `standalone → solrcloud → standalone`.
+- `scripts/upgrade-docker.sh` — one-way bare-metal Solr 8/9/10/11 → Docker upgrade script.
+- `systemd/upgrade-docker@.service` — systemd oneshot template for instance-based upgrades.
+- `Dockerfile.wizard` — containerized wizard runner (debian:12-slim, whiptail + textual).
+- `.github/workflows/solr-testing.yml` — push triggers, mode-switch job, containerized linting.
+- Moodle plugin extracted to dedicated repo: `github.com/Codename-Beast/local_eledia_solrplus` (v0.0.1).
 
 ### Verified
-- Lokaler Lauf: `./scripts/run-tests.sh --unit-only --tenant --cloud` -> **46/46 PASS**, 0 Failures.
-- Syntaxchecks erfolgreich: `bash -n scripts/run-tests.sh scripts/solr-mode-portability.sh scripts/test-mode-switch.sh`.
-- Moduswechsel-Test erfolgreich: `./scripts/test-mode-switch.sh` -> PASS (API-Kontinuität über `solrcloud -> standalone`).
+- SolrCloud: 8 collections, 37 credentials, security active (401 anonymous), configset in ZK.
+- Local run: `./scripts/run-tests.sh --unit-only --tenant --cloud` → 46/46 PASS.
+- Mode-switch: `./scripts/test-mode-switch.sh` → PASS (`solrcloud → standalone` API continuity).
 
 ## [3.1.0] - 2026-05-26
 
