@@ -19,6 +19,8 @@ solr-moodle-docker. The project was later restructured and rebranded as
 | 2.1.0   | 2026-01-14 | GitLab CI, dynamic core name, refactor     |
 | 2.1.1   | 2026-01-15 | Dockerfile simplification (powerinit.sh)   |
 | 2.2.0   | 2026-01-15 | Security hardening, CI/CD improvements     |
+| 2.2.1   | 2026-01-18 | CVE-2025-26519 musl hotfix (untagged)      |
+| 2.2.2   | 2026-01-24 | Apache reverse proxy templates (untagged)  |
 | 2.3.0   | 2026-03-27 | Moodle 4.x auth fix, password entropy      |
 | 2.3.1   | 2026-03-28 | Solr 9.10.1 CVE update                     |
 | 2.3.2   | 2026-03-30 | Security permission cleanup, monitoring rm |
@@ -211,6 +213,42 @@ Housekeeping release.
 - README: documentation added for mounting native Solr log directory
   (`/var/solr/logs/` via `docker-compose.override.yml`)
 - `docker-compose.yml`: version label updated to v2.5.0
+
+---
+
+## [2.2.1] — 2026-01-18 (Hotfix)
+
+Not formally tagged — committed directly to main as a hotfix.
+
+### Security
+- CVE-2025-26519 (musl/musl-utils): `apk upgrade --no-cache musl musl-utils`
+  added to `Dockerfile` and `Dockerfile.init` to patch the vulnerability
+  in Alpine 3.20 base images
+
+---
+
+## [2.2.2] — 2026-01-24 (Apache Templates)
+
+Not formally tagged — merged from branch `feature/setup-gitlab-ci`.
+
+### Added
+- `apache/` directory: reverse proxy templates for multi-instance Solr setups
+  behind an existing Apache server
+  - `apache/solr-instance.conf.template` — VirtualHost template with
+    placeholders (`{{INSTANCE_NAME}}`, `{{HOSTNAME}}`, `{{SOLR_PORT}}`)
+  - `apache/ssl-common.conf` — shared SSL settings (inherits Let's Encrypt certs)
+  - `apache/generate-apache-config.sh` — interactive config generator
+    (194 lines, supports `--instance`, `--hostname`, `--port` params)
+  - `apache/README.md` — setup guide with architecture diagram
+- `.env.example`: `SOLR_HOSTNAME` variable added
+- `.gitignore`: `apache/generated/` excluded
+
+### Changed (GitLab CI)
+- New `lint` stage added before security scans
+- `apache-config-test` job: tests generator with multiple instances,
+  verifies placeholder replacement, runs `httpd -t` syntax validation
+  with mock SSL certificates
+- GitLab CI and GitHub Actions test stages de-duplicated
 
 ---
 

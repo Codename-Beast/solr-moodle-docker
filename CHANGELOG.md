@@ -308,6 +308,8 @@ Full details: [docs/HISTORY-v1.md](docs/HISTORY-v1.md)
 | 2.1.0   | 2026-01-14 | GitLab CI, dynamic core name, `.env` location refactor |
 | 2.1.1   | 2026-01-15 | Dockerfile simplified via `powerinit.sh` (273→30 lines)|
 | 2.2.0   | 2026-01-15 | Security hardening, Trivy scanning, resource limits    |
+| 2.2.1   | 2026-01-18 | CVE-2025-26519 musl hotfix (untagged)                  |
+| 2.2.2   | 2026-01-24 | Apache reverse proxy templates, CI lint stage (untagged)|
 | 2.3.0   | 2026-03-27 | Moodle 4.x `config-read` 403 fix, password entropy     |
 | 2.3.1   | 2026-03-28 | Solr 9.10.1 CVE update                                 |
 | 2.3.2   | 2026-03-30 | Security permission cleanup, monitoring removed        |
