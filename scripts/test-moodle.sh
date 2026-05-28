@@ -176,7 +176,8 @@ solrcloud_tests() {
     print_header "SOLRCLOUD TESTS - Collections API & Restart Persistence"
 
     if ! _is_cloud_mode; then
-        print_skip "SolrCloud tests skipped (SOLR_MODE != solrcloud)"
+        print_fail "SolrCloud tests require SOLR_MODE=solrcloud (current mode is standalone)"
+        return 1
         return 0
     fi
 

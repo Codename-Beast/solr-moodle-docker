@@ -344,7 +344,7 @@ tenant_tests() {
         /var/solr/data/security.json 2>/dev/null | grep -q true; then
         print_pass "User solr_schule_a present in security.json"
     else
-        print_skip "security.json check (may need restart to reflect)"
+        print_fail "User solr_schule_a not found in security.json"
     fi
 
     PASS_A="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"

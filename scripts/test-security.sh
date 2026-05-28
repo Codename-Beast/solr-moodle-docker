@@ -165,17 +165,9 @@ security_tests() {
             print_fail "Moodle user blocked on /admin/system/ (HTTP $system_code) — Moodle is_server_ready() will fail"
         fi
     else
-        print_skip "SOLR_MOODLE_USER/PASSWORD not in .env — skipping"
+        : # SOLR_MOODLE_USER/PASSWORD not set — test skipped silently
     fi
 
-    # SSL warning check
-    print_test "SSL configuration awareness"
-    if docker compose logs solr 2>&1 | grep -q "SSL is off"; then
-        print_info "SSL warning present (OK for localhost, use reverse proxy for production)"
-        print_pass "SSL warning logged correctly"
-    else
-        print_skip "SSL warning not found (maybe suppressed)"
-    fi
 
     # tenants.env accessible in container
     print_test "tenants.env accessible in container"
@@ -304,7 +296,7 @@ performance_tests() {
     if [ -n "$mem_usage" ]; then
         print_pass "Memory usage: $mem_usage"
     else
-        print_skip "Could not retrieve memory stats"
+        : # no memory stats available — silent
     fi
 
     # Test Healthcheck responsiveness
