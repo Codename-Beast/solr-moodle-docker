@@ -63,12 +63,15 @@ jobs:
         sudo chmod -R 777 /var/log/eledia
 
     - name: Create .env
+      env:
+        CI_ADMIN_PW: ${{ secrets.SOLR_CI_ADMIN_PASSWORD }}
+        CI_SUPPORT_PW: ${{ secrets.SOLR_CI_SUPPORT_PASSWORD }}
       run: |
         cp .env.example .env
-        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/'       .env
-        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'             .env
-        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass1234567890/' .env
-        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass1234567890/' .env
+        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/' .env
+        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'       .env
+        sed -i "s/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=${CI_ADMIN_PW}/"     .env
+        sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=${CI_SUPPORT_PW}/" .env
         echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
         touch tenants.env
         chmod 666 tenants.env
@@ -133,12 +136,15 @@ jobs:
         sudo chmod -R 777 /var/log/eledia
 
     - name: Create .env (SolrCloud + multi-tenant)
+      env:
+        CI_ADMIN_PW: ${{ secrets.SOLR_CI_ADMIN_PASSWORD }}
+        CI_SUPPORT_PW: ${{ secrets.SOLR_CI_SUPPORT_PASSWORD }}
       run: |
         cp .env.example .env
-        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/'       .env
-        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'             .env
-        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOL...90/' .env
-        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOL...90/' .env
+        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/' .env
+        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'       .env
+        sed -i "s/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=${CI_ADMIN_PW}/"     .env
+        sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=${CI_SUPPORT_PW}/" .env
         echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
         touch tenants.env
         chmod 666 tenants.env
