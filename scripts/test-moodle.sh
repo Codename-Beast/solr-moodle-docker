@@ -115,10 +115,8 @@ moodle_document_tests() {
 cleanup_tests() {
     print_header "CLEANUP TESTS - Restart and Data Persistence"
 
-    local admin_pass
 
     # Test Restart without data loss
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     print_test "Restart without data loss"
     docker compose restart solr >/dev/null 2>&1
     sleep 20
@@ -126,7 +124,7 @@ cleanup_tests() {
     local restart_response
 
 
-    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
+    restart_response=$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$restart_response" = "200" ]; then
         print_pass "Container restart successful, data persisted"
     else
@@ -181,8 +179,7 @@ solrcloud_tests() {
         return 0
     fi
 
-    local admin_pass container tenant_cmd
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
+ local container tenant_cmd
     container="${INSTANCE_NAME:-solr}-solr"
     tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
 
@@ -190,7 +187,7 @@ solrcloud_tests() {
     print_test "Embedded ZooKeeper reachable (port 9983)"
     local zk_code
     zk_code=$(curl -so /dev/null -w '%{http_code}' \
-        -u "admin:${admin_pass}" \
+        -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/zookeeper?detail=true&path=%2F&wt=json" 2>/dev/null)
     if [ "$zk_code" = "200" ]; then
         print_pass "ZooKeeper API reachable (HTTP 200)"
@@ -222,7 +219,7 @@ solrcloud_tests() {
     local coll_wait=0
     local coll_ok=0
     while [ "$coll_wait" -lt 60 ]; do
-        coll_resp=$(curl -s -u "admin:${admin_pass}" \
+        coll_resp=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
             "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
         if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
             coll_ok=1
@@ -268,10 +265,10 @@ solrcloud_tests() {
     # Restart Solr and verify everything survives
     print_test "Restart Solr — collection, security, and documents must survive"
     docker compose restart solr >/dev/null 2>&1
-    wait_for_solr_ready "$admin_pass" || true
+    wait_for_solr_ready "$SOLR_ADMIN_PASSWORD" || true
 
     # Collection still exists
-    coll_resp=$(curl -s -u "admin:${admin_pass}" \
+    coll_resp=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
     if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
         print_pass "Collection survives restart (ZK persistence confirmed)"

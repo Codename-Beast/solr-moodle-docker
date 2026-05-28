@@ -82,12 +82,12 @@ security_tests() {
 
    #Container privileges
     print_test "Container privileges (non-root for Solr)"
-    local user
-    user=$(docker exec "$SOLR_CONTAINER" id -u 2>/dev/null)
-    if [ "$user" = "8983" ]; then
-        print_pass "Solr process runs as uid 8983 (solr)"
+    local solr_uid
+    solr_uid=$(docker exec "$SOLR_CONTAINER" sh -c 'ps -o uid= -C java 2>/dev/null | head -1 | tr -d " "' 2>/dev/null)
+    if [ "$solr_uid" = "8983" ]; then
+        print_pass "Solr JVM process runs as uid 8983 (solr)"
     else
-        print_fail "Solr process runs as wrong uid: $user (expected 8983)"
+        print_fail "Solr JVM runs as wrong uid: $solr_uid (expected 8983)"
     fi
 
     # Test 3: Privileged mode
@@ -139,10 +139,7 @@ security_tests() {
 
     # Default passwords in production
     print_test "No default passwords used"
-    local admin_pass
-
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
-    if [ "$admin_pass" = "eledia_default" ]; then
+    if [ "$SOLR_ADMIN_PASSWORD" = "eledia_default" ]; then
         print_fail "Default password still in use (CHANGE IT!)"
     else
         print_pass "Default password changed"
@@ -185,10 +182,8 @@ security_tests() {
 negative_tests() {
     print_header "NEGATIVE TESTS - Invalid Input Handling"
 
-    local admin_pass
 
     # Test Invalid credentials
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     print_test "Reject invalid credentials"
     local invalid_response
 
@@ -203,7 +198,7 @@ negative_tests() {
     print_test "SQL injection protection"
     local injection_response
 
-    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
+    injection_response=$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*';DROP%20TABLE%20users;--")
     if [ "$injection_response" = "200" ] || [ "$injection_response" = "400" ] || [ "$injection_response" = "404" ] || [ "$injection_response" = "401" ] || [ "$injection_response" = "403" ]; then
         print_pass "SQL injection handled safely (HTTP $injection_response)"
     else
@@ -214,7 +209,7 @@ negative_tests() {
     print_test "XSS protection"
     local xss_response
 
-    xss_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
+    xss_response=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=<script>alert('xss')</script>&wt=json")
     if echo "$xss_response" | grep -qv "<script>"; then
         print_pass "XSS attack sanitized"
     else
@@ -228,7 +223,7 @@ negative_tests() {
     long_query=$(python3 -c "print('a'*10000)")
     local long_response
 
-    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
+    long_response=$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=${long_query}")
     if [ "$long_response" = "400" ] || [ "$long_response" = "414" ] || [ "$long_response" = "200" ]; then
         print_pass "Long query handled (HTTP $long_response)"
     else
@@ -239,7 +234,7 @@ negative_tests() {
     print_test "Reject invalid core name"
     local invalid_core_response
 
-    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/nonexistent_core/select?q=*:*")
+    invalid_core_response=$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/nonexistent_core/select?q=*:*")
     if [ "$invalid_core_response" = "404" ] || [ "$invalid_core_response" = "401" ] || [ "$invalid_core_response" = "403" ]; then
         print_pass "Invalid core safely rejected (HTTP $invalid_core_response)"
     else
@@ -250,7 +245,7 @@ negative_tests() {
     print_test "Handle empty query"
     local empty_response
 
-    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=")
+    empty_response=$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=")
     if [ "$empty_response" = "400" ] || [ "$empty_response" = "200" ] || [ "$empty_response" = "404" ] || [ "$empty_response" = "401" ] || [ "$empty_response" = "403" ]; then
         print_pass "Empty query handled (HTTP $empty_response)"
     else
@@ -265,17 +260,13 @@ negative_tests() {
 performance_tests() {
     print_header "PERFORMANCE TESTS - Basic Performance"
 
-    local admin_pass
 
     # Test Response time
-
-
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     print_test "API response time (<2s)"
     local start_time
 
     start_time=$(date +%s%3N)
-    curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1
     local end_time
 
     end_time=$(date +%s%3N)
@@ -316,7 +307,7 @@ performance_tests() {
 
     concurrent_start=$(date +%s%3N)
     for i in {1..10}; do
-        curl -s -o /dev/null -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
+        curl -s -o /dev/null -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
     done
     wait
     local concurrent_end
@@ -338,7 +329,7 @@ performance_tests() {
 
     load_start=$(date +%s%3N)
     for i in {1..20}; do
-        curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
+        curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
     done
     local load_end
 

@@ -86,10 +86,8 @@ integration_tests() {
     docker compose up -d >/dev/null 2>&1
 
     local waited=0
-    local admin_pass_boot
-    admin_pass_boot=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     while [ $waited -lt 180 ]; do
-        if curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass_boot}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
+        if curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
             break
         fi
         sleep 5
@@ -102,7 +100,7 @@ integration_tests() {
         SOLR_PORT="$mapped_port"
     fi
 
-    if curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass_boot}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
+    if curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
         print_pass "Containers started and healthy"
     else
         print_fail "Containers not healthy"
@@ -142,7 +140,7 @@ integration_tests() {
     # Solr Core Creation
     print_test "Solr core/collection creation"
     if _is_cloud_mode; then
-        if curl -s -u "admin:${admin_pass_boot}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json" | grep -q "\"${SOLR_CORE_NAME}\""; then
+        if curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json" | grep -q "\"${SOLR_CORE_NAME}\""; then
             print_pass "Collection exists (${SOLR_CORE_NAME})"
         else
             print_fail "Collection not found (${SOLR_CORE_NAME})"
@@ -170,12 +168,9 @@ integration_tests() {
 
     #Authentication
     print_test "Basic authentication"
-    local admin_pass
-
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     local response
 
-    response=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
+    response=$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores")
     if [ "$response" = "200" ]; then
         print_pass "Authentication successful (HTTP 200)"
     else
@@ -194,14 +189,18 @@ integration_tests() {
     fi
 
     #Core status API
-    print_test "Core status API"
+    #Core/Collection status API
+    print_test "Core/Collection status API"
     local core_response
-
-    core_response=$(curl -s -u "admin:${admin_pass}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&wt=json")
-    if echo "$core_response" | grep -q "\"${SOLR_CORE_NAME}\""; then
-        print_pass "Core status API returns ${SOLR_CORE_NAME}"
+    if _is_cloud_mode; then
+        core_response=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
     else
-        print_fail "Core status API does not return ${SOLR_CORE_NAME}"
+        core_response=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&wt=json")
+    fi
+    if echo "$core_response" | grep -q "${SOLR_CORE_NAME}"; then
+        print_pass "Core/Collection API returns ${SOLR_CORE_NAME}"
+    else
+        print_fail "Core/Collection API does not return ${SOLR_CORE_NAME}"
     fi
 
     # Tenant management lifecycle (create/deactivate/enable/core add/core remove)
@@ -214,9 +213,11 @@ integration_tests() {
 
     print_test "Tenant create with two cores"
     if docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh create "$tenant_name" --cores "${tenant_core_a},${tenant_core_b}" >/tmp/_tenant_create 2>&1; then
+        sleep 3
         print_pass "Tenant created (${tenant_name})"
     else
         print_fail "Tenant create failed (${tenant_name})"
+        cat /tmp/_tenant_create | while IFS= read -r line; do echo "] $line"; done
         cat /tmp/_tenant_create || true
     fi
 
@@ -318,9 +319,6 @@ integration_tests() {
 
 tenant_tests() {
     print_header "MULTI-TENANT TESTS - Isolation & Management"
-
-    local admin_pass
-    admin_pass=$(grep "^SOLR_ADMIN_PASSWORD=" .env | cut -d= -f2)
     local container="${INSTANCE_NAME:-solr}-solr"
     local tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
 
@@ -486,7 +484,7 @@ tenant_tests() {
     # Restart persistence
     print_test "Restart persistence: tenants survive docker compose restart"
     docker compose restart solr >/dev/null 2>&1 || true
-    wait_for_solr_ready "$admin_pass" || true
+    wait_for_solr_ready "$SOLR_ADMIN_PASSWORD" || true
     local rp_wait=0
     local rp_ok=0
     while [ "$rp_wait" -lt 60 ]; do
