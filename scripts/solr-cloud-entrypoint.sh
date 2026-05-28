@@ -13,20 +13,15 @@
 #   exec solr-foreground directly.
 #
 # SolrCloud mode:
-#   The init container writes /var/solr/data/security.json before Solr starts.
-#   In SolrCloud, however, Solr reads security config from ZooKeeper, not from
-#   the local filesystem. Embedded ZooKeeper only exists after Solr has started,
-#   so we must bootstrap /security.json into ZK immediately after startup and
+#   On first start (empty volume), the entrypoint generates security.json
+#   from the embedded template using SOLR_ADMIN_PASSWORD / SOLR_SUPPORT_PASSWORD.
+#   It then uploads security.json to ZooKeeper immediately after Solr starts,
 #   before Docker marks the container healthy.
+#   On subsequent starts, the existing security.json is re-uploaded to ZK
+#   (idempotent — ZK is reset on embedded-ZK restart).
 #
-#   The entrypoint runs as root (compose user: 0:0) to fix bind-mounted file
-#   permissions, then drops to solr user via gosu for the actual Solr process.
-#
-# Why this script exists:
-#   Without this bootstrap, SolrCloud starts with authentication=disabled even
-#   though /var/solr/data/security.json exists. That makes admin APIs anonymous
-#   until the first tenant command happens to upload security.json. Production
-#   and tests both need security active as part of startup, not as a side effect.
+#   The entrypoint also uploads the eLeDia-moodle-tenant configset to ZK
+#   and runs solr-tenant.sh apply to recreate collections for active tenants.
 # =========================================
 
 set -euo pipefail
@@ -44,9 +39,78 @@ if [ -z "${ZK_HOST:-}" ]; then
 fi
 
 SECURITY_JSON="${SECURITY_JSON:-/var/solr/data/security.json}"
+SECURITY_TEMPLATE="${SECURITY_TEMPLATE:-/opt/solr/security.json.template}"
 
 log() {
   printf '[solr-entrypoint] %s\n' "$*"
+}
+
+# hash_solr_password: Produce a Solr BasicAuthPlugin-compatible credential string.
+# Algorithm: base64(SHA256(SHA256(random_salt || password))) + " " + base64(salt)
+# Args: $1 - plaintext password
+hash_solr_password() {
+  local pass="$1"
+  local salt_file pass_file combined hash1 hash2
+  salt_file="$(mktemp)"
+  pass_file="$(mktemp)"
+  combined="$(mktemp)"
+  hash1="$(mktemp)"
+  hash2="$(mktemp)"
+  chmod 600 "$salt_file" "$pass_file" "$combined" "$hash1" "$hash2"
+  openssl rand 32 > "$salt_file"
+  printf '%s' "$pass" > "$pass_file"
+  cat "$salt_file" "$pass_file" > "$combined"
+  openssl dgst -sha256 -binary "$combined" > "$hash1"
+  openssl dgst -sha256 -binary "$hash1" > "$hash2"
+  local hash_b64 salt_b64
+  hash_b64="$(base64 < "$hash2" | tr -d '\n\r')"
+  salt_b64="$(base64 < "$salt_file" | tr -d '\n\r')"
+  dd if=/dev/zero of="$pass_file" bs=1 count="$(wc -c < "$pass_file")" 2>/dev/null || true
+  dd if=/dev/zero of="$combined"  bs=1 count="$(wc -c < "$combined")"  2>/dev/null || true
+  rm -f "$salt_file" "$pass_file" "$combined" "$hash1" "$hash2"
+  printf '%s %s' "$hash_b64" "$salt_b64"
+}
+
+# generate_security_json: Create /var/solr/data/security.json from template.
+# Called when the file is missing (fresh volume / first start).
+# Requires: SOLR_ADMIN_USER, SOLR_ADMIN_PASSWORD, SOLR_SUPPORT_USER, SOLR_SUPPORT_PASSWORD
+generate_security_json() {
+  log "Generating security.json from template (first start)"
+
+  local admin_user="${SOLR_ADMIN_USER:-admin}"
+  local support_user="${SOLR_SUPPORT_USER:-support}"
+
+  if [ -z "${SOLR_ADMIN_PASSWORD:-}" ]; then
+    log "ERROR: SOLR_ADMIN_PASSWORD is not set — cannot generate security.json"
+    return 1
+  fi
+  if [ -z "${SOLR_SUPPORT_PASSWORD:-}" ]; then
+    log "ERROR: SOLR_SUPPORT_PASSWORD is not set — cannot generate security.json"
+    return 1
+  fi
+  if [ ! -f "$SECURITY_TEMPLATE" ]; then
+    log "ERROR: security.json template not found at $SECURITY_TEMPLATE"
+    return 1
+  fi
+
+  log "Hashing credentials..."
+  local admin_hash support_hash
+  admin_hash="$(hash_solr_password "$SOLR_ADMIN_PASSWORD")"
+  support_hash="$(hash_solr_password "$SOLR_SUPPORT_PASSWORD")"
+
+  mkdir -p "$(dirname "$SECURITY_JSON")"
+  local tmp
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
+  sed \
+    -e "s|__ADMIN_USER__|${admin_user}|g" \
+    -e "s|__SUPPORT_USER__|${support_user}|g" \
+    -e "s|__ADMIN_HASH__|${admin_hash}|g" \
+    -e "s|__SUPPORT_HASH__|${support_hash}|g" \
+    "$SECURITY_TEMPLATE" > "$tmp"
+  mv "$tmp" "$SECURITY_JSON"
+  chmod 600 "$SECURITY_JSON"
+  log "security.json generated at $SECURITY_JSON"
 }
 
 wait_for_solr() {
@@ -87,9 +151,9 @@ bootstrap_cloud_security() {
     return 0
   fi
 
+  # Generate security.json if missing (first start — empty volume)
   if [ ! -f "$SECURITY_JSON" ]; then
-    log "ERROR: ${SECURITY_JSON} not found; cannot bootstrap SolrCloud security"
-    return 1
+    generate_security_json || return 1
   fi
 
   log "Uploading ${SECURITY_JSON} to ZooKeeper ${ZK_HOST} as /security.json"
