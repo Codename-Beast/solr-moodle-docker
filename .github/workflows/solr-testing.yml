@@ -59,13 +59,13 @@ jobs:
 
     - name: Create host log directory
       run: |
-        sudo mkdir -p /var/log/eledia/solr
+        sudo mkdir -p /var/log/eledia/ci-solr
         sudo chmod -R 777 /var/log/eledia
 
     - name: Create .env
       run: |
         cat > .env <<'EOF'
-        INSTANCE_NAME=solr
+        INSTANCE_NAME=ci-solr
         SOLR_VERSION=9.10.1
         SOLR_PORT=8983
         SOLR_BIND=127.0.0.1
@@ -73,9 +73,9 @@ jobs:
         SOLR_LOG_LEVEL=INFO
         SOLR_NETWORK_NAME=solr_network
         SOLR_ADMIN_USER=admin
-        SOLR_ADMIN_PASSWORD=CI_AdminPass1234567890
+        SOLR_ADMIN_PASSWORD=CI_Adm...90
         SOLR_SUPPORT_USER=support
-        SOLR_SUPPORT_PASSWORD=CI_SupportPass1234567890
+        SOLR_SUPPORT_PASSWORD=CI_Sup...90
         SOLR_CPU_LIMIT=2
         SOLR_MEMORY_LIMIT=4G
         SOLR_CPU_RESERVATION=0.5
@@ -90,15 +90,15 @@ jobs:
       run: |
         docker compose build solr
         docker compose up -d
-        timeout 120 bash -c \
+        timeout 240 bash -c \
           'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting for healthy..."; done'
         echo "Solr is healthy"
 
     - name: Create CI tenant + core
       run: |
-        docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test \
+        docker exec ci-solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test \
           --cores eLeDia_core 2>&1 || true
-        PASS=$(docker exec solr-solr grep 'TENANT_CI_TEST_PASS=' /opt/solr/tenants.env \
+        PASS=$(docker exec ci-solr-solr grep 'TENANT_CI_TEST_PASS=' /opt/solr/tenants.env \
           | cut -d= -f2 || echo "")
         echo "SOLR_CORE_NAME=eLeDia_core" >> .env
         echo "CI_TENANT_PASS=${PASS}" >> .env
@@ -137,13 +137,13 @@ jobs:
 
     - name: Create host log directory
       run: |
-        sudo mkdir -p /var/log/eledia/solr
+        sudo mkdir -p /var/log/eledia/ci-solr
         sudo chmod -R 777 /var/log/eledia
 
     - name: Create .env (SolrCloud + multi-tenant)
       run: |
         cat > .env <<'EOF'
-        INSTANCE_NAME=solr
+        INSTANCE_NAME=ci-solr
         SOLR_VERSION=9.10.1
         SOLR_PORT=8983
         SOLR_BIND=127.0.0.1
@@ -168,7 +168,7 @@ jobs:
       run: |
         docker compose build solr
         docker compose up -d
-        timeout 120 bash -c \
+        timeout 240 bash -c \
           'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
 
     - name: Run SolrCloud tenant isolation tests
