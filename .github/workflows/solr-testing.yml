@@ -29,7 +29,11 @@ jobs:
         sudo apt-get install -y shellcheck
         find scripts/ -name "*.sh" -exec shellcheck -S warning {} +
     - name: Validate docker-compose.yml
-      run: docker compose config --quiet
+      run: |
+        cp .env.example .env
+        touch tenants.env
+        docker compose config --quiet
+        rm -f .env tenants.env
 
   security-scan:
     name: Security Scan
