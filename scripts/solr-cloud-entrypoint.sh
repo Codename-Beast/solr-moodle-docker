@@ -196,10 +196,18 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   bootstrap_cloud_security
 
   # Upload eLeDia-moodle-tenant configset to ZooKeeper so Collections API can use it.
-  local_conf_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
-  if [ ! -d "$local_conf_dir" ] && [ -d "/var/solr/data/configsets/moodle-tenant/conf" ]; then
-    log "WARN: eLeDia configset path missing, fallback to legacy moodle-tenant path"
+  # Configset source: bind-mounted from ./eLeDia-config at /opt/solr/eledia-config
+  # Fallback chain: eledia-config mount -> data/configsets/eLeDia-moodle-tenant -> legacy moodle-tenant
+  if [ -d "/opt/solr/eledia-config" ]; then
+    local_conf_dir="/opt/solr/eledia-config"
+  elif [ -d "/var/solr/data/configsets/eLeDia-moodle-tenant/conf" ]; then
+    local_conf_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
+  elif [ -d "/var/solr/data/configsets/moodle-tenant/conf" ]; then
+    log "WARN: falling back to legacy moodle-tenant configset path"
     local_conf_dir="/var/solr/data/configsets/moodle-tenant/conf"
+  else
+    log "ERROR: no configset source found — checked /opt/solr/eledia-config, /var/solr/data/configsets/eLeDia-moodle-tenant/conf"
+    exit 1
   fi
   log "Uploading eLeDia-moodle-tenant configset to ZooKeeper ${ZK_HOST} from ${local_conf_dir}"
   /opt/solr/bin/solr zk upconfig \

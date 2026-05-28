@@ -81,10 +81,9 @@ unit_tests() {
     print_test "Required files existence"
     local required_files=(
         "docker-compose.yml"
-        "init/powerinit.sh"
+        "security.json.template"
         "eLeDia-config/managed-schema"
         "eLeDia-config/solrconfig.xml"
-        "init/security.json.template"
         "scripts/solr-cloud-entrypoint.sh"
         "scripts/solr-tenant.sh"
         "tenants.env.example"
@@ -100,12 +99,12 @@ unit_tests() {
         print_pass "All required files present"
     fi
 
-    # Test 3: Script permissions
-    print_test "Script file permissions"
-    if [ -x "init/powerinit.sh" ] || [ -r "init/powerinit.sh" ]; then
-        print_pass "init scripts are readable"
+    # Test 3: Security template
+    print_test "Security bootstrap template"
+    if [ -f "security.json.template" ]; then
+        print_pass "security.json.template present (embedded in image for first-start security bootstrap)"
     else
-        print_fail "init scripts not readable"
+        print_fail "security.json.template missing"
     fi
 
     # Container-first delivery: helper scripts must be baked into Solr image

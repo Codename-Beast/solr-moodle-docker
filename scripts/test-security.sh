@@ -83,11 +83,11 @@ security_tests() {
    #Container privileges
     print_test "Container privileges (non-root for Solr)"
     local user
-    user=$(docker inspect "$SOLR_CONTAINER" --format='{{.Config.User}}' 2>/dev/null)
-    if [ "$user" = "8983:8983" ]; then
-        print_pass "Solr runs as non-root user (8983:8983)"
+    user=$(docker exec "$SOLR_CONTAINER" id -u 2>/dev/null)
+    if [ "$user" = "8983" ]; then
+        print_pass "Solr process runs as uid 8983 (solr)"
     else
-        print_fail "Solr runs as wrong user: $user"
+        print_fail "Solr process runs as wrong uid: $user (expected 8983)"
     fi
 
     # Test 3: Privileged mode
@@ -120,12 +120,21 @@ security_tests() {
         print_fail "security.json has wrong permissions: $sec_perms (expected 600)"
     fi
 
-    #.env in gitignore
-    print_test ".env in .gitignore"
-    if grep -q "\.env" .gitignore 2>/dev/null; then
-        print_pass ".env correctly listed in .gitignore"
+    # .env.example validation — ensure template exists and has required keys
+    print_test ".env.example present and contains required variables"
+    local required_vars=("INSTANCE_NAME" "SOLR_PORT" "SOLR_ADMIN_USER" "SOLR_ADMIN_PASSWORD" "SOLR_SUPPORT_USER" "SOLR_SUPPORT_PASSWORD" "SOLR_MODE")
+    local env_ok=1
+    if [ ! -f ".env.example" ]; then
+        print_fail ".env.example missing"
+        env_ok=0
     else
-        print_fail ".env not in .gitignore (SECURITY RISK!!)"
+        for var in "${required_vars[@]}"; do
+            if ! grep -q "^${var}=" .env.example 2>/dev/null; then
+                print_fail ".env.example missing variable: $var"
+                env_ok=0
+            fi
+        done
+        [ "$env_ok" -eq 1 ] && print_pass ".env.example present with all required variables"
     fi
 
     # Default passwords in production
