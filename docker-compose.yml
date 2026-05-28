@@ -32,7 +32,7 @@ services:
     image: solr-eledia:${SOLR_VERSION:-9.10.1}
     container_name: ${INSTANCE_NAME:-solr}-solr
     command: ["/opt/solr/docker/scripts/solr-cloud-entrypoint.sh"]
-    user: "8983:8983"
+    user: "0:0"
     ports:
       # SECURITY: SOLR_BIND MUST stay 127.0.0.1 — never bind to 0.0.0.0.
       # External access goes through the reverse proxy (Apache/Caddy) with TLS.
