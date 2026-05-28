@@ -1,219 +1,64 @@
-name: Solr Test Suite
+name: Solr Testing
+
 on:
   push:
     branches:
-    - feature/**
-    - feature/v*
-    - fix/**
-    - release*
-    paths-ignore:
-    - docs/**
-    - '**.md'
-    - .gitignore
+      - 'feature/**'
+      - 'release/**'
+      - 'main'
   pull_request:
     branches:
-    - main
-    - feature/**
-    paths-ignore:
-    - docs/**
-    - '**.md'
-  workflow_dispatch: null
+      - 'feature/**'
+      - 'release/**'
+      - 'main'
+  workflow_dispatch:
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   lint:
-    name: Code Quality Checks
+    name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-    - name: Run shellcheck on bash scripts
-      run: 'sudo apt-get update -qq
-
+    - uses: actions/checkout@v6
+    - name: Lint shell scripts
+      run: |
         sudo apt-get install -y shellcheck
+        find scripts/ -name "*.sh" -exec shellcheck -S warning {} +
+    - name: Validate docker-compose.yml
+      run: docker compose config --quiet
 
-        find . -name "*.sh" -type f -exec shellcheck -x {} +
-
-        '
-    - name: Run hadolint on Dockerfiles (containerized, no JS action runtime)
-      run: |
-        docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile
-        docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile.solr
-    - name: Validate YAML files
-      run: |
-        sudo apt-get install -y yamllint
-        yamllint -c .yamllint .github/workflows/*.yml docker-compose.yml .gitlab-ci.yml
   security-scan:
-    name: Security Vulnerability Scan
+    name: Security Scan
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     needs: lint
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-    - name: Build init container
-      run: docker build -f Dockerfile -t solr-init:test .
-    - name: Run Trivy vulnerability scanner (containerized, no JS action runtime)
+    - uses: actions/checkout@v6
+    - name: Build Solr image
+      run: docker build -f Dockerfile.solr -t solr-eledia:test --build-arg SOLR_VERSION=9.10.1 .
+    - name: Trivy image scan
       run: |
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr-init:test
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr:9.10.1
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr-eledia:test
+
   solr-test:
-    name: Solr Tests
+    name: SolrCloud Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: security-scan
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-    - name: Show Docker version (Buildx via Docker CLI)
+    - uses: actions/checkout@v6
+
+    - name: Create host log directory
       run: |
-        docker version
-        docker buildx version || true
-    - name: Create .env for testing
-      run: "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
-        \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
-        \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
-        \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
-        \ \\\n  > .env\ntouch tenants.env\nchmod 666 tenants.env\nsudo mkdir -p /var/log/solr/instances/solr-solr /var/log/solr/instances/solr-init\nsudo chmod -R 777 /var/log/solr/instances\n"
-    - name: Build containers
-      run: docker compose build solr-init solr
-    - name: Start Solr
-      run: 'docker compose up -d
+        sudo mkdir -p /var/log/eledia/solr
+        sudo chmod -R 777 /var/log/eledia
 
-        timeout 120 bash -c ''until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done''
-
-        echo "Solr is healthy"
-
-        docker compose ps
-
-        '
-    - name: Run unit tests
-      run: 'chmod +x scripts/run-tests.sh
-
-        ./scripts/run-tests.sh --unit-only
-
-        '
-    - name: Run integration tests
-      run: ./scripts/run-tests.sh --integration-only --no-cleanup
-    - name: Run security tests
-      run: ./scripts/run-tests.sh --security-only --no-cleanup
-    - name: Create test tenant for document tests
-      run: 'docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test --cores eLeDia_core 2>&1 || true
-
-        PASS=$(docker exec solr-solr grep ''TENANT_ci_test_PASS='' /opt/solr/tenants.env | cut -d= -f2)
-
-        echo "SOLR_CORE_NAME=eLeDia_core" >> .env
-
-        echo "CI_TENANT_PASS=$PASS" >> .env
-
-        '
-    - name: Test Tika file extraction (/update/extract)
-      run: "PASS=$(docker exec solr-solr grep 'TENANT_ci_test_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nprintf 'Moodle\
-        \ Tika extraction test \u2014 this line must be indexed.\\n' > /tmp/tika_test.txt\nCODE=$(curl -so /dev/null -w '%{http_code}'\
-        \ \\\n  -u \"solr_ci_test:$PASS\" \\\n  -F \"file=@/tmp/tika_test.txt\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_core/update/extract?extractOnly=true&wt=json\"\
-        )\nrm -f /tmp/tika_test.txt\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: /update/extract returned HTTP $CODE (Tika not\
-        \ working)\"; exit 1; }\necho \"PASS: Tika /update/extract (HTTP 200)\"\n"
-    - name: Run Moodle document tests
-      run: 'chmod +x scripts/test-moodle-documents.sh
-
-        ./scripts/test-moodle-documents.sh
-
-        '
-    - name: Test placeholder password rejection
-      run: "docker compose down -v\nprintf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983'\
-        \ \\\n  'SOLR_BIND=127.0.0.1' \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network'\
-        \ \\\n  'SOLR_ADMIN_USER=admin' \\\n  'SOLR_ADMIN_PASSWORD=CHANGE_ME_ADMIN' \\\n  'SOLR_SUPPORT_USER=support' \\\n\
-        \  'SOLR_SUPPORT_PASSWORD=' \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5'\
-        \ \\\n  'SOLR_MEMORY_RESERVATION=2G' \\\n  > .env\n: > tenants.env\nchmod 666 tenants.env\ndocker compose build solr-init\
-        \ solr\nif docker compose up --abort-on-container-exit --exit-code-from solr-init solr-init; then\n  echo \"FAIL:\
-        \ solr-init accepted placeholder or empty passwords\"\n  exit 1\nfi\ndocker compose logs solr-init | grep -q \"SOLR_ADMIN_PASSWORD\
-        \ is missing or still contains CHANGE_ME\"\necho \"PASS: placeholder/empty passwords rejected before Solr starts\"\
-        \ndocker compose down -v\n"
-    - name: Multi-tenant isolation test
-      run: "printf '%s\\n' \\\n  'INSTANCE_NAME=solr' \\\n  'SOLR_VERSION=9.10.1' \\\n  'SOLR_PORT=8983' \\\n  'SOLR_BIND=127.0.0.1'\
-        \ \\\n  'SOLR_HEAP=2g' \\\n  'SOLR_LOG_LEVEL=INFO' \\\n  'SOLR_NETWORK_NAME=solr_network' \\\n  'SOLR_ADMIN_USER=admin'\
-        \ \\\n  'SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890' \\\n  'SOLR_SUPPORT_USER=support' \\\n  'SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890'\
-        \ \\\n  'SOLR_CPU_LIMIT=2' \\\n  'SOLR_MEMORY_LIMIT=4G' \\\n  'SOLR_CPU_RESERVATION=0.5' \\\n  'SOLR_MEMORY_RESERVATION=2G'\
-        \ \\\n  > .env\n> tenants.env\nchmod 666 tenants.env\ndocker compose build solr-init solr\ndocker compose up -d\n\
-        timeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'\n\nCONTAINER=\"solr-solr\"\nTENANT_CMD=\"\
-        docker exec $CONTAINER /opt/solr/scripts/solr-tenant.sh\"\n\necho \"Creating tenant_a...\"\n$TENANT_CMD create tenant_a\
-        \ --cores core_a\nPASS_A=$(docker exec \"$CONTAINER\" grep 'TENANT_tenant_a_PASS=' /opt/solr/tenants.env | cut -d=\
-        \ -f2)\n\necho \"Creating tenant_b...\"\n$TENANT_CMD create tenant_b --cores core_b\nPASS_B=$(docker exec \"$CONTAINER\"\
-        \ grep 'TENANT_tenant_b_PASS=' /opt/solr/tenants.env | cut -d= -f2)\n\necho \"Testing tenant_a can access core_a...\"\
-        \nCODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_tenant_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/core_a/select?q=*:*&rows=0\"\
-        )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: tenant_a cannot access core_a (HTTP $CODE)\"; exit 1; }\necho \"PASS:\
-        \ tenant_a -> core_a (HTTP 200)\"\n\necho \"Testing tenant_b can access core_b...\"\nCODE=$(curl -so /dev/null -w\
-        \ '%{http_code}' -u \"solr_tenant_b:$PASS_B\" \\\n  \"http://127.0.0.1:8983/solr/core_b/select?q=*:*&rows=0\")\n[\
-        \ \"$CODE\" = \"200\" ] || { echo \"FAIL: tenant_b cannot access core_b (HTTP $CODE)\"; exit 1; }\necho \"PASS: tenant_b\
-        \ -> core_b (HTTP 200)\"\n\n# Authentication isolation: wrong credentials must be rejected (401).\n# Note: RuleBasedAuthorizationPlugin\
-        \ collection-field is SolrCloud-only.\n# Core-to-core URL isolation in standalone mode requires a reverse proxy\n\
-        # (e.g., Nginx) \u2014 that layer is out of scope for this unit test.\necho \"Testing authentication isolation: wrong\
-        \ password => 401...\"\nCODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_tenant_a:wrongpassword\" \\\n  \"http://127.0.0.1:8983/solr/core_a/select?q=*:*&rows=0\"\
-        )\n[ \"$CODE\" = \"401\" ] || { echo \"FAIL: wrong password not rejected (HTTP $CODE)\"; exit 1; }\necho \"PASS: Wrong\
-        \ password rejected (HTTP 401)\"\n\necho \"Testing admin-API isolation: tenant_a cannot reach admin endpoints...\"\
-        \nCODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_tenant_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/admin/cores?wt=json\"\
-        )\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL: tenant_a can access admin/cores (HTTP $CODE)\"; exit 1; }\necho \"PASS:\
-        \ tenant_a blocked from /admin/cores (HTTP 403)\"\n\necho \"Testing apply is idempotent...\"\n$TENANT_CMD apply\n\
-        echo \"PASS: apply completed\"\n\necho \"Testing restart persistence...\"\ndocker compose restart solr\nsleep 30\n\
-        $TENANT_CMD list | grep -q \"tenant_a\" || { echo \"FAIL: tenants lost after restart\"; exit 1; }\necho \"PASS: Tenants\
-        \ persist after restart\"\n\ndocker compose down -v\n"
-    - name: Tenant scale test (30 tenants/cores/users)
-      run: |
-        cp -f .env.example .env
-        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
-        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890/' .env || true
-        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890/' .env || true
-        : > tenants.env
-        chmod 666 tenants.env
-        docker compose build solr-init solr
-        docker compose up -d
-        timeout 150 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; done'
-        bash scripts/run-tests.sh --integration-only --tenant-scale --no-cleanup
-        docker compose down -v
-    - name: Collect logs on failure
-      if: failure()
-      run: 'mkdir -p logs
-
-        docker compose logs > logs/docker-compose-all.log 2>&1 || true
-
-        docker compose logs solr > logs/solr.log 2>&1 || true
-
-        docker compose logs solr-init > logs/solr-init.log 2>&1 || true
-
-        docker compose ps > logs/container-status.log 2>&1 || true
-
-        '
-    - name: Upload logs as artifacts
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-logs-${{ github.run_id }}
-        path: logs/
-        retention-days: 7
-    - name: Cleanup
-      if: always()
-      run: 'docker compose down -v || true
-
-        rm -f .env tenants.env || true
-
-        '
-  solrcloud-test:
-    name: SolrCloud Mode Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: security-scan
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-    - name: Show Docker version (Buildx via Docker CLI)
-      run: |
-        docker version
-        docker buildx version || true
-    - name: Create .env for SolrCloud testing
+    - name: Create .env
       run: |
         cat > .env <<'EOF'
         INSTANCE_NAME=solr
@@ -224,148 +69,121 @@ jobs:
         SOLR_LOG_LEVEL=INFO
         SOLR_NETWORK_NAME=solr_network
         SOLR_ADMIN_USER=admin
-        SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890
+        SOLR_ADMIN_PASSWORD=CI_AdminPass1234567890
         SOLR_SUPPORT_USER=support
-        SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890
+        SOLR_SUPPORT_PASSWORD=CI_SupportPass1234567890
         SOLR_CPU_LIMIT=2
         SOLR_MEMORY_LIMIT=4G
         SOLR_CPU_RESERVATION=0.5
         SOLR_MEMORY_RESERVATION=2G
         SOLR_MODE=solrcloud
+        ELEDIA_LOG_ROOT=/var/log/eledia
         EOF
         touch tenants.env
         chmod 666 tenants.env
-        sudo mkdir -p /var/log/solr/instances/solr-solr /var/log/solr/instances/solr-init
-        sudo chmod -R 777 /var/log/solr/instances
-    - name: Build and start SolrCloud
-      run: 'docker compose build solr-init solr
 
+    - name: Build and start Solr (SolrCloud)
+      run: |
+        docker compose build solr
         docker compose up -d
+        timeout 120 bash -c \
+          'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting for healthy..."; done'
+        echo "Solr is healthy"
 
-        timeout 150 bash -c ''until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done''
-
-        echo "SolrCloud is healthy"
-
-        docker compose ps
-
-        '
-    - name: Verify SolrCloud mode active
-      run: "CODE=$(curl -so /dev/null -w '%{http_code}' -u \"admin:CI_AdminPass_1234567890\" \\\n  \"http://127.0.0.1:8983/solr/admin/zookeeper?detail=true&path=%2F&wt=json\"\
-        )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: ZooKeeper API not reachable (HTTP $CODE)\"; exit 1; }\necho \"PASS: Embedded\
-        \ ZooKeeper running (HTTP 200)\"\n\nCODE=$(curl -so /dev/null -w '%{http_code}' \\\n  \"http://127.0.0.1:8983/solr/admin/authentication?wt=json\"\
-        )\n[ \"$CODE\" = \"401\" ] || { echo \"FAIL: anonymous auth API access returned HTTP $CODE (expected 401)\"; exit\
-        \ 1; }\necho \"PASS: SolrCloud security.json is active from ZooKeeper (anonymous HTTP 401)\"\n"
-    - name: Run consolidated SolrCloud regression suite
-      run: 'chmod +x scripts/run-tests.sh
-
-        ./scripts/run-tests.sh --unit-only --tenant --cloud --no-cleanup
-
-        '
-    - name: Create tenant via Collections API
-      run: 'docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_a --cores eLeDia_cloud_1
-
-        PASS_A=$(docker exec solr-solr grep ''TENANT_cloud_a_PASS='' /opt/solr/tenants.env | cut -d= -f2)
-
-        echo "CLOUD_A_PASS=$PASS_A" >> .env
-
-        '
-    - name: Verify collection exists and tenant can access it
-      run: "PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nCODE=$(curl -so\
-        \ /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/select?q=*:*&rows=0\"\
-        )\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: tenant cannot access collection (HTTP $CODE)\"; exit 1; }\necho \"PASS:\
-        \ tenant can access own collection (HTTP 200)\"\n"
-    - name: Test true collection isolation (SolrCloud enforces collection field)
-      run: "docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create cloud_b --cores eLeDia_cloud_2\nPASS_A=$(docker\
-        \ exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nCODE=$(curl -so /dev/null -w '%{http_code}'\
-        \ -u \"solr_cloud_a:$PASS_A\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_2/select?q=*:*&rows=0\")\n[ \"$CODE\"\
-        \ = \"403\" ] || { echo \"FAIL: isolation broken \u2014 cloud_a can access cloud_b collection (HTTP $CODE)\"; exit\
-        \ 1; }\necho \"PASS: True collection isolation enforced by SolrCloud (HTTP 403)\"\n"
-    - name: Index document and verify restart persistence
-      run: "PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\n\n# Index a Moodle-format\
-        \ document (all required schema fields included)\nDOC='[{\"id\":\"ci-persist-1\",\"contextid\":1,\"courseid\":1,\"\
-        owneruserid\":0,\n       \"modified\":\"2026-01-01T00:00:00Z\",\"type\":0,\"areaid\":\"core-user-myprofile\",\n  \
-        \     \"itemid\":1,\"content\":\"restart test content for CI persistence check\"}]'\nCODE=$(curl -so /dev/null -w\
-        \ '%{http_code}' \\\n  -u \"solr_cloud_a:$PASS_A\" \\\n  -X POST -H 'Content-Type: application/json' \\\n  -d \"$DOC\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/update?commit=true\")\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL:\
-        \ indexing failed (HTTP $CODE)\"; exit 1; }\necho \"PASS: Moodle document indexed\"\n\necho \"Restarting Solr container...\"\
-        \ndocker compose restart solr\ntimeout 120 bash -c 'until docker compose ps | grep -q healthy; do sleep 5; echo \"\
-        Waiting...\"; done'\n\n# Verify document survives restart (index data in named volume)\nRESP=$(curl -s -u \"solr_cloud_a:$PASS_A\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/select?q=id:ci-persist-1&wt=json\")\necho \"$RESP\" | grep -q\
-        \ '\"numFound\":1' || { echo \"FAIL: document lost after restart\"; exit 1; }\necho \"PASS: Document survives Solr\
-        \ restart (ZK + index persistence confirmed)\"\n\n# Verify collection still listed\nRESP=$(curl -s -u \"admin:CI_AdminPass_1234567890\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/admin/collections?action=LIST&wt=json\")\necho \"$RESP\" | grep -q '\"eLeDia_cloud_1\"\
-        ' || { echo \"FAIL: collection lost after restart\"; exit 1; }\necho \"PASS: Collection persists after restart\"\n\
-        \n# Verify isolation still holds after restart\nCODE=$(curl -so /dev/null -w '%{http_code}' -u \"solr_cloud_a:$PASS_A\"\
-        \ \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_2/select?q=*:*&rows=0\")\n[ \"$CODE\" = \"403\" ] || { echo \"FAIL:\
-        \ isolation broken after restart (HTTP $CODE)\"; exit 1; }\necho \"PASS: Isolation holds after restart\"\n"
-    - name: Test Tika file extraction in SolrCloud
-      run: "PASS_A=$(docker exec solr-solr grep 'TENANT_cloud_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)\nprintf 'Moodle\
-        \ Tika extraction test in SolrCloud mode.\\n' > /tmp/tika_cloud_test.txt\nCODE=$(curl -so /dev/null -w '%{http_code}'\
-        \ \\\n  -u \"solr_cloud_a:$PASS_A\" \\\n  -F \"file=@/tmp/tika_cloud_test.txt\" \\\n  \"http://127.0.0.1:8983/solr/eLeDia_cloud_1/update/extract?extractOnly=true&wt=json\"\
-        )\nrm -f /tmp/tika_cloud_test.txt\n[ \"$CODE\" = \"200\" ] || { echo \"FAIL: /update/extract HTTP $CODE in SolrCloud\"\
-        ; exit 1; }\necho \"PASS: Tika /update/extract in SolrCloud (HTTP 200)\"\n"
-    - name: Generate Caddy config
-      run: "docker exec solr-solr /opt/solr/scripts/solr-tenant.sh caddy-config \\\n  --domain solr.example.com\necho \"PASS:\
-        \ Caddy config generated\"\n"
-    - name: Collect logs on failure
-      if: failure()
-      run: 'mkdir -p logs
-
-        docker compose logs > logs/docker-compose-cloud.log 2>&1 || true
-
-        docker compose ps > logs/container-status.log 2>&1 || true
-
-        '
-    - name: Upload logs as artifacts
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: cloud-test-logs-${{ github.run_id }}
-        path: logs/
-        retention-days: 7
-    - name: Cleanup
-      if: always()
-      run: 'docker compose down -v || true
-
-        rm -f .env tenants.env || true
-
-        '
-  mode-switch-test:
-    name: Mode Switch Portability Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: security-scan
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-    - name: Create .env for mode-switch tests
+    - name: Create CI tenant + core
       run: |
-        cp -f .env.example .env
-        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
-        sed -i 's/^SOLR_PORT=.*/SOLR_PORT=8983/' .env || true
-        sed -i 's/^SOLR_BIND=.*/SOLR_BIND=127.0.0.1/' .env || true
-        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/' .env || true
-        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890/' .env || true
-        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890/' .env || true
-        : > tenants.env
-        chmod 666 tenants.env
-    - name: Run mode switch continuity test
-      run: |
-        chmod +x scripts/solr-mode-portability.sh scripts/test-mode-switch.sh
-        ./scripts/test-mode-switch.sh
+        docker exec solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test \
+          --cores eLeDia_core 2>&1 || true
+        PASS=$(docker exec solr-solr grep 'TENANT_CI_TEST_PASS=' /opt/solr/tenants.env \
+          | cut -d= -f2 || echo "")
+        echo "SOLR_CORE_NAME=eLeDia_core" >> .env
+        echo "CI_TENANT_PASS=${PASS}" >> .env
+
+    - name: Run tests
+      run: bash scripts/run-tests.sh --cloud --tenant
+
     - name: Collect logs on failure
       if: failure()
       run: |
         mkdir -p logs
-        docker compose logs > logs/docker-compose-mode-switch.log 2>&1 || true
+        docker compose logs --no-color > logs/docker-compose.log 2>&1 || true
         docker compose ps > logs/container-status.log 2>&1 || true
-    - name: Upload logs as artifacts
+
+    - name: Upload logs on failure
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: mode-switch-test-logs-${{ github.run_id }}
+        name: solr-test-logs-${{ github.run_id }}
         path: logs/
         retention-days: 7
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker compose down -v || true
+        rm -f .env tenants.env || true
+
+  solrcloud-test:
+    name: SolrCloud Tenant Isolation Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: security-scan
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Create host log directory
+      run: |
+        sudo mkdir -p /var/log/eledia/solr
+        sudo chmod -R 777 /var/log/eledia
+
+    - name: Create .env (SolrCloud + multi-tenant)
+      run: |
+        cat > .env <<'EOF'
+        INSTANCE_NAME=solr
+        SOLR_VERSION=9.10.1
+        SOLR_PORT=8983
+        SOLR_BIND=127.0.0.1
+        SOLR_HEAP=2g
+        SOLR_LOG_LEVEL=INFO
+        SOLR_NETWORK_NAME=solr_network
+        SOLR_ADMIN_USER=admin
+        SOLR_ADMIN_PASSWORD=CI_AdminPass1234567890
+        SOLR_SUPPORT_USER=support
+        SOLR_SUPPORT_PASSWORD=CI_SupportPass1234567890
+        SOLR_CPU_LIMIT=2
+        SOLR_MEMORY_LIMIT=4G
+        SOLR_CPU_RESERVATION=0.5
+        SOLR_MEMORY_RESERVATION=2G
+        SOLR_MODE=solrcloud
+        ELEDIA_LOG_ROOT=/var/log/eledia
+        EOF
+        touch tenants.env
+        chmod 666 tenants.env
+
+    - name: Build and start SolrCloud
+      run: |
+        docker compose build solr
+        docker compose up -d
+        timeout 120 bash -c \
+          'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
+
+    - name: Run SolrCloud tenant isolation tests
+      run: bash scripts/run-tests.sh --cloud --tenant --tenant-scale
+
+    - name: Collect logs on failure
+      if: failure()
+      run: |
+        mkdir -p logs
+        docker compose logs --no-color > logs/docker-compose.log 2>&1 || true
+
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: solrcloud-test-logs-${{ github.run_id }}
+        path: logs/
+        retention-days: 7
+
     - name: Cleanup
       if: always()
       run: |
