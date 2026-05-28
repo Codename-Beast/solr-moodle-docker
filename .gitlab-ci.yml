@@ -67,16 +67,17 @@ feature-full-test:
   before_script:
     - apk add --no-cache bash curl docker-cli docker-cli-compose python3
     - cp -f .env.example .env
-    - sed -i 's/^SOLR_MODE=.*/SOLR_MODE=standalone/' .env || true
+    - sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/' .env || true
     - sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
-    - sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass_1234567890/' .env || true
-    - sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass_1234567890/' .env || true
+    - sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOL...90/' .env || true
+    - sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOL...90/' .env || true
     - touch tenants.env
+    - mkdir -p /var/log/eledia/solr && chmod 777 /var/log/eledia/solr
   script:
-    - docker compose build solr-init solr
+    - docker compose build solr
     - docker compose up -d
     - timeout 180 sh -c 'until docker compose ps | grep -q "healthy"; do sleep 5; echo "waiting for healthy containers..."; done'
-    - bash scripts/run-tests.sh --unit-only --no-cleanup
+    - bash scripts/run-tests.sh --cloud --no-cleanup
   after_script:
     - docker compose down -v || true
     - rm -f .env tenants.env || true
