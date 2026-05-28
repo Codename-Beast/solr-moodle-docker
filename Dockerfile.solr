@@ -19,7 +19,8 @@ COPY --chown=solr:solr scripts/solr-cloud-entrypoint.sh /opt/solr/docker/scripts
 COPY --chown=solr:solr security.json.template /opt/solr/security.json.template
 USER root
 RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends jq openssl \
+    && apt-get install -y --no-install-recommends jq openssl gosu \
+    && gosu --version \
     && chmod 0755 /opt/solr/docker/scripts/solr-cloud-entrypoint.sh \
     && chmod 0755 /opt/solr/scripts/*.sh \
     && rm -rf /var/lib/apt/lists/*
