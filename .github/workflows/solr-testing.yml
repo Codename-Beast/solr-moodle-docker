@@ -64,25 +64,12 @@ jobs:
 
     - name: Create .env
       run: |
-        cat > .env <<'EOF'
-        INSTANCE_NAME=ci-solr
-        SOLR_VERSION=9.10.1
-        SOLR_PORT=8983
-        SOLR_BIND=127.0.0.1
-        SOLR_HEAP=2g
-        SOLR_LOG_LEVEL=INFO
-        SOLR_NETWORK_NAME=solr_network
-        SOLR_ADMIN_USER=admin
-        SOLR_ADMIN_PASSWORD=CI_Adm...90
-        SOLR_SUPPORT_USER=support
-        SOLR_SUPPORT_PASSWORD=CI_Sup...90
-        SOLR_CPU_LIMIT=2
-        SOLR_MEMORY_LIMIT=4G
-        SOLR_CPU_RESERVATION=0.5
-        SOLR_MEMORY_RESERVATION=2G
-        SOLR_MODE=solrcloud
-        ELEDIA_LOG_ROOT=/var/log/eledia
-        EOF
+        cp .env.example .env
+        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/'       .env
+        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'             .env
+        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=CI_AdminPass1234567890/' .env
+        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=CI_SupportPass1234567890/' .env
+        echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
         touch tenants.env
         chmod 666 tenants.env
 
@@ -90,9 +77,14 @@ jobs:
       run: |
         docker compose build solr
         docker compose up -d
-        timeout 240 bash -c \
-          'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting for healthy..."; done'
-        echo "Solr is healthy"
+        echo "Waiting for ci-solr-solr to become healthy (max 10 x 20s = 200s)..."
+        for i in $(seq 1 10); do
+          STATUS=$(docker inspect --format='{{.State.Health.Status}}' ci-solr-solr 2>/dev/null || echo "missing")
+          echo "  attempt $i/10: $STATUS"
+          [ "$STATUS" = "healthy" ] && echo "Solr is healthy" && break
+          [ "$i" = "10" ] && echo "ERROR: not healthy after 200s" && docker compose logs --no-color && exit 1
+          sleep 20
+        done
 
     - name: Create CI tenant + core
       run: |
@@ -142,25 +134,12 @@ jobs:
 
     - name: Create .env (SolrCloud + multi-tenant)
       run: |
-        cat > .env <<'EOF'
-        INSTANCE_NAME=ci-solr
-        SOLR_VERSION=9.10.1
-        SOLR_PORT=8983
-        SOLR_BIND=127.0.0.1
-        SOLR_HEAP=2g
-        SOLR_LOG_LEVEL=INFO
-        SOLR_NETWORK_NAME=solr_network
-        SOLR_ADMIN_USER=admin
-        SOLR_ADMIN_PASSWORD=CI_AdminPass1234567890
-        SOLR_SUPPORT_USER=support
-        SOLR_SUPPORT_PASSWORD=CI_SupportPass1234567890
-        SOLR_CPU_LIMIT=2
-        SOLR_MEMORY_LIMIT=4G
-        SOLR_CPU_RESERVATION=0.5
-        SOLR_MEMORY_RESERVATION=2G
-        SOLR_MODE=solrcloud
-        ELEDIA_LOG_ROOT=/var/log/eledia
-        EOF
+        cp .env.example .env
+        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/'       .env
+        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'             .env
+        sed -i 's/^SOLR_ADMIN_PASSWORD=.*/SOL...90/' .env
+        sed -i 's/^SOLR_SUPPORT_PASSWORD=.*/SOL...90/' .env
+        echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
         touch tenants.env
         chmod 666 tenants.env
 
@@ -168,8 +147,14 @@ jobs:
       run: |
         docker compose build solr
         docker compose up -d
-        timeout 240 bash -c \
-          'until docker compose ps | grep -q healthy; do sleep 5; echo "Waiting..."; done'
+        echo "Waiting for ci-solr-solr to become healthy (max 10 x 20s = 200s)..."
+        for i in $(seq 1 10); do
+          STATUS=$(docker inspect --format='{{.State.Health.Status}}' ci-solr-solr 2>/dev/null || echo "missing")
+          echo "  attempt $i/10: $STATUS"
+          [ "$STATUS" = "healthy" ] && echo "Solr is healthy" && break
+          [ "$i" = "10" ] && echo "ERROR: Solr not healthy after 200s" && docker compose logs --no-color && exit 1
+          sleep 20
+        done
 
     - name: Run SolrCloud tenant isolation tests
       run: bash scripts/run-tests.sh --cloud --tenant --tenant-scale
