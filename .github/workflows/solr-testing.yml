@@ -77,12 +77,12 @@ jobs:
       run: |
         docker compose build solr
         docker compose up -d
-        echo "Waiting for ci-solr-solr to become healthy (max 10 x 20s = 200s)..."
-        for i in $(seq 1 10); do
+        echo "Waiting for ci-solr-solr to become healthy (max 5 x 20s = 100s)..."
+        for i in $(seq 1 5); do
           STATUS=$(docker inspect --format='{{.State.Health.Status}}' ci-solr-solr 2>/dev/null || echo "missing")
-          echo "  attempt $i/10: $STATUS"
+          echo "  attempt $i/5: $STATUS"
           [ "$STATUS" = "healthy" ] && echo "Solr is healthy" && break
-          [ "$i" = "10" ] && echo "ERROR: not healthy after 200s" && docker compose logs --no-color && exit 1
+          [ "$i" = "5" ] && echo "ERROR: not healthy after 100s" && docker compose logs --no-color && exit 1
           sleep 20
         done
 
@@ -147,12 +147,12 @@ jobs:
       run: |
         docker compose build solr
         docker compose up -d
-        echo "Waiting for ci-solr-solr to become healthy (max 10 x 20s = 200s)..."
-        for i in $(seq 1 10); do
+        echo "Waiting for ci-solr-solr to become healthy (max 5 x 20s = 100s)..."
+        for i in $(seq 1 5); do
           STATUS=$(docker inspect --format='{{.State.Health.Status}}' ci-solr-solr 2>/dev/null || echo "missing")
-          echo "  attempt $i/10: $STATUS"
+          echo "  attempt $i/5: $STATUS"
           [ "$STATUS" = "healthy" ] && echo "Solr is healthy" && break
-          [ "$i" = "10" ] && echo "ERROR: Solr not healthy after 200s" && docker compose logs --no-color && exit 1
+          [ "$i" = "5" ] && echo "ERROR: Solr not healthy after 100s" && docker compose logs --no-color && exit 1
           sleep 20
         done
 
