@@ -141,6 +141,61 @@ wait_for_auth() {
   return 1
 }
 
+ensure_system_collection() {
+  local admin_user admin_pass list_json create_json
+
+  admin_user="${SOLR_ADMIN_USER:-admin}"
+  admin_pass="${SOLR_ADMIN_PASSWORD:-}"
+  if [ -z "$admin_pass" ]; then
+    log "WARNING: SOLR_ADMIN_PASSWORD not set; cannot auto-create .system collection"
+    return 0
+  fi
+
+  list_json="$(curl -sS -u "${admin_user}:${admin_pass}" \
+    "${SOLR_BASE}/admin/collections?action=LIST&wt=json" 2>/dev/null || true)"
+
+  if printf '%s' "$list_json" | jq -e '.collections[]? | select(.==".system")' >/dev/null 2>&1; then
+    log "SolrCloud internal collection .system already present"
+    return 0
+  fi
+
+  log "Creating missing SolrCloud internal collection .system (idempotent bootstrap)"
+  create_json="$(curl -sS -u "${admin_user}:${admin_pass}" \
+    "${SOLR_BASE}/admin/collections?action=CREATE&name=.system&numShards=1&replicationFactor=1&collection.configName=_default&wt=json" 2>/dev/null || true)"
+
+  if printf '%s' "$create_json" | jq -e '.responseHeader.status == 0' >/dev/null 2>&1; then
+    log "Created .system collection successfully"
+    return 0
+  fi
+
+  if printf '%s' "$create_json" | grep -qi 'already exists'; then
+    log ".system collection already exists (race-safe)"
+    return 0
+  fi
+
+  log "WARNING: could not auto-create .system collection; schema designer may fail until created manually"
+  log "WARNING: create response: $create_json"
+  return 0
+}
+
+schema_designer_guardrails_hint() {
+  log "Schema Designer hint: sample upload limit is 5MB; markdown (text/markdown) is not supported"
+}
+
+ensure_zk_max_cnxns_opt() {
+  local max_cnxns="${ZK_MAX_CNXNS:-60}"
+  case "$max_cnxns" in
+    ''|*[!0-9]*)
+      log "WARNING: ZK_MAX_CNXNS='$max_cnxns' invalid, falling back to 60"
+      max_cnxns="60"
+      ;;
+  esac
+  export SOLR_OPTS="${SOLR_OPTS:-} -Dzookeeper.maxCnxns=${max_cnxns}"
+  log "Using embedded ZooKeeper maxCnxns=${max_cnxns}"
+}
+
+ensure_zk_max_cnxns_opt
+
 bootstrap_cloud_security() {
   local code
 
@@ -195,6 +250,8 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   trap terminate TERM INT
 
   bootstrap_cloud_security
+  ensure_system_collection
+  schema_designer_guardrails_hint
 
   # Upload eLeDia-moodle-tenant configset to ZooKeeper so Collections API can use it.
   # Configset source: bind-mounted from ./eLeDia-config at /opt/solr/eledia-config

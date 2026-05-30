@@ -97,7 +97,12 @@ In `.env`:
 
 ```bash
 SOLR_MODE=solrcloud
+ZK_MAX_CNXNS=60
 ```
+
+Hinweise:
+- Die interne SolrCloud-Collection `.system` wird beim Start idempotent automatisch erzeugt, falls sie fehlt (Schema Designer benötigt sie).
+- Schema Designer Upload-Guardrails: max. 5MB pro Sample; `text/markdown` wird nicht unterstützt.
 
 Neu starten:
 

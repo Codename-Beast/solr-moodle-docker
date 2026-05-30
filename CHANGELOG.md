@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
 - Added `solr-tenant.sh drift-detect` to detect runtime drift between tenants.env (desired) and runtime Solr API/ZooKeeper state (users/collections).
 - Added `solr-tenant.sh drift-remediate` to reconcile detected drift by reapplying runtime state from source-of-truth (`sync-sot`).
 - Enforced Solr permission ordering so fallback rule `all` is always moved to the end after apply/sync operations; this prevents broad-rule shadowing of tenant-specific ACLs.
+- SolrCloud runtime now auto-creates internal `.system` collection (idempotent) to prevent Schema Designer `Collection not found: .system` errors.
+- Added optional `ZK_MAX_CNXNS` runtime tuning and startup guardrail logging for Schema Designer sample constraints (5MB limit, no markdown).
 
 ### Verified
 - Local run: `./scripts/run-tests.sh --integration-only --tenant --cloud --no-cleanup` → `8/8 PASS`.
