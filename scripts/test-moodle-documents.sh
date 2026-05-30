@@ -322,15 +322,35 @@ print_info "  Wait Time: ${WAIT_TIME}s"
 SOLR_LOG_BASELINE_LINES=$(docker compose logs --no-color solr 2>/dev/null | wc -l | tr -d ' ')
 echo ""
 
-# Ensure test core exists (standalone/local runs without prior tenant bootstrap)
-if ! curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
-  "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&core=${SOLR_CORE}&wt=json" \
-  | grep -q '"instanceDir"'; then
-  print_info "Core '${SOLR_CORE}' fehlt — erstelle Test-Core via Core Admin API"
-  curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
-    "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=CREATE&name=${SOLR_CORE}&configSet=eLeDia-moodle-tenant&wt=json" >/dev/null
-  sleep 2
+# Ensure test target exists (Collection in SolrCloud, Core in Standalone)
+SOLR_MODE_ENV="${SOLR_MODE:-}"
+IS_SOLRCLOUD=false
+if [ "${SOLR_MODE_ENV}" = "solrcloud" ]; then
+  IS_SOLRCLOUD=true
 fi
+
+if [ "$IS_SOLRCLOUD" = "true" ]; then
+  COLLECTIONS_JSON=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
+  if ! echo "$COLLECTIONS_JSON" | grep -q "\"${SOLR_CORE}\""; then
+    print_info "Collection '${SOLR_CORE}' fehlt — erstelle Test-Collection via Collections API"
+    curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+      "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=CREATE&name=${SOLR_CORE}&numShards=1&replicationFactor=1&collection.configName=eLeDia-moodle-tenant&wt=json" >/dev/null
+    sleep 2
+  fi
+else
+  if ! curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS&core=${SOLR_CORE}&wt=json" \
+    | grep -q '"instanceDir"'; then
+    print_info "Core '${SOLR_CORE}' fehlt — erstelle Test-Core via Core Admin API"
+    curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+      "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=CREATE&name=${SOLR_CORE}&configSet=eLeDia-moodle-tenant&wt=json" >/dev/null
+    sleep 2
+  fi
+fi
+
+# Re-baseline logs after setup actions to avoid false positives in final log healthcheck
+SOLR_LOG_BASELINE_LINES=$(docker compose logs --no-color solr 2>/dev/null | wc -l | tr -d ' ')
 
 # Solr connectivity test
 print_header "CONNECTIVITY TEST"
