@@ -82,26 +82,31 @@ _log_action() {
 # --- _load_admin_creds ---
 _load_admin_creds() {
   local env_file="${ENV_FILE:-/var/solr/data/.env}"
-  if [ -f "$env_file" ]; then
+
+  # Prefer the compose-mounted /.env as source-of-truth for current credentials.
+  if [ -f "/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "/.env"
+    set +a
+  fi
+
+  # Backward compatibility fallback: legacy env file inside data dir.
+  if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] && [ -f "$env_file" ]; then
     set -a
     # shellcheck disable=SC1090
     . "$env_file"
     set +a
   fi
-  # Also try host-mounted .env path
-  if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] && [ -f "/.env" ]; then
-    set -a
-    . "/.env"
-    set +a
-  fi
+
   ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
   ADMIN_PASS="${SOLR_ADMIN_PASSWORD:-}"
   if [ -z "$ADMIN_PASS" ]; then
-    # Try reading directly from security.json via jq (not feasible — hashed)
     _log "ERROR" "SOLR_ADMIN_PASSWORD not set. Set it in .env or export it."
     exit 1
   fi
 }
+
 
 # _solr_api: Send an authenticated HTTP request to the Solr REST API.
 # Stores the response body in /tmp/_solr_resp; logs errors to /tmp/_solr_err.
@@ -113,31 +118,37 @@ _solr_api() {
   local method="${1:-GET}"
   local path="$2"
   local data="${3:-}"
-  local http_code
+  local http_code tmp_resp tmp_err
+
+  tmp_resp="$(mktemp /tmp/solr-api-resp.XXXXXX)"
+  tmp_err="$(mktemp /tmp/solr-api-err.XXXXXX)"
 
   # Do NOT use -f: it causes curl to exit with code 22 on HTTP>=400, which
   # propagates through $() and triggers set -e before we can log the error.
   if [ -n "$data" ]; then
-    http_code="$(curl -s -o /tmp/_solr_resp -w '%{http_code}' \
+    http_code="$(curl -s -o "$tmp_resp" -w '%{http_code}' \
       -u "${ADMIN_USER}:${ADMIN_PASS}" \
       -X "$method" \
       -H 'Content-Type: application/json' \
       -d "$data" \
-      "${SOLR_BASE}${path}" 2>/tmp/_solr_err)" || true
+      "${SOLR_BASE}${path}" 2>"$tmp_err")" || true
   else
-    http_code="$(curl -s -o /tmp/_solr_resp -w '%{http_code}' \
+    http_code="$(curl -s -o "$tmp_resp" -w '%{http_code}' \
       -u "${ADMIN_USER}:${ADMIN_PASS}" \
       -X "$method" \
-      "${SOLR_BASE}${path}" 2>/tmp/_solr_err)" || true
+      "${SOLR_BASE}${path}" 2>"$tmp_err")" || true
   fi
 
   if [ "$http_code" != "200" ]; then
     _log "ERROR" "Solr API $method $path returned HTTP ${http_code:-<no response>}"
-    _log "ERROR" "Response body: $(head -5 /tmp/_solr_resp 2>/dev/null || true)"
-    _log "ERROR" "Curl error: $(cat /tmp/_solr_err 2>/dev/null || true)"
+    _log "ERROR" "Response body: $(head -5 "$tmp_resp" 2>/dev/null || true)"
+    _log "ERROR" "Curl error: $(cat "$tmp_err" 2>/dev/null || true)"
+    rm -f "$tmp_resp" "$tmp_err" 2>/dev/null || true
     return 1
   fi
-  cat /tmp/_solr_resp 2>/dev/null || true
+
+  cat "$tmp_resp" 2>/dev/null || true
+  rm -f "$tmp_resp" "$tmp_err" 2>/dev/null || true
 }
 
 # _gen_password: Generate a random 32-character alphanumeric password.

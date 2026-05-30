@@ -232,9 +232,9 @@ fi
 # ---------------------------------------------------------------------------
 # Step 5: Build init image
 # ---------------------------------------------------------------------------
-_log "Step 5: Building solr-init image"
+_log "Step 5: Building eLeDia-solr-init image"
 
-if ! docker compose build solr-init 2>&1 | tee -a "$LOG_FILE"; then
+if ! docker compose build eLeDia-solr-init 2>&1 | tee -a "$LOG_FILE"; then
   _die "docker compose build failed"
 fi
 

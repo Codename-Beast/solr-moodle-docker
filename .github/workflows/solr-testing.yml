@@ -78,7 +78,7 @@ jobs:
 
     - name: Build and start Solr (SolrCloud)
       run: |
-        docker compose build solr
+        docker compose build eLeDia-solr-init solr
         docker compose up -d
         echo "Waiting for ci-solr-solr to become healthy (max 5 x 20s = 100s)..."
         for i in $(seq 1 5); do
@@ -151,7 +151,7 @@ jobs:
 
     - name: Build and start SolrCloud
       run: |
-        docker compose build solr
+        docker compose build eLeDia-solr-init solr
         docker compose up -d
         echo "Waiting for ci-solr-solr to become healthy (max 5 x 20s = 100s)..."
         for i in $(seq 1 5); do

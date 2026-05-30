@@ -33,7 +33,7 @@ if [ -f ".env" ]; then
 fi
 INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
-INIT_CONTAINER="${INSTANCE_NAME}-init"
+INIT_CONTAINER="${INSTANCE_NAME}-eLeDia-solr-init"
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-eLeDia_core}
@@ -176,12 +176,17 @@ solrcloud_tests() {
     if ! _is_cloud_mode; then
         print_fail "SolrCloud tests require SOLR_MODE=solrcloud (current mode is standalone)"
         return 1
-        return 0
     fi
 
- local container tenant_cmd
+    local container tenant_cmd
     container="${INSTANCE_NAME:-solr}-solr"
     tenant_cmd="docker exec $container /opt/solr/scripts/solr-tenant.sh"
+
+    local cloud_tenant cloud_collection doc_id cloud_user
+    cloud_tenant="cloud_tenant_$(date +%s)_$RANDOM"
+    cloud_collection="cloud_test_c1_$(date +%s)_$RANDOM"
+    doc_id="persist-test-${cloud_tenant}"
+    cloud_user="solr_${cloud_tenant}"
 
     # Verify embedded ZooKeeper is running
     print_test "Embedded ZooKeeper reachable (port 9983)"
@@ -195,23 +200,20 @@ solrcloud_tests() {
         print_fail "ZooKeeper API not reachable (HTTP $zk_code)"
     fi
 
-    # Collections API: create collection
-    print_test "Collections API: create collection via tenant (cloud_test_c1)"
+    # Collections API: create collection via unique tenant to avoid stale state
+    print_test "Collections API: create collection via tenant (${cloud_collection})"
     local cloud_create_out
-    cloud_create_out=$($tenant_cmd create cloud_tenant --cores cloud_test_c1 2>&1) || true
-    if echo "$cloud_create_out" | grep -Eqi "already exists|bereits|exists"; then
-        print_pass "Collection cloud_test_c1 already present"
-    elif [ -n "$cloud_create_out" ] && ! echo "$cloud_create_out" | grep -Eqi "error|failed"; then
-        print_pass "Collection cloud_test_c1 created via Collections API"
-    elif $tenant_cmd info cloud_tenant >/dev/null 2>&1; then
-        print_pass "Collection cloud_test_c1 created via Collections API"
+    cloud_create_out=$($tenant_cmd create "$cloud_tenant" --cores "$cloud_collection" 2>&1) || true
+    if [ -n "$cloud_create_out" ] && ! echo "$cloud_create_out" | grep -Eqi "error|failed"; then
+        print_pass "Collection ${cloud_collection} created via Collections API"
+    elif $tenant_cmd info "$cloud_tenant" >/dev/null 2>&1; then
+        print_pass "Collection ${cloud_collection} created via Collections API"
     else
-        print_fail "Failed to create collection cloud_test_c1"
+        print_fail "Failed to create collection ${cloud_collection}"
     fi
 
-    $tenant_cmd core-add cloud_tenant --core cloud_test_c1 >/dev/null 2>&1 || true
-    $tenant_cmd enable cloud_tenant >/dev/null 2>&1 || true
-    CLOUD_PASS="$(docker exec "$container" grep 'TENANT_cloud_tenant_PASS=' /opt/solr/tenants.env | tail -n1 | cut -d= -f2)"
+    local CLOUD_PASS
+    CLOUD_PASS="$(docker exec "$container" sh -lc "grep '^TENANT_${cloud_tenant}_PASS=' /opt/solr/tenants.env | tail -n1 | cut -d= -f2")"
 
     # Verify collection exists via Collections API
     print_test "Collection exists in ZooKeeper via Collections API"
@@ -221,7 +223,7 @@ solrcloud_tests() {
     while [ "$coll_wait" -lt 60 ]; do
         coll_resp=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
             "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
-        if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
+        if echo "$coll_resp" | grep -q "\"${cloud_collection}\""; then
             coll_ok=1
             break
         fi
@@ -229,15 +231,15 @@ solrcloud_tests() {
         coll_wait=$((coll_wait + 3))
     done
     if [ "$coll_ok" -eq 1 ]; then
-        print_pass "Collection cloud_test_c1 in Collections API list"
+        print_pass "Collection ${cloud_collection} in Collections API list"
     else
-        print_fail "Collection cloud_test_c1 NOT in Collections API list"
+        print_fail "Collection ${cloud_collection} NOT in Collections API list"
     fi
 
     # True isolation via collection field (SolrCloud enforces it)
     print_test "True collection isolation: wrong tenant => 403"
     local iso_code
-    iso_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
+    iso_code=$(curl -so /dev/null -w '%{http_code}' -u "${cloud_user}:${CLOUD_PASS}" \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?wt=json" 2>/dev/null)
     if [ "$iso_code" = "403" ]; then
         print_pass "Admin API blocked for tenant (HTTP 403)"
@@ -246,16 +248,13 @@ solrcloud_tests() {
     fi
 
     # Index a minimal Moodle-compatible document to test persistence.
-    # The managed schema has required Moodle fields (contextid, courseid,
-    # owneruserid, modified, type, areaid, itemid); using only id/title would
-    # correctly fail with HTTP 400 and would test the schema, not persistence.
     print_test "Index document for restart persistence test"
     local idx_code
     idx_code=$(curl -so /dev/null -w '%{http_code}' \
-        -u "solr_cloud_tenant:${CLOUD_PASS}" \
+        -u "${cloud_user}:${CLOUD_PASS}" \
         -X POST -H 'Content-Type: application/json' \
-        -d '[{"id":"persist-test-1","title":"restart_persistence_check","content":"SolrCloud restart persistence test document","contextid":1,"courseid":1,"owneruserid":1,"modified":"2026-01-01T00:00:00Z","type":1,"areaid":"test_area","itemid":1}]' \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/update?commit=true" 2>/dev/null)
+        -d "[{\"id\":\"${doc_id}\",\"title\":\"restart_persistence_check\",\"content\":\"SolrCloud restart persistence test document\",\"contextid\":1,\"courseid\":1,\"owneruserid\":1,\"modified\":\"2026-01-01T00:00:00Z\",\"type\":1,\"areaid\":\"test_area\",\"itemid\":1}]" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/${cloud_collection}/update?commit=true" 2>/dev/null)
     if [ "$idx_code" = "200" ]; then
         print_pass "Document indexed (HTTP 200)"
     else
@@ -270,7 +269,7 @@ solrcloud_tests() {
     # Collection still exists
     coll_resp=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json")
-    if echo "$coll_resp" | grep -q '"cloud_test_c1"'; then
+    if echo "$coll_resp" | grep -q "\"${cloud_collection}\""; then
         print_pass "Collection survives restart (ZK persistence confirmed)"
     else
         print_fail "Collection LOST after restart (ZK data not persisted)"
@@ -282,8 +281,8 @@ solrcloud_tests() {
     local doc_wait=0
     local doc_ok=0
     while [ "$doc_wait" -lt 60 ]; do
-        doc_resp=$(curl -s -u "solr_cloud_tenant:${CLOUD_PASS}" \
-            "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=id:persist-test-1&wt=json")
+        doc_resp=$(curl -s -u "${cloud_user}:${CLOUD_PASS}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/${cloud_collection}/select?q=id:${doc_id}&wt=json")
         if echo "$doc_resp" | grep -q '"numFound":1'; then
             doc_ok=1
             break
@@ -300,8 +299,8 @@ solrcloud_tests() {
     # Tenant credentials survive (security in ZK)
     print_test "Tenant authentication survives restart (Security API in ZK)"
     local auth_code
-    auth_code=$(curl -so /dev/null -w '%{http_code}' -u "solr_cloud_tenant:${CLOUD_PASS}" \
-        "http://${SOLR_HOST}:${SOLR_PORT}/solr/cloud_test_c1/select?q=*:*&rows=0&wt=json" 2>/dev/null)
+    auth_code=$(curl -so /dev/null -w '%{http_code}' -u "${cloud_user}:${CLOUD_PASS}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/${cloud_collection}/select?q=*:*&rows=0&wt=json" 2>/dev/null)
     if [ "$auth_code" = "200" ]; then
         print_pass "Tenant credentials persist after restart (HTTP 200)"
     else
@@ -309,7 +308,7 @@ solrcloud_tests() {
     fi
 
     # Cleanup
-    $tenant_cmd delete cloud_tenant --force >/dev/null 2>&1 || true
+    $tenant_cmd delete "$cloud_tenant" --force >/dev/null 2>&1 || true
 }
 
 # =========================================

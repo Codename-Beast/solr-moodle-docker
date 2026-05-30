@@ -154,7 +154,7 @@ permission.
 - 3x fresh deploy + 3x existing-stack test + 1x final fresh = 70/70 PASS
 
 > After changes to `init/powerinit.sh` or `init/security.json.template`
-> rebuild the init image: `docker compose build --no-cache solr-init`
+> rebuild the init image: `docker compose build --no-cache eLeDia-solr-init`
 
 ---
 
@@ -182,7 +182,7 @@ permission.
 - `generate_env.sh`: monitoring variables removed
 - `.env.example`: monitoring variables removed
 - GitHub Actions: leading whitespace in inline `.env` blocks fixed
-- `docker-compose.yml`: image tag `solr-init:v2.3` → `solr-init:v2.3.2`
+- `docker-compose.yml`: image tag `eLeDia-solr-init:v2.3` → `eLeDia-solr-init:v2.3.2`
 
 ### Added
 - `docs/monitoring.md`: guide for Prometheus + Loki integration (external)

@@ -2,28 +2,56 @@
 # Solr for Moodle — Multi-Tenant SolrCloud
 # Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter
 # SPDX-License-Identifier: MIT
-# Version: v3.4.0
+# Version: v3.4.6
 # =========================================
-# SolrCloud is the only supported mode since Solr 10.1.
-# The former one-shot init container has been removed — security.json,
-# configset upload and collection bootstrap are handled by
-# solr-cloud-entrypoint.sh on every container start.
+# Init container is reintroduced as global bootstrap worker:
+#   service: eLeDia-solr-init
+# It prepares security.json + default configsets before runtime starts.
 #
-# Log path: /var/log/eledia/<INSTANCE_NAME>/  (bind-mounted from host)
-#   All Docker instance logs land there for Promtail/syslog scraping.
+# Host log root default:
+#   /var/log/eledia/solr/<INSTANCE_NAME>/
 # =========================================
 
 services:
   # =================================
-  # Solr SolrCloud
-  # solr-cloud-entrypoint.sh handles on every start:
-  #   1. Wait for ZooKeeper readiness
-  #   2. Upload security.json → ZK
-  #   3. Upload eLeDia-moodle-tenant configset → ZK
-  #   4. Run solr-tenant.sh apply (idempotent)
-  #   5. Hand off to solr-foreground
+  # [BOOTSTRAP] Global Init container
+  # eLeDia-solr-init creates/refreshes:
+  #   - security.json
+  #   - eLeDia-moodle-tenant configset + _default
+  #   - optional multi-target bootstrap metadata
+  # Exits 0 on success.
+  # =================================
+  eLeDia-solr-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: eledia-solr-init:v3.4.6
+    container_name: ${INSTANCE_NAME:-solr}-eLeDia-solr-init
+    user: "0:0"
+    volumes:
+      - solr_data:/var/solr/data
+      - ./.env:/.env:ro,z
+      - ./tenants.env:/opt/solr/tenants.env:rw
+      - ./eLeDia-config:/config:ro
+      - ${ELEDIA_LOG_ROOT:-/var/log/eledia/solr}/${INSTANCE_NAME:-solr}:/var/log/solr:z
+    env_file:
+      - .env
+    environment:
+      ENV_FILE_PATH: /.env
+      SOLR_MODE: ${SOLR_MODE:-solrcloud}
+      # Optional comma-separated runtime targets (for globalized init orchestration metadata)
+      INIT_TARGETS: ${INIT_TARGETS:-solr-a,solr-b,solr-c}
+    networks:
+      - solr_network
+    restart: "no"
+
+  # =================================
+  # Solr SolrCloud Runtime
   # =================================
   solr:
+    depends_on:
+      eLeDia-solr-init:
+        condition: service_completed_successfully
     build:
       context: .
       dockerfile: Dockerfile.solr

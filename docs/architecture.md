@@ -4,7 +4,7 @@
 # Architektur — solr-moodle-docker
 
 ## Ziel
-Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Security-Bootstrap und optionalem SolrCloud-Modus.
+Containerisierter Solr-Stack fuer Moodle Global Search mit globalisiertem Init-Container, Security-Bootstrap, Default-Configset aus `eLeDia-config/` und SolrCloud-Runtime.
 
 ## Architekturdiagramm
 
@@ -18,23 +18,24 @@ Containerisierter Solr-Stack fuer Moodle Global Search mit Tenant-Management, Se
 │  ├── tenants.env                                             │
 │  ├── init/powerinit.sh                                       │
 │  ├── scripts/solr-tenant.sh                                  │
-│  ├── config/managed-schema                                   │
-│  └── config/solrconfig.xml                                   │
+│  ├── eLeDia-config/managed-schema                            │
+│  └── eLeDia-config/solrconfig.xml                            │
 └──────────────────────────┬──────────────────────────────────┘
 │ docker compose up -d
 ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Docker Network: ${INSTANCE_NAME}-network                    │
 │                                                             │
-│  ┌────────────────┐   bootstrap   ┌───────────────────────┐ │
-│  │  solr-init     │──────────────▶│  solr (9.x)          │ │
-│  │  (one-shot)    │               │  /solr               │ │
-│  │  writes security.json          │  AuthN/AuthZ enabled │ │
-│  └────────────────┘               └──────────┬────────────┘ │
-│                                              │              │
-│                                   /update/extract (Tika)    │
-│                                              │              │
-│                                   fmap.content=solr_filecontent
+│  ┌──────────────────────────┐  bootstrap  ┌───────────────┐ │
+│  │  eLeDia-solr-init        │────────────▶│  solr (9.x)   │ │
+│  │  (global init worker)    │             │  /solr        │ │
+│  │  writes security.json    │             │  AuthN/AuthZ  │ │
+│  │  uploads default config  │             │  + collections │ │
+│  └──────────────────────────┘             └──────┬────────┘ │
+│                                                  │          │
+│                                       /update/extract (Tika)│
+│                                                  │          │
+│                                       fmap.content=solr_filecontent
 └──────────────────────────────────────────────┬──────────────┘
 │
 bind 127.0.0.1:${SOLR_PORT}
@@ -49,23 +50,25 @@ bind 127.0.0.1:${SOLR_PORT}
 ## Komponenten
 
 - `docker-compose.yml`
-- `solr-init` (Init/Bootstrap)
+- `eLeDia-solr-init` (globaler Init/Bootstrap)
 - `solr` (Runtime)
 - `init/powerinit.sh`
-- erzeugt/aktualisiert `security.json`
-- initialisiert Kerndaten und Rollen
+  - erzeugt/aktualisiert `security.json`
+  - setzt Default-Configsets (`eLeDia-moodle-tenant` und `_default`) aus `eLeDia-config/`
+  - verarbeitet optionale Multi-Target-Metadaten (`INIT_TARGETS`)
 - `scripts/solr-tenant.sh`
-- Tenant-Lifecycle: create/delete/enable/passwd/core-add/core-remove/apply/export/caddy-config
-- `config/managed-schema`
-- Moodle-Felder + `solr_filecontent` fuer Tika-Extraktion
-- `config/solrconfig.xml`
-- `/update/extract` Handler; `fmap.content=solr_filecontent`
+  - Tenant-Lifecycle: create/delete/enable/passwd/core-add/core-remove/apply/export/caddy-config
+- `eLeDia-config/managed-schema`
+  - Moodle-Felder + `solr_filecontent` fuer Tika-Extraktion
+- `eLeDia-config/solrconfig.xml`
+  - `/update/extract` Handler; `fmap.content=solr_filecontent`
 
 ## Laufzeitdaten
 
 - `.env` (Admin/Support, Ports, Modus)
 - `tenants.env` (Tenant-Zustand + Core-Zuordnung)
 - `/var/solr/data` (Cores/Collections + Security)
+- `${ELEDIA_LOG_ROOT:-/var/log/eledia/solr}/${INSTANCE_NAME}` (init/setup/install/runtime Logs auf Host)
 
 ## Betriebsmodi
 

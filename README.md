@@ -1,7 +1,7 @@
 # Solr für Moodle — Multi-Tenant Docker Stack
 
 [![CI](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml/badge.svg?branch=release_1.0)](https://github.com/Codename-Beast/solr-moodle-docker/actions/workflows/solr-testing.yml)
-![Version](https://img.shields.io/badge/version-3.1.0-blue)
+![Version](https://img.shields.io/badge/version-3.4.6-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
@@ -11,7 +11,7 @@ Docker-Stack für **Solr + Moodle Global Search** mit Multi-Tenant-Isolation.
 - Standalone oder SolrCloud (embedded ZooKeeper)
 - Tenant-User + Core/Collection-Isolation pro Moodle-Instanz
 - Tika `/update/extract` für Datei-Indexierung (PDF, DOCX, HTML, …)
-- Security-Bootstrap via `solr-init` One-Shot Container
+- Security-Bootstrap via globalen Init-Container `eLeDia-solr-init`
 - CI für Standalone und SolrCloud auf GitHub + GitLab
 
 ---
@@ -33,8 +33,9 @@ Moodle ──HTTPS──► Reverse Proxy (Apache/Caddy/Nginx)
        (Index+Security)
 ```
 
-**Init-Prozess (einmalig):**
-`solr-init` schreibt `security.json` → Solr startet erst nach erfolgreichem Init.
+**Init-Prozess (globalisiert):**
+`eLeDia-solr-init` schreibt/aktualisiert `security.json`, Default-Configsets und Bootstrap-Metadaten.
+Der Runtime-Container startet erst nach erfolgreichem Init (`depends_on: service_completed_successfully`).
 
 **Runtime:**
 Moodle → Proxy → `127.0.0.1:${SOLR_PORT}` → Tenant-Core/Collection
@@ -156,7 +157,7 @@ Core-Namensschema:
 Mehrere Instanzen:
 - vollständig über `--instance` unterstützt
 - erkennbare Runtime-Namen bleiben konsistent:
-  - Container: `<instance>-solr`, `<instance>-init`
+  - Container: `<instance>-solr`, `<instance>-eLeDia-solr-init`
   - Volume: `solr_data_<instance>`
   - Network: `<instance>-network`
 
@@ -194,7 +195,9 @@ Alle Optionen in `.env.example` dokumentiert. Wichtigste Variablen:
 | `SOLR_PORT` | `8983` | Solr-Port (nur auf 127.0.0.1 gebunden) |
 | `SOLR_BIND` | `127.0.0.1` | **Nicht ändern** — Proxy übernimmt externe Zugriffe |
 | `SOLR_HEAP` | `2g` | JVM Heap für Solr |
-| `SOLR_MODE` | `` | `solrcloud` für ZooKeeper-Modus |
+| `SOLR_MODE` | `solrcloud` | SolrCloud-Modus (Default) |
+| `ELEDIA_LOG_ROOT` | `/var/log/eledia/solr` | Host-Root für init/setup/install/runtime Logs |
+| `INIT_TARGETS` | `solr-a,solr-b,solr-c` | Zielmetadaten für globalisierten Init-Lauf |
 | `SOLR_ADMIN_PASSWORD` | — | Pflicht — kein CHANGE_ME |
 | `SOLR_SUPPORT_PASSWORD` | — | Pflicht — kein CHANGE_ME |
 
@@ -215,12 +218,12 @@ Alle Optionen in `.env.example` dokumentiert. Wichtigste Variablen:
 solr-moodle-docker/
 ├── docker-compose.yml          # Stack-Definition
 ├── .env.example                # Konfigurationsvorlage
-├── Dockerfile                  # solr-init Bootstrap-Container
+├── Dockerfile                  # eLeDia-solr-init Bootstrap-Container
 ├── Dockerfile.solr             # Solr Runtime (mit Tika-Modul)
 ├── init/
 │   ├── powerinit.sh            # Bootstrap: security.json + Tenant-Permissions
-│   └── security.json.template  # Solr Security-Template
-├── config/
+│   └── security.json.template  # Init-Template für Security JSON
+├── eLeDia-config/
 │   ├── managed-schema          # Moodle-Felder + solr_filecontent (Tika)
 │   └── solrconfig.xml          # /update/extract Handler
 ├── scripts/

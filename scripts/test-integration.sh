@@ -33,7 +33,7 @@ if [ -f ".env" ]; then
 fi
 INSTANCE_NAME=${INSTANCE_NAME:-solr}
 SOLR_CONTAINER="${INSTANCE_NAME}-solr"
-INIT_CONTAINER="${INSTANCE_NAME}-init"
+INIT_CONTAINER="${INSTANCE_NAME}-eLeDia-solr-init"
 SOLR_HOST="127.0.0.1"
 SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE_NAME=${SOLR_CORE_NAME:-eLeDia_core}
@@ -298,7 +298,7 @@ integration_tests() {
     docker compose up -d >/dev/null 2>&1
     sleep 30
 
-    if docker compose logs solr-init 2>&1 | grep -q "security.json written"; then
+    if docker compose logs eLeDia-solr-init 2>&1 | grep -q "security.json written"; then
         print_pass "security.json regenerated on config change"
     else
         print_fail "security.json not regenerated"
@@ -336,13 +336,14 @@ tenant_tests() {
         print_fail "Failed to create tenant schule_a"
     fi
 
-    # Verify user in security.json
-    print_test "User solr_schule_a in security.json"
-    if docker exec "$container" jq '.authentication.credentials | has("solr_schule_a")' \
-        /var/solr/data/security.json 2>/dev/null | grep -q true; then
-        print_pass "User solr_schule_a present in security.json"
+    # Verify user via Security API (source of truth in SolrCloud)
+    print_test "User solr_schule_a in Solr Security API"
+    if docker exec "$container" sh -lc 'curl -s -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASSWORD" \
+        "http://localhost:${SOLR_PORT:-8983}/solr/admin/authentication" | jq -e ".authentication.credentials | has(\"solr_schule_a\")"' \
+        2>/dev/null | grep -q true; then
+        print_pass "User solr_schule_a present in Solr Security API"
     else
-        print_fail "User solr_schule_a not found in security.json"
+        print_fail "User solr_schule_a not found in Solr Security API"
     fi
 
     PASS_A="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"

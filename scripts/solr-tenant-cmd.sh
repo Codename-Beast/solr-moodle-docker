@@ -452,7 +452,6 @@ cmd_apply() {
           core="$(echo "$core" | tr -d ' ')"
           [ -z "$core" ] && continue
           _create_core "$core" || true
-          _add_permission "tenant-${name}-${core}" "$role" "$core" || true
         done
 
         ((count++)) || true
@@ -487,6 +486,10 @@ cmd_sync_sot() {
   _log_action "sync-sot"
 
   cmd_apply
+
+  if _is_cloud_mode; then
+    _rebuild_tenant_permissions || return 1
+  fi
 
   local auth_json api_users
   auth_json="$(_solr_api GET "/admin/authentication" 2>/dev/null || true)"

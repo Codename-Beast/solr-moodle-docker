@@ -99,7 +99,7 @@ docker compose down -v
 
 **Init-Container schlägt fehl:**
 ```bash
-docker compose logs solr-init
+docker compose logs eLeDia-solr-init
 # Häufig: SOLR_ADMIN_PASSWORD nicht gesetzt oder noch CHANGE_ME
 ```
 

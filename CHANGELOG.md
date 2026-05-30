@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.4.6] - 2026-05-30
+
+### Changed
+- Restored and promoted the one-shot init service as `eLeDia-solr-init` as default runtime architecture, including updated docs/diagrams for init responsibilities, multi-instance targeting, and host log flow.
+- Standardized defaults around `eLeDia-config/` and `eLeDia-moodle-tenant` so schema/solrconfig are always bootstrapped from the eLeDia configset path.
+- Clarified and aligned host log handling toward `/var/log/eledia/solr` style layouts (setup/runtime/install logs via host-mounted log roots).
+- SolrCloud test suite now uses unique per-run cloud tenant/collection names to avoid stale-state collisions and make restart-persistence checks deterministic.
+
+### Fixed
+- `solr-tenant-api.sh`: replaced static `/tmp/_solr_resp` and `/tmp/_solr_err` files with `mktemp`-based request-local files to eliminate cross-run permission collisions that caused intermittent `HTTP <no response>` in tenant API operations.
+- SolrCloud integration tests no longer depend on potentially inactive legacy `cloud_tenant` entries in `tenants.env`; this fixes false 401/collection-missing/persistence regressions in long-lived local test environments.
+- Multi-tenant verification in integration tests now checks Solr Security API credentials (runtime source of truth) instead of relying on local `security.json` file inspection.
+
+### Verified
+- Local run: `./scripts/run-tests.sh --integration-only --tenant --cloud --no-cleanup` → `8/8 PASS`.
+
 ## [3.4.0] - 2026-05-27
 
 ### Changed

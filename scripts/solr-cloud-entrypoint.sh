@@ -40,6 +40,7 @@ fi
 
 SECURITY_JSON="${SECURITY_JSON:-/var/solr/data/security.json}"
 SECURITY_TEMPLATE="${SECURITY_TEMPLATE:-/opt/solr/security.json.template}"
+APPLY_MARKER_FILE="${APPLY_MARKER_FILE:-/var/solr/data/.eledia-apply-required}"
 
 log() {
   printf '[solr-entrypoint] %s\n' "$*"
@@ -215,11 +216,41 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
     -d "$local_conf_dir" \
     -z "$ZK_HOST" 2>&1 | while IFS= read -r line; do log "[zk] $line"; done
 
-  log "Applying tenant collections via solr-tenant.sh apply"
+  apply_reason="startup"
+  if [ -f "$APPLY_MARKER_FILE" ]; then
+    apply_reason="init-change-detected"
+  fi
+
+  log "Applying tenant collections via solr-tenant.sh apply (reason: ${apply_reason})"
   (
     /opt/solr/scripts/solr-tenant.sh apply 2>&1
   ) | while IFS= read -r line; do log "[tenant] $line"; done || \
     log "WARNING: solr-tenant.sh apply returned non-zero — check tenant logs"
+
+  log "Rebuilding tenant permission order after apply"
+  (
+    /opt/solr/scripts/solr-tenant.sh sync-sot 2>&1
+  ) | while IFS= read -r line; do log "[tenant-sync] $line"; done || \
+    log "WARNING: solr-tenant.sh sync-sot returned non-zero — check tenant logs"
+
+  if [ -f "$APPLY_MARKER_FILE" ]; then
+    rm -f "$APPLY_MARKER_FILE" || true
+    log "Cleared init apply marker: $APPLY_MARKER_FILE"
+  fi
+
+  while kill -0 "$solr_pid" 2>/dev/null; do
+    if [ -f "$APPLY_MARKER_FILE" ]; then
+      log "Detected init apply marker during runtime — applying tenant collections"
+      (
+        /opt/solr/scripts/solr-tenant.sh apply 2>&1
+      ) | while IFS= read -r line; do log "[tenant] $line"; done || \
+        log "WARNING: runtime solr-tenant.sh apply returned non-zero — check tenant logs"
+
+      rm -f "$APPLY_MARKER_FILE" || true
+      log "Cleared init apply marker: $APPLY_MARKER_FILE"
+    fi
+    sleep 5
+  done
 
   wait "$solr_pid"
 else

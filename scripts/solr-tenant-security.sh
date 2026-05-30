@@ -103,7 +103,7 @@ _add_permission() {
         "collection": [$c],
         "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
       }}')"
-    _cloud_authz_api "$read_payload"
+    _cloud_authz_api "$read_payload" || return 1
 
     write_payload="$(jq -n --arg n "${name}-write" --arg r "$role" --arg c "$core" \
       '{"set-permission": {
@@ -112,7 +112,7 @@ _add_permission() {
         "collection": [$c],
         "path": ["/update","/update/extract"]
       }}')"
-    _cloud_authz_api "$write_payload"
+    _cloud_authz_api "$write_payload" || return 1
   else
     _log "INFO" "Ensuring standalone shared tenant-read and tenant-write permissions"
     local read_payload write_payload
@@ -121,6 +121,66 @@ _add_permission() {
     write_payload='{"set-permission": {"name": "tenant-write", "role": ["admin","tenant"], "path": ["/update","/update/extract"]}}'
     _cloud_authz_api "$write_payload"
   fi
+}
+
+# Rebuild only tenant-scoped permissions and keep them ahead of generic rules.
+# Called after startup apply to avoid duplicate tenant-* entries that can break ACL evaluation.
+_rebuild_tenant_permissions() {
+  _is_cloud_mode || return 0
+
+  local authz current_names n
+  authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
+  current_names="$(printf '%s' "$authz" | jq -r '.authorization.permissions[]?.name // empty' 2>/dev/null || true)"
+
+  while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    case "$n" in
+      tenant-*-read|tenant-*-write)
+        _cloud_authz_api "$(jq -n --arg x "$n" '{"delete-permission": $x}')" || true
+        ;;
+    esac
+  done <<< "$current_names"
+
+  local tenant_names t_name t_user t_role t_cores t_active c read_payload write_payload
+  tenant_names="$(grep '^TENANT_.*_CORES=' "$TENANTS_ENV" 2>/dev/null | sed -E 's/^TENANT_(.+)_CORES=.*/\1/' | sort -u)"
+
+  while IFS= read -r t_name; do
+    [ -z "$t_name" ] && continue
+    t_active="$(_get_tenant_field "$t_name" "ACTIVE")"
+    [ "$t_active" = "false" ] && continue
+
+    t_user="$(_get_tenant_field "$t_name" "USER")"
+    [ -z "$t_user" ] && t_user="solr_${t_name}"
+    t_role="$(_get_tenant_role "$t_name")"
+    _write_user_role "$t_user" "$t_role" || return 1
+
+    t_cores="$(_get_tenant_field "$t_name" "CORES")"
+    IFS=',' read -ra CORE_ARRAY <<< "$t_cores"
+    for c in "${CORE_ARRAY[@]}"; do
+      c="$(echo "$c" | tr -d ' ')"
+      [ -z "$c" ] && continue
+
+      read_payload="$(jq -n --arg n "tenant-${t_name}-${c}-read" --arg r "$t_role" --arg col "$c" \
+        '{"set-permission": {
+          "name": $n,
+          "role": ["admin","support",$r],
+          "collection": [$col],
+          "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+        }}')"
+      _cloud_authz_api "$read_payload" || return 1
+
+      write_payload="$(jq -n --arg n "tenant-${t_name}-${c}-write" --arg r "$t_role" --arg col "$c" \
+        '{"set-permission": {
+          "name": $n,
+          "role": ["admin",$r],
+          "collection": [$col],
+          "path": ["/update","/update/extract"]
+        }}')"
+      _cloud_authz_api "$write_payload" || return 1
+    done
+  done <<< "$tenant_names"
+
+  return 0
 }
 
 # Remove both read and write permissions for a core.

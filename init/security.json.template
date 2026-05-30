@@ -1,0 +1,33 @@
+{
+  "authentication": {
+    "blockUnknown": true,
+    "class": "solr.BasicAuthPlugin",
+    "credentials": {
+      "__ADMIN_USER__": "__ADMIN_HASH__",
+      "__SUPPORT_USER__": "__SUPPORT_HASH__"
+    },
+    "realm": "Eledia",
+    "forwardCredentials": false
+  },
+  "authorization": {
+    "class": "solr.RuleBasedAuthorizationPlugin",
+    "permissions": [
+      { "name": "health",          "role": ["admin", "support", "moodle"] },
+      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "schema-edit",     "role": ["admin", "moodle"] },
+      { "name": "read",            "role": ["admin", "support", "moodle"] },
+      { "name": "update",          "role": ["admin", "moodle"] },
+      { "name": "config-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "metrics-read",    "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit", "role": ["admin"] },
+      { "name": "core-system-read", "role": ["admin", "support", "moodle"],
+        "path": ["/admin/system", "/admin/system/", "/solr/*/admin/system", "/solr/*/admin/system/"] },
+      { "name": "all",             "role": "admin" }
+    ],
+    "user-role": {
+      "__ADMIN_USER__":   "admin",
+      "__SUPPORT_USER__": "support"
+    }
+  }
+}
