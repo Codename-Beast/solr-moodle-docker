@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - `solr-tenant-api.sh`: replaced static `/tmp/_solr_resp` and `/tmp/_solr_err` files with `mktemp`-based request-local files to eliminate cross-run permission collisions that caused intermittent `HTTP <no response>` in tenant API operations.
 - SolrCloud integration tests no longer depend on potentially inactive legacy `cloud_tenant` entries in `tenants.env`; this fixes false 401/collection-missing/persistence regressions in long-lived local test environments.
 - Multi-tenant verification in integration tests now checks Solr Security API credentials (runtime source of truth) instead of relying on local `security.json` file inspection.
+- `solr-tenant.sh export` now emits `solr_runtime_source_of_truth` metadata for host_vars so runtime authority (Solr API + ZooKeeper) is explicitly represented in exported inventory data.
 
 ### Verified
 - Local run: `./scripts/run-tests.sh --integration-only --tenant --cloud --no-cleanup` → `8/8 PASS`.

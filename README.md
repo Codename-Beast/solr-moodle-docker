@@ -78,6 +78,9 @@ docker exec solr-solr /opt/solr/scripts/solr-tenant.sh passwd schule_a
 
 # Source-of-Truth Sync (.env + tenants.env → Solr API)
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh sync-sot
+
+# Export runtime-aligned host_vars (includes solr_runtime_source_of_truth)
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh export
 ```
 
 ---
