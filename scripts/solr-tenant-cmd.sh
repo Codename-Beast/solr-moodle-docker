@@ -459,6 +459,10 @@ cmd_apply() {
     esac
   done < "$TENANTS_ENV"
 
+  if _is_cloud_mode; then
+    _ensure_all_permission_last || return 1
+  fi
+
   # Wait for Solr to reload the updated security.json before returning
   if [ "$count" -gt 0 ]; then
     _log "INFO" "Waiting for Solr security reload..."
@@ -489,6 +493,7 @@ cmd_sync_sot() {
 
   if _is_cloud_mode; then
     _rebuild_tenant_permissions || return 1
+    _ensure_all_permission_last || return 1
   fi
 
   local auth_json api_users
@@ -619,6 +624,129 @@ cmd_export() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: drift-detect
+# Detect runtime drift between tenants.env (desired state) and Solr runtime state
+# (authentication + authorization + collections API in SolrCloud).
+# ---------------------------------------------------------------------------
+
+# --- cmd_drift_detect ---
+cmd_drift_detect() {
+  _load_admin_creds
+  _log_action "drift-detect"
+
+  local desired_file actual_users_file desired_users_file actual_collections_file desired_collections_file
+  desired_file="$(mktemp)"
+  actual_users_file="$(mktemp)"
+  desired_users_file="$(mktemp)"
+  actual_collections_file="$(mktemp)"
+  desired_collections_file="$(mktemp)"
+
+  if [ ! -f "$TENANTS_ENV" ]; then
+    printf 'ERROR: tenants.env not found: %s\n' "$TENANTS_ENV" >&2
+    rm -f "$desired_file" "$actual_users_file" "$desired_users_file" "$actual_collections_file" "$desired_collections_file"
+    return 1
+  fi
+
+  printf '# Runtime drift report\n'
+  printf 'mode=%s\n' "${SOLR_MODE:-standalone}"
+  printf 'tenants_env=%s\n\n' "$TENANTS_ENV"
+
+  # Build desired state snapshot (active tenants only)
+  while IFS='=' read -r key value; do
+    case "$key" in
+      TENANT_*_CORES)
+        local name active user cores
+        name="${key#TENANT_}"; name="${name%_CORES}"
+        active="$(grep "^TENANT_${name}_ACTIVE=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+        [ "${active:-true}" = "false" ] && continue
+
+        user="$(grep "^TENANT_${name}_USER=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+        user="${user:-solr_${name}}"
+        cores="$value"
+
+        printf '%s|%s|%s\n' "$name" "$user" "$cores" >> "$desired_file"
+      ;;
+    esac
+  done < "$TENANTS_ENV"
+
+  cut -d'|' -f2 "$desired_file" | sort -u > "$desired_users_file"
+  cut -d'|' -f3 "$desired_file" | tr ',' '\n' | sed '/^$/d' | tr -d ' ' | sort -u > "$desired_collections_file"
+
+  # Runtime users from Solr Security API
+  local auth_json
+  auth_json="$(_solr_api GET "/admin/authentication" 2>/dev/null || true)"
+  if [ -z "$auth_json" ]; then
+    printf 'ERROR: could not read /admin/authentication\n' >&2
+    rm -f "$desired_file" "$actual_users_file" "$desired_users_file" "$actual_collections_file" "$desired_collections_file"
+    return 1
+  fi
+  printf '%s' "$auth_json" | jq -r '.authentication.credentials | keys[]?' | sort -u > "$actual_users_file"
+
+  # Runtime collections only in SolrCloud
+  if _is_cloud_mode; then
+    local coll_json
+    coll_json="$(_solr_api GET "/admin/collections?action=LIST&wt=json" 2>/dev/null || true)"
+    printf '%s' "$coll_json" | jq -r '.collections[]?' | sort -u > "$actual_collections_file"
+  else
+    : > "$actual_collections_file"
+  fi
+
+  local drift=0
+
+  printf '[USERS] desired(active tenants) minus runtime:\n'
+  if comm -23 "$desired_users_file" "$actual_users_file" | sed '/^$/d' | sed 's/^/  MISSING_RUNTIME_USER: /'; then :; fi
+  if [ -n "$(comm -23 "$desired_users_file" "$actual_users_file")" ]; then drift=1; fi
+
+  printf '[USERS] runtime minus desired(active tenants):\n'
+  if comm -13 "$desired_users_file" "$actual_users_file" | grep -vE '^(admin|support|moodle)$' | sed '/^$/d' | sed 's/^/  UNMANAGED_RUNTIME_USER: /'; then :; fi
+  if [ -n "$(comm -13 "$desired_users_file" "$actual_users_file" | grep -vE '^(admin|support|moodle)$')" ]; then drift=1; fi
+
+  if _is_cloud_mode; then
+    printf '[COLLECTIONS] desired(active tenants) minus runtime:\n'
+    if comm -23 "$desired_collections_file" "$actual_collections_file" | sed '/^$/d' | sed 's/^/  MISSING_RUNTIME_COLLECTION: /'; then :; fi
+    if [ -n "$(comm -23 "$desired_collections_file" "$actual_collections_file")" ]; then drift=1; fi
+
+    printf '[COLLECTIONS] runtime minus desired(active tenants):\n'
+    if comm -13 "$desired_collections_file" "$actual_collections_file" | sed '/^$/d' | sed 's/^/  UNMANAGED_RUNTIME_COLLECTION: /'; then :; fi
+    if [ -n "$(comm -13 "$desired_collections_file" "$actual_collections_file")" ]; then drift=1; fi
+  fi
+
+  if [ "$drift" -eq 0 ]; then
+    printf '\n✔ No runtime drift detected\n'
+    _log "INFO" "drift-detect: no drift"
+  else
+    printf '\n✖ Runtime drift detected\n'
+    _log "WARN" "drift-detect: drift detected"
+  fi
+
+  rm -f "$desired_file" "$actual_users_file" "$desired_users_file" "$actual_collections_file" "$desired_collections_file"
+  return "$drift"
+}
+
+# --- cmd_drift_remediate ---
+cmd_drift_remediate() {
+  _load_admin_creds
+  _log_action "drift-remediate"
+
+  if [ ! -f "$TENANTS_ENV" ]; then
+    printf 'ERROR: tenants.env not found: %s\n' "$TENANTS_ENV" >&2
+    return 1
+  fi
+
+  printf '# Drift remediation\n'
+  printf 'strategy=sync-sot\n'
+  printf 'tenants_env=%s\n\n' "$TENANTS_ENV"
+
+  if cmd_sync_sot; then
+    printf '\n✔ Drift remediation applied via sync-sot\n'
+    return 0
+  fi
+
+  printf '\n✖ Drift remediation failed\n' >&2
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: caddy-config
 # Generates a Caddyfile snippet for all active tenants.
 # Each tenant gets a subdomain that only passes their own cores through to Solr.
@@ -733,6 +861,8 @@ Commands:
   core-remove <name> --core <core>    Remove core permission from tenant
   apply                               Re-apply all tenants from tenants.env (idempotent)
   sync-sot                            Enforce .env+tenants.env as SOT and rotate unknown API users
+  drift-detect                        Detect runtime drift vs tenants.env (users/collections)
+  drift-remediate                     Reconcile runtime drift via sync-sot
   export                              YAML output for Ansible host_vars
   caddy-config --domain <d>           Generate Caddyfile for URL-level tenant isolation
 

@@ -79,6 +79,12 @@ docker exec solr-solr /opt/solr/scripts/solr-tenant.sh passwd schule_a
 # Source-of-Truth Sync (.env + tenants.env → Solr API)
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh sync-sot
 
+# Drift detection (runtime API/ZK vs tenants.env)
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh drift-detect
+
+# Drift remediation (enforce SOT back to runtime)
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh drift-remediate
+
 # Export runtime-aligned host_vars (includes solr_runtime_source_of_truth)
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh export
 ```

@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 - SolrCloud integration tests no longer depend on potentially inactive legacy `cloud_tenant` entries in `tenants.env`; this fixes false 401/collection-missing/persistence regressions in long-lived local test environments.
 - Multi-tenant verification in integration tests now checks Solr Security API credentials (runtime source of truth) instead of relying on local `security.json` file inspection.
 - `solr-tenant.sh export` now emits `solr_runtime_source_of_truth` metadata for host_vars so runtime authority (Solr API + ZooKeeper) is explicitly represented in exported inventory data.
+- Added `solr-tenant.sh drift-detect` to detect runtime drift between tenants.env (desired) and runtime Solr API/ZooKeeper state (users/collections).
+- Added `solr-tenant.sh drift-remediate` to reconcile detected drift by reapplying runtime state from source-of-truth (`sync-sot`).
+- Enforced Solr permission ordering so fallback rule `all` is always moved to the end after apply/sync operations; this prevents broad-rule shadowing of tenant-specific ACLs.
 
 ### Verified
 - Local run: `./scripts/run-tests.sh --integration-only --tenant --cloud --no-cleanup` → `8/8 PASS`.

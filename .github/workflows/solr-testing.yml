@@ -50,7 +50,7 @@ jobs:
           aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr-eledia:test
 
   solr-test:
-    name: SolrCloud Tests
+    name: SolrCloud Tests (combined)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: security-scan
@@ -98,8 +98,11 @@ jobs:
         echo "SOLR_CORE_NAME=eLeDia_core" >> .env
         echo "CI_TENANT_PASS=${PASS}" >> .env
 
-    - name: Run tests
+    - name: Run core SolrCloud tests
       run: bash scripts/run-tests.sh --cloud --tenant
+
+    - name: Run SolrCloud tenant isolation scale tests
+      run: bash scripts/run-tests.sh --cloud --tenant --tenant-scale
 
     - name: Collect logs on failure
       if: failure()
@@ -122,65 +125,3 @@ jobs:
         docker compose down -v || true
         rm -f .env tenants.env || true
 
-  solrcloud-test:
-    name: SolrCloud Tenant Isolation Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: security-scan
-    steps:
-    - uses: actions/checkout@v6
-
-    - name: Create host log directory
-      run: |
-        sudo mkdir -p /var/log/eledia/ci-solr
-        sudo chmod -R 777 /var/log/eledia
-
-    - name: Create .env (SolrCloud + multi-tenant)
-      env:
-        CI_ADMIN_PW: ${{ secrets.SOLR_CI_ADMIN_PASSWORD }}
-        CI_SUPPORT_PW: ${{ secrets.SOLR_CI_SUPPORT_PASSWORD }}
-      run: |
-        cp .env.example .env
-        sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=ci-solr/' .env
-        sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/'       .env
-        sed -i "s/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=${CI_ADMIN_PW}/"     .env
-        sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=${CI_SUPPORT_PW}/" .env
-        echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
-        touch tenants.env
-        chmod 666 tenants.env
-
-    - name: Build and start SolrCloud
-      run: |
-        docker compose build eLeDia-solr-init solr
-        docker compose up -d
-        echo "Waiting for ci-solr-solr to become healthy (max 5 x 20s = 100s)..."
-        for i in $(seq 1 5); do
-          STATUS=$(docker inspect --format='{{.State.Health.Status}}' ci-solr-solr 2>/dev/null || echo "missing")
-          echo "  attempt $i/5: $STATUS"
-          [ "$STATUS" = "healthy" ] && echo "Solr is healthy" && break
-          [ "$i" = "5" ] && echo "ERROR: Solr not healthy after 100s" && docker compose logs --no-color && exit 1
-          sleep 20
-        done
-
-    - name: Run SolrCloud tenant isolation tests
-      run: bash scripts/run-tests.sh --cloud --tenant --tenant-scale
-
-    - name: Collect logs on failure
-      if: failure()
-      run: |
-        mkdir -p logs
-        docker compose logs --no-color > logs/docker-compose.log 2>&1 || true
-
-    - name: Upload logs on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: solrcloud-test-logs-${{ github.run_id }}
-        path: logs/
-        retention-days: 7
-
-    - name: Cleanup
-      if: always()
-      run: |
-        docker compose down -v || true
-        rm -f .env tenants.env || true

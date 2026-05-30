@@ -183,6 +183,35 @@ _rebuild_tenant_permissions() {
   return 0
 }
 
+# Keep fallback 'all' permission at the very end to avoid broad-match shadowing.
+# Solr evaluates permissions in order; if 'all' is not last, tenant/core rules can be ignored.
+# This function re-adds 'all' after dynamic updates in SolrCloud mode.
+
+# --- _ensure_all_permission_last ---
+_ensure_all_permission_last() {
+  _is_cloud_mode || return 0
+  [ "$DRY_RUN" = "1" ] && return 0
+
+  local authz all_count i
+  authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
+  [ -z "$authz" ] && return 0
+
+  all_count="$(printf '%s' "$authz" | jq -r '[.authorization.permissions[]? | select(.name=="all")] | length' 2>/dev/null || echo 0)"
+
+  # Remove all existing 'all' entries first.
+  if [ "$all_count" -gt 0 ] 2>/dev/null; then
+    i=0
+    while [ "$i" -lt "$all_count" ]; do
+      _cloud_authz_api '{"delete-permission":"all"}' || true
+      i=$((i + 1))
+    done
+  fi
+
+  # Re-add fallback rule so it lands at the bottom.
+  _cloud_authz_api '{"set-permission":{"name":"all","role":"admin"}}' || return 1
+  return 0
+}
+
 # Remove both read and write permissions for a core.
 # Expects the base name without -read/-write suffix.
 # Standalone: shared tenant-read/tenant-write are NOT removed (other tenants still need them).

@@ -34,8 +34,10 @@ case "$cmd" in
   core-add)     cmd_core_add "$@" ;;
   core-remove)  cmd_core_remove "$@" ;;
   apply)        cmd_apply ;;
-  sync-sot)     cmd_sync_sot ;;
-  export)       cmd_export ;;
+  sync-sot)       cmd_sync_sot ;;
+  drift-detect)   cmd_drift_detect ;;
+  drift-remediate) cmd_drift_remediate ;;
+  export)         cmd_export ;;
   caddy-config) cmd_caddy_config "$@" ;;
   usage|help|-h|--help) usage ;;
   "")           usage; exit 1 ;;

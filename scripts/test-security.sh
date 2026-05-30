@@ -260,13 +260,17 @@ negative_tests() {
 performance_tests() {
     print_header "PERFORMANCE TESTS - Basic Performance"
 
+    local PERF_TIMEOUT_S
+    PERF_TIMEOUT_S="${PERF_TIMEOUT_S:-10}"
 
     # Test Response time
     print_test "API response time (<2s)"
     local start_time
 
     start_time=$(date +%s%3N)
-    curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1
+    if ! timeout "${PERF_TIMEOUT_S}s" curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" >/dev/null 2>&1; then
+        print_fail "API response timeout after ${PERF_TIMEOUT_S}s"
+    fi
     local end_time
 
     end_time=$(date +%s%3N)
@@ -294,7 +298,7 @@ performance_tests() {
     print_test "Healthcheck endpoint response"
     local health_response
 
-    health_response=$(curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/ping" 2>/dev/null)
+    health_response=$(timeout "${PERF_TIMEOUT_S}s" curl -s -o /dev/null -w '%{http_code}' "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/ping" 2>/dev/null || echo 000)
     if [ "$health_response" = "401" ] || [ "$health_response" = "200" ]; then
         print_pass "Healthcheck endpoint responsive (HTTP $health_response)"
     else
@@ -302,14 +306,19 @@ performance_tests() {
     fi
 
     # Test Concurrent request handling (load test)
-    print_test "Concurrent request handling (10 parallel requests)"
+    print_test "Concurrent request handling (10 parallel requests, timeout ${PERF_TIMEOUT_S}s)"
     local concurrent_start
 
     concurrent_start=$(date +%s%3N)
+    local pids=()
     for i in {1..10}; do
-        curl -s -o /dev/null -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
+        timeout "${PERF_TIMEOUT_S}s" curl -s -o /dev/null -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/cores?action=STATUS" &
+        pids+=("$!")
     done
-    wait
+    local concurrent_timeout=0
+    for pid in "${pids[@]}"; do
+        wait "$pid" || concurrent_timeout=1
+    done
     local concurrent_end
 
     concurrent_end=$(date +%s%3N)
@@ -317,7 +326,9 @@ performance_tests() {
 
 
     concurrent_time=$((concurrent_end - concurrent_start))
-    if [ $concurrent_time -lt 5000 ]; then
+    if [ "$concurrent_timeout" -ne 0 ]; then
+        print_fail "Concurrent requests hit timeout (${PERF_TIMEOUT_S}s per request)"
+    elif [ $concurrent_time -lt 5000 ]; then
         print_pass "Handled 10 concurrent requests in ${concurrent_time}ms"
     else
         print_fail "Concurrent requests too slow: ${concurrent_time}ms (expected <5000ms)"
@@ -328,8 +339,9 @@ performance_tests() {
     local load_start
 
     load_start=$(date +%s%3N)
+    local load_timeout=0
     for i in {1..20}; do
-        curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1
+        timeout "${PERF_TIMEOUT_S}s" curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/${SOLR_CORE_NAME}/select?q=*:*&rows=10" > /dev/null 2>&1 || load_timeout=1
     done
     local load_end
 
@@ -341,7 +353,9 @@ performance_tests() {
 
 
     avg_time=$((load_time / 20))
-    if [ $avg_time -lt 200 ]; then
+    if [ "$load_timeout" -ne 0 ]; then
+        print_fail "Query performance load test hit timeout (${PERF_TIMEOUT_S}s per request)"
+    elif [ $avg_time -lt 200 ]; then
         print_pass "Average query time under load: ${avg_time}ms per query"
     else
         print_fail "Query performance under load too slow: ${avg_time}ms per query (expected <200ms)"
