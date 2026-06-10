@@ -18,14 +18,18 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
 
-# Test counters
-TESTS_TOTAL=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-TESTS_SKIPPED=0
+# Test counters. Preserve existing values when this file is sourced by
+# run-tests.sh; sourced test modules must never reset counters because that
+# can mask earlier print_fail calls and make CI green despite [FAIL] lines.
+: "${TESTS_TOTAL:=0}"
+: "${TESTS_PASSED:=0}"
+: "${TESTS_FAILED:=0}"
+: "${TESTS_SKIPPED:=0}"
 
 # Test results array
-declare -a FAILED_TESTS
+if ! declare -p FAILED_TESTS >/dev/null 2>&1; then
+    declare -a FAILED_TESTS
+fi
 
 # Get dynamic container names from .env or fallback to default
 if [ -f ".env" ]; then
@@ -127,11 +131,9 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-# Check .env exists
-if [ ! -f ".env" ]; then
-    echo -e "${RED}ERROR: .env not found. Run setup first: ./setup.sh${NC}"
-    exit 1
-fi
+# .env is required for runtime/integration suites, but unit/static checks
+# must be able to run on a fresh checkout in CI before secrets are generated.
+# Runtime suites create or validate .env in their own setup paths.
 
 # =========================================
 # UNIT TESTS - Component Level

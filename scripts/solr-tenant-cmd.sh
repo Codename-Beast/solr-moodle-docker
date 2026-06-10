@@ -651,23 +651,26 @@ cmd_drift_detect() {
   printf 'mode=%s\n' "${SOLR_MODE:-standalone}"
   printf 'tenants_env=%s\n\n' "$TENANTS_ENV"
 
+  local tenants_content
+  tenants_content="$(cat "$TENANTS_ENV")"
+
   # Build desired state snapshot (active tenants only)
   while IFS='=' read -r key value; do
     case "$key" in
       TENANT_*_CORES)
         local name active user cores
         name="${key#TENANT_}"; name="${name%_CORES}"
-        active="$(grep "^TENANT_${name}_ACTIVE=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+        active="$(printf '%s\n' "$tenants_content" | grep "^TENANT_${name}_ACTIVE=" 2>/dev/null | cut -d= -f2-)"
         [ "${active:-true}" = "false" ] && continue
 
-        user="$(grep "^TENANT_${name}_USER=" "$TENANTS_ENV" 2>/dev/null | cut -d= -f2-)"
+        user="$(printf '%s\n' "$tenants_content" | grep "^TENANT_${name}_USER=" 2>/dev/null | cut -d= -f2-)"
         user="${user:-solr_${name}}"
         cores="$value"
 
         printf '%s|%s|%s\n' "$name" "$user" "$cores" >> "$desired_file"
       ;;
     esac
-  done < "$TENANTS_ENV"
+  done <<< "$tenants_content"
 
   cut -d'|' -f2 "$desired_file" | sort -u > "$desired_users_file"
   cut -d'|' -f3 "$desired_file" | tr ',' '\n' | sed '/^$/d' | tr -d ' ' | sort -u > "$desired_collections_file"
@@ -699,7 +702,7 @@ cmd_drift_detect() {
 
   printf '[USERS] runtime minus desired(active tenants):\n'
   if comm -13 "$desired_users_file" "$actual_users_file" | grep -vE '^(admin|support|moodle)$' | sed '/^$/d' | sed 's/^/  UNMANAGED_RUNTIME_USER: /'; then :; fi
-  if [ -n "$(comm -13 "$desired_users_file" "$actual_users_file" | grep -vE '^(admin|support|moodle)$')" ]; then drift=1; fi
+  if comm -13 "$desired_users_file" "$actual_users_file" | grep -qvE '^(admin|support|moodle)$'; then drift=1; fi
 
   if _is_cloud_mode; then
     printf '[COLLECTIONS] desired(active tenants) minus runtime:\n'

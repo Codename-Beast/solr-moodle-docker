@@ -99,10 +99,22 @@ jobs:
         echo "CI_TENANT_PASS=${PASS}" >> .env
 
     - name: Run core SolrCloud tests
-      run: bash scripts/run-tests.sh --cloud --tenant
+      run: |
+        set -o pipefail
+        bash scripts/run-tests.sh --cloud --tenant 2>&1 | tee /tmp/solr-core-tests.log
+        if grep -q '\[FAIL\]' /tmp/solr-core-tests.log; then
+          echo "ERROR: test output contains [FAIL] lines"
+          exit 1
+        fi
 
     - name: Run SolrCloud tenant isolation scale tests
-      run: bash scripts/run-tests.sh --cloud --tenant --tenant-scale
+      run: |
+        set -o pipefail
+        bash scripts/run-tests.sh --cloud --tenant --tenant-scale 2>&1 | tee /tmp/solr-scale-tests.log
+        if grep -q '\[FAIL\]' /tmp/solr-scale-tests.log; then
+          echo "ERROR: test output contains [FAIL] lines"
+          exit 1
+        fi
 
     - name: Collect logs on failure
       if: failure()
