@@ -312,6 +312,17 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   wait "$solr_pid"
 else
   # ── Standalone mode ──────────────────────────────────────────────────────
+  # The compose service intentionally starts as root so the entrypoint can fix
+  # Docker volume ownership. Solr itself must never run as root; the official
+  # launcher refuses that. Mirror the SolrCloud branch and re-exec as the solr
+  # user before calling solr-foreground.
+  if [ "$(id -u)" = "0" ]; then
+    log "Running as root — fixing /var/solr ownership and dropping to solr user"
+    mkdir -p /var/solr/data /var/solr/logs
+    chown -R solr:solr /var/solr
+    exec gosu solr "$0" "$@"
+  fi
+
   log "Starting standalone Solr on port ${SOLR_PORT}"
   exec solr-foreground
 fi
