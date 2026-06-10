@@ -75,11 +75,31 @@ integration_tests() {
         print_fail "tenants.env is not writable in container"
     fi
 
-    # Create a test tenant so core-level tests have a valid core to work with
-    print_info "Creating test tenant ci_test (core: ${SOLR_CORE_NAME})..."
+    # Create a test tenant so core-level tests have a valid core to work with.
+    # In SolrCloud CI the tenant may already exist in tenants.env from the
+    # pre-test setup while the runtime volume was recreated. Force an apply and
+    # wait for the Collections API instead of assuming create immediately
+    # materialized the collection.
+    print_info "Creating/applying test tenant ci_test (core: ${SOLR_CORE_NAME})..."
     docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh \
         create ci_test --cores "${SOLR_CORE_NAME}" >/dev/null 2>&1 || true
-    sleep 2
+    docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh \
+        enable ci_test >/dev/null 2>&1 || true
+    docker exec "$SOLR_CONTAINER" /opt/solr/scripts/solr-tenant.sh \
+        apply >/dev/null 2>&1 || true
+
+    if _is_cloud_mode; then
+        local collection_waited=0
+        while [ "$collection_waited" -lt 60 ]; do
+            if curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/collections?action=LIST&wt=json" | grep -q "\"${SOLR_CORE_NAME}\""; then
+                break
+            fi
+            sleep 3
+            collection_waited=$((collection_waited + 3))
+        done
+    else
+        sleep 2
+    fi
 
     # Solr Core Creation
     print_test "Solr core/collection creation"
