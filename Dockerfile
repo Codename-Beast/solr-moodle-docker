@@ -23,7 +23,10 @@ RUN apk add --no-cache \
     mkdir -p /config /workspace /var/solr/data /init
 
 # Copy configuration files
+# Copy config into both the default runtime path and an image-owned fallback.
+# The fallback is used when Docker-in-Docker host bind mounts create an empty /config.
 COPY eLeDia-config/ /config/
+COPY eLeDia-config/ /config-image/
 COPY init/security.json.template /init/security.json.template
 COPY init/powerinit.sh /init/powerinit.sh
 COPY scripts/ /opt/solr/scripts/

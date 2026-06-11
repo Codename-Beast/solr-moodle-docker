@@ -39,6 +39,7 @@ services:
     environment:
       ENV_FILE_PATH: /.env
       SOLR_MODE: ${SOLR_MODE:-solrcloud}
+      TENANTS_ENV: ${TENANTS_ENV:-/opt/solr/tenants.env}
       # Optional comma-separated runtime targets (for globalized init orchestration metadata)
       INIT_TARGETS: ${INIT_TARGETS:-solr-a,solr-b,solr-c}
     networks:

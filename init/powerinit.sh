@@ -47,10 +47,13 @@ _setup_logging
 # Constants
 # ---------------------------------------------------------------------------
 DATA_DIR="/var/solr/data"
-CONFIGSET_SRC="/config"
+CONFIGSET_SRC="${CONFIGSET_SRC:-/config}"
+if [ ! -f "${CONFIGSET_SRC}/solrconfig.xml" ] && [ -f "/config-image/solrconfig.xml" ]; then
+  CONFIGSET_SRC="/config-image"
+fi
 CONFIGSET_DST="${DATA_DIR}/configsets/eLeDia-moodle-tenant/conf"
 DEFAULT_CONFIGSET_DST="${DATA_DIR}/configsets/_default/conf"
-TENANTS_ENV="/opt/solr/tenants.env"
+TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
 ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 
 # Init state tracking (install vs upgrade/update)
