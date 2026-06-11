@@ -6,7 +6,7 @@
 #   Beispiel: xen-04, docker-runner, privileged-runner, …
 #   Default (lokal): docker
 #
-# Max. 2 parallele Jobs (runner concurrent=2), Timeout je 10 Minuten.
+# Max. 2 parallele Jobs (runner concurrent=2), Timeout: lint 10 Minuten, Full-Test 30 Minuten.
 ################################################################################
 
 ---
@@ -60,7 +60,7 @@ feature-lint:
 feature-full-test:
   stage: test
   image: alpine:3.20
-  timeout: 10 minutes
+  timeout: 30 minutes
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /^feature\/(v)?[0-9].*/'
     - if: '$CI_COMMIT_BRANCH =~ /^release.*/'

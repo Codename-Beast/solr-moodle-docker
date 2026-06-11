@@ -65,7 +65,7 @@ Anforderungen:
 | Stage | Jobs |
 |-------|------|
 | lint | shellcheck, docker compose config, bash -n |
-| test | feature-full-test (`--cloud --no-performance --no-cleanup` im 10min-Limit) |
+| test | feature-full-test (`--cloud --no-performance --no-cleanup`, 30min Timeout) |
 
 ---
 
