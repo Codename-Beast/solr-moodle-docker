@@ -56,15 +56,15 @@ integration_tests() {
 
     # Runtime guard: tenants file must exist where helper expects it
     print_test "tenants.env available in container"
-    if docker exec "$SOLR_CONTAINER" test -f /opt/solr/tenants.env 2>/dev/null; then
-        print_pass "tenants.env found at /opt/solr/tenants.env"
+    if docker exec "$SOLR_CONTAINER" sh -lc 'test -f "${TENANTS_ENV:-/opt/solr/tenants.env}"' 2>/dev/null; then
+        print_pass "tenants.env found in container tenant SOT path"
     else
-        print_fail "tenants.env missing in container (/opt/solr/tenants.env)"
+        print_fail "tenants.env missing in container tenant SOT path"
     fi
 
     # Runtime guard: tests need write access for create/delete/password rotation.
     print_test "tenants.env writable in container"
-    if docker exec "$SOLR_CONTAINER" test -w /opt/solr/tenants.env 2>/dev/null; then
+    if docker exec "$SOLR_CONTAINER" sh -lc 'test -w "${TENANTS_ENV:-/opt/solr/tenants.env}"' 2>/dev/null; then
         print_pass "tenants.env is writable for tenant lifecycle ops"
     else
         print_fail "tenants.env is not writable in container"
@@ -305,7 +305,7 @@ tenant_tests() {
         print_fail "User solr_schule_a not found in Solr Security API"
     fi
 
-    PASS_A="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+    PASS_A="$(docker exec "$container" sh -lc 'grep "^TENANT_schule_a_PASS=" "${TENANTS_ENV:-/opt/solr/tenants.env}" | cut -d= -f2')"
 
     # Tenant can access own core
     print_test "solr_schule_a can access /moodle_prod_a/select (200)"
@@ -353,7 +353,7 @@ tenant_tests() {
         print_fail "Failed to create tenant schule_b"
     fi
 
-    PASS_B="$(docker exec "$container" grep 'TENANT_schule_b_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+    PASS_B="$(docker exec "$container" sh -lc 'grep "^TENANT_schule_b_PASS=" "${TENANTS_ENV:-/opt/solr/tenants.env}" | cut -d= -f2')"
 
     # Isolation: cross-core access enforcement depends on mode
     # SolrCloud: collection field enforced by Solr → 403
@@ -435,7 +435,7 @@ tenant_tests() {
     print_test "enable schule_a -> new password works (200)"
     NEW_PASS=$($tenant_cmd enable schule_a 2>/dev/null | grep 'Password:' | awk '{print $3}') || true
     if [ -z "$NEW_PASS" ]; then
-        NEW_PASS="$(docker exec "$container" grep 'TENANT_schule_a_PASS=' /opt/solr/tenants.env | cut -d= -f2)"
+        NEW_PASS="$(docker exec "$container" sh -lc 'grep "^TENANT_schule_a_PASS=" "${TENANTS_ENV:-/opt/solr/tenants.env}" | cut -d= -f2')"
     fi
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${NEW_PASS}" \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/select?q=*:*&rows=0" 2>/dev/null)
@@ -502,7 +502,7 @@ tenant_scale_tests() {
 
     print_test "All ${tenant_count} tenant credentials written to tenants.env"
     local cred_count
-    cred_count=$(docker exec "$container" sh -lc "grep -c '^TENANT_moodle_[0-9][0-9]_PASS=' /opt/solr/tenants.env || true")
+    cred_count=$(docker exec "$container" sh -lc 'grep -c "^TENANT_moodle_[0-9][0-9]_PASS=" "${TENANTS_ENV:-/opt/solr/tenants.env}" || true')
     if [ "$cred_count" -ge "$tenant_count" ]; then
         print_pass "tenants.env contains ${cred_count} tenant passwords"
     else
@@ -510,7 +510,7 @@ tenant_scale_tests() {
     fi
 
     print_test "Sample tenant auth and core access work"
-    tpass=$(docker exec "$container" sh -lc "grep '^TENANT_moodle_01_PASS=' /opt/solr/tenants.env | cut -d= -f2")
+    tpass=$(docker exec "$container" sh -lc 'grep "^TENANT_moodle_01_PASS=" "${TENANTS_ENV:-/opt/solr/tenants.env}" | cut -d= -f2')
     code=$(curl -so /dev/null -w '%{http_code}' -u "solr_moodle_01:${tpass}" \
         "http://${SOLR_HOST}:${SOLR_PORT}/solr/eLeDia_core_01/select?q=*:*&rows=0" 2>/dev/null)
     if [ "$code" = "200" ]; then

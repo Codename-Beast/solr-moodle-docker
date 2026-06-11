@@ -14,6 +14,8 @@ FROM solr:${SOLR_VERSION}@sha256:b37a8fa998167fefc2acafe2cbaf3be992e81133881f1ba
 COPY --chown=solr:solr scripts/ /opt/solr/scripts/
 # SolrCloud bootstrap is executed as container command from image-owned path.
 COPY --chown=solr:solr scripts/solr-cloud-entrypoint.sh /opt/solr/docker/scripts/solr-cloud-entrypoint.sh
+# Image-owned configset fallback for Docker-in-Docker CI where host bind mounts can be empty.
+COPY --chown=solr:solr eLeDia-config/ /opt/solr/eledia-config-image/
 # security.json template — used by entrypoint to generate initial security.json
 # on first start when the volume is empty (replaces the former init container).
 COPY --chown=solr:solr security.json.template /opt/solr/security.json.template

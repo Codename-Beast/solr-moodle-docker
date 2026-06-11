@@ -69,6 +69,7 @@ feature-full-test:
     - cp -f .env.example .env
     - sed -i 's/^SOLR_MODE=.*/SOLR_MODE=solrcloud/' .env || true
     - sed -i 's/^INSTANCE_NAME=.*/INSTANCE_NAME=solr/' .env || true
+    - sed -i 's#^TENANTS_ENV=.*#TENANTS_ENV=/var/solr/data/tenants.env#' .env || echo 'TENANTS_ENV=/var/solr/data/tenants.env' >> .env
     - sed -i "s/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=$(openssl rand -hex 20)/" .env
     - sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=$(openssl rand -hex 20)/" .env
     - touch tenants.env

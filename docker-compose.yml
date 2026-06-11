@@ -86,6 +86,8 @@ services:
       SOLR_JETTY_GRACEFUL: ${SOLR_JETTY_GRACEFUL:-true}
       SOLR_LOGS_REQUESTLOG_ENABLED: ${SOLR_LOGS_REQUESTLOG_ENABLED:-false}
       SOLR_SECURITY_MANAGER_ENABLED: ${SOLR_SECURITY_MANAGER_ENABLED:-false}
+      # Tenant SOT path override for Docker-in-Docker CI where file bind mounts are not reliable.
+      TENANTS_ENV: ${TENANTS_ENV:-/opt/solr/tenants.env}
       SOLR_OPTS: >-
         -XX:-UseLargePages
         -Dsolr.usage.analytics.enabled=false

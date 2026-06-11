@@ -112,7 +112,7 @@ security_tests() {
 
     # tenants.env accessible in container
     print_test "tenants.env accessible in container"
-    if docker exec "$SOLR_CONTAINER" test -f /opt/solr/tenants.env 2>/dev/null; then
+    if docker exec "$SOLR_CONTAINER" sh -lc 'test -f "${TENANTS_ENV:-/opt/solr/tenants.env}"' 2>/dev/null; then
         print_pass "tenants.env accessible in container"
     else
         print_fail "tenants.env not accessible in container"

@@ -164,7 +164,7 @@ solrcloud_tests() {
     fi
 
     local CLOUD_PASS
-    CLOUD_PASS="$(docker exec "$container" sh -lc "grep '^TENANT_${cloud_tenant}_PASS=' /opt/solr/tenants.env | tail -n1 | cut -d= -f2")"
+    CLOUD_PASS="$(docker exec "$container" sh -lc 'grep "^TENANT_'"${cloud_tenant}"'_PASS=" "${TENANTS_ENV:-/opt/solr/tenants.env}" | tail -n1 | cut -d= -f2')"
 
     # Verify collection exists via Collections API
     print_test "Collection exists in ZooKeeper via Collections API"

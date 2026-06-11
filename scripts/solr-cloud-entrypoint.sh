@@ -254,17 +254,24 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   schema_designer_guardrails_hint
 
   # Upload eLeDia-moodle-tenant configset to ZooKeeper so Collections API can use it.
-  # Configset source: bind-mounted from ./eLeDia-config at /opt/solr/eledia-config
-  # Fallback chain: eledia-config mount -> data/configsets/eLeDia-moodle-tenant -> legacy moodle-tenant
-  if [ -d "/opt/solr/eledia-config" ]; then
+  # Configset source: bind-mounted from ./eLeDia-config at /opt/solr/eledia-config.
+  # Docker-in-Docker CI may create an empty host bind directory, so require solrconfig.xml
+  # before accepting the bind mount and otherwise use the image-owned fallback.
+  # Fallback chain: valid eledia-config mount -> image fallback -> data/configsets/eLeDia-moodle-tenant -> legacy moodle-tenant
+  if [ -f "/opt/solr/eledia-config/solrconfig.xml" ]; then
     local_conf_dir="/opt/solr/eledia-config"
+  elif [ -f "/opt/solr/eledia-config/conf/solrconfig.xml" ]; then
+    local_conf_dir="/opt/solr/eledia-config/conf"
+  elif [ -f "/opt/solr/eledia-config-image/solrconfig.xml" ]; then
+    log "WARN: bind-mounted eLeDia configset missing or empty; using image-owned configset fallback"
+    local_conf_dir="/opt/solr/eledia-config-image"
   elif [ -d "/var/solr/data/configsets/eLeDia-moodle-tenant/conf" ]; then
     local_conf_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
   elif [ -d "/var/solr/data/configsets/moodle-tenant/conf" ]; then
     log "WARN: falling back to legacy moodle-tenant configset path"
     local_conf_dir="/var/solr/data/configsets/moodle-tenant/conf"
   else
-    log "ERROR: no configset source found — checked /opt/solr/eledia-config, /var/solr/data/configsets/eLeDia-moodle-tenant/conf"
+    log "ERROR: no configset source found — checked /opt/solr/eledia-config, /opt/solr/eledia-config-image, /var/solr/data/configsets/eLeDia-moodle-tenant/conf"
     exit 1
   fi
   log "Uploading eLeDia-moodle-tenant configset to ZooKeeper ${ZK_HOST} from ${local_conf_dir}"
