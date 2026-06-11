@@ -257,10 +257,10 @@ integration_tests() {
     docker compose up -d >/dev/null 2>&1
     wait_for_solr_ready "TESTPASS999" || true
 
-    if docker compose logs eLeDia-solr-init 2>&1 | grep -q "security.json written"; then
-        print_pass "security.json regenerated on config change"
+    if wait_for_solr_ready "TESTPASS999"; then
+        print_pass "security.json regenerated and new admin password works"
     else
-        print_fail "security.json not regenerated"
+        print_fail "security.json not regenerated or new admin password did not become active"
     fi
 
     # Atomic restore of original .env

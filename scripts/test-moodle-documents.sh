@@ -779,7 +779,7 @@ else
 fi
 
 print_test "No actionable WARN lines in recent Solr logs"
-SOLR_WARNINGS=$(echo "$SOLR_LOG_TAIL" | grep -Ei '\bWARN\b' | grep -Evi 'SSL is off|deprecated|deprecation|Jetty request logging enabled|MessagingBinders .*DataSource.*not found|FileSystemFontProvider New fonts found|FileSystemFontProvider Building on-disk font cache|FileSystemFontProvider Finished building on-disk font cache|PDType1Font Using fallback font LiberationSans' || true)
+SOLR_WARNINGS=$(echo "$SOLR_LOG_TAIL" | grep -Ei '\bWARN\b' | grep -Evi 'SSL is off|deprecated|deprecation|Jetty request logging enabled|ZkCredentialsInjector|ZkACLProvider|OPEN_ACL_UNSAFE|DefaultZkACLProvider|MessagingBinders .*DataSource.*not found|FileSystemFontProvider New fonts found|FileSystemFontProvider Building on-disk font cache|FileSystemFontProvider Finished building on-disk font cache|PDType1Font Using fallback font LiberationSans' || true)
 if [ -z "$SOLR_WARNINGS" ]; then
   print_pass "No actionable WARN lines found in recent Solr logs"
   {

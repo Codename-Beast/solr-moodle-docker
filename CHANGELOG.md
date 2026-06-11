@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Moodle document test result parsing now uses a machine-readable `RESULTS:total=...;passed=...;failed=...` summary line.
 - Trivy now remains fail-closed for new CRITICAL findings while documenting accepted upstream Solr bundled Java dependency CVEs in `.trivyignore`.
 - GitLab Docker-in-Docker CI now tolerates runner host bind-mount limitations by using an image-owned configset fallback and a container-local tenant SOT path.
+- CI password-rotation and Moodle log-health checks now assert runtime behavior directly and ignore known Solr ZooKeeper ACL bootstrap warnings.
 - Moodle readiness now works for tenant users in both `SOLR_MODE=solrcloud` and `SOLR_MODE=standalone`; tenant read ACLs include Moodle's Solr system-read path while keeping broad admin-only fallback permissions last.
 - Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` starts reliably instead of failing Solr's root-user guard.
 - Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module-level counter resets.
