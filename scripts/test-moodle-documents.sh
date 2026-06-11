@@ -831,6 +831,7 @@ echo -e "${RED}${BOLD}Failed:${NC}         $TESTS_FAILED"
 echo ""
 echo -e "${BOLD}Documents:${NC}      $DOCS_INDEXED indexed"
 echo ""
+echo "RESULTS:total=${TOTAL_ASSERTIONS};passed=${TESTS_PASSED};failed=${TESTS_FAILED}"
 
 if [ "$TESTS_FAILED" -eq 0 ]; then
   SUCCESS_RATE=100

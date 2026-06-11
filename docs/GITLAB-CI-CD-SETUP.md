@@ -77,8 +77,7 @@ oder `CI_RUNNER_TAG` korrekt setzen.
 ```
 
 **Timeout (10 Minuten):**
-Die GitLab CI führt nur `--unit-only` Tests aus.
-Für vollständige Tests → GitHub Actions oder lokal.
+Die GitLab CI führt die SolrCloud-Suite mit `--cloud --no-performance --no-cleanup` aus. Performance-/Lasttests sind im 10-Minuten-Fenster bewusst deaktiviert; vollständige Läufe inklusive Performance laufen lokal.
 
 **"docker compose: command not found":**
 ```yaml

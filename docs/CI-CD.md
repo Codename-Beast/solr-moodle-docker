@@ -7,7 +7,7 @@ Workflow: [.github/workflows/solr-testing.yml](../.github/workflows/solr-testing
 Läuft automatisch bei Push auf `feature/*` und `release*`, sowie bei PRs gegen `main`.
 
 Manueller Start:
-- GitHub: `workflow_dispatch` in `solr-testing.yml` (voller Lauf, kein separater Speed-Modus).
+- GitHub: `workflow_dispatch` in `solr-testing.yml` (Standalone + SolrCloud; Performance-Tests sind in CI deaktiviert, damit Shared Runner nicht flaken).
 - GitLab: Pipeline auf Branch `release*` oder `feature/*` starten.
 
 ### Pipeline-Stages
@@ -37,6 +37,7 @@ Manueller Start:
 - Echte Collection-Level-Isolation (403 ohne Proxy)
 - Moodle-Dokument indexieren + Neustart-Persistenz
 - Tika `/update/extract` im SolrCloud-Modus
+- Drift-Detection/-Remediation und Permission-Ordering (`all` als letzte Permission)
 
 ---
 
@@ -64,7 +65,7 @@ Anforderungen:
 | Stage | Jobs |
 |-------|------|
 | lint | shellcheck, docker compose config, bash -n |
-| test | feature-full-test (unit-only im 10min-Limit) |
+| test | feature-full-test (`--cloud --no-performance --no-cleanup` im 10min-Limit) |
 
 ---
 
@@ -86,7 +87,10 @@ docker compose up -d --build
 # Moodle-Dokument-Indexierung
 ./scripts/test-moodle-documents.sh
 
-# Alles
+# Alles ohne flake-anfällige Performance-Checks
+./scripts/run-tests.sh --no-performance
+
+# Voller lokaler Lauf inklusive Performance-Checks
 ./scripts/run-tests.sh
 
 # Aufräumen

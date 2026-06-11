@@ -25,10 +25,17 @@ moodle_document_tests() {
 
     # Run the moodle document test script against the integration test core
     if SOLR_CORE_NAME="${SOLR_CORE_NAME}" bash scripts/test-moodle-documents.sh 2>&1 | tee /tmp/moodle-test-output.log | tail -20; then
-        # Extract test results from output
-        MOODLE_TESTS=$(grep "Total Tests:" /tmp/moodle-test-output.log | awk '{print $3}' || echo "0")
-        MOODLE_PASSED=$(grep "Passed:" /tmp/moodle-test-output.log | awk '{print $2}' || echo "0")
-        MOODLE_FAILED=$(grep "Failed:" /tmp/moodle-test-output.log | awk '{print $2}' || echo "0")
+        # Extract machine-readable test results from output
+        RESULTS_LINE=$(grep '^RESULTS:' /tmp/moodle-test-output.log | tail -n1 || true)
+        if [ -n "$RESULTS_LINE" ]; then
+            MOODLE_TESTS=$(echo "$RESULTS_LINE" | sed -n 's/.*total=\([0-9][0-9]*\).*/\1/p')
+            MOODLE_PASSED=$(echo "$RESULTS_LINE" | sed -n 's/.*passed=\([0-9][0-9]*\).*/\1/p')
+            MOODLE_FAILED=$(echo "$RESULTS_LINE" | sed -n 's/.*failed=\([0-9][0-9]*\).*/\1/p')
+        else
+            MOODLE_TESTS=0
+            MOODLE_PASSED=0
+            MOODLE_FAILED=1
+        fi
 
         # Update global counters
         ((TESTS_TOTAL += MOODLE_TESTS))
@@ -249,6 +256,57 @@ solrcloud_tests() {
         print_pass "Tenant credentials persist after restart (HTTP 200)"
     else
         print_fail "Tenant authentication failed after restart (HTTP $auth_code)"
+    fi
+
+    # Permission ordering is security-critical: RuleBasedAuthorizationPlugin
+    # evaluates first-match wins, so broad fallback 'all' must stay last.
+    print_test "Authorization fallback permission 'all' is last"
+    local last_permission
+    last_permission=$(curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/authorization" \
+        | jq -r '.authorization.permissions[-1].name // empty' 2>/dev/null || true)
+    if [ "$last_permission" = "all" ]; then
+        print_pass "Authorization permission ordering keeps 'all' last"
+    else
+        print_fail "Authorization permission ordering broken: last permission is '${last_permission}'"
+    fi
+
+    # Drift detection/remediation: add one unmanaged runtime user manually,
+    # verify drift-detect reports it, drift-remediate rotates it, and the known
+    # tenant user remains usable.
+    local unmanaged_user unmanaged_pass drift_out drift_rc old_code known_code
+    unmanaged_user="unmanaged_ci_drift_${RANDOM}"
+    unmanaged_pass="UnmanagedDriftPass123_${RANDOM}"
+
+    print_test "drift-detect reports unmanaged runtime user"
+    curl -s -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+        -H 'Content-Type: application/json' \
+        -X POST "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/authentication" \
+        --data "{\"set-user\":{\"${unmanaged_user}\":\"${unmanaged_pass}\"}}" >/dev/null
+    drift_out=$($tenant_cmd drift-detect 2>&1)
+    drift_rc=$?
+    if [ "$drift_rc" -ne 0 ] && echo "$drift_out" | grep -q "UNMANAGED_RUNTIME_USER: ${unmanaged_user}"; then
+        print_pass "drift-detect found unmanaged runtime user ${unmanaged_user}"
+    else
+        print_fail "drift-detect did not report unmanaged runtime user ${unmanaged_user}"
+        echo "$drift_out"
+    fi
+
+    print_test "drift-remediate rotates unmanaged user and preserves known tenant user"
+    if $tenant_cmd drift-remediate >/tmp/_drift_remediate 2>&1; then
+        old_code=$(curl -so /dev/null -w '%{http_code}' -u "${unmanaged_user}:${unmanaged_pass}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" 2>/dev/null)
+        known_code=$(curl -so /dev/null -w '%{http_code}' -u "${cloud_user}:${CLOUD_PASS}" \
+            "http://${SOLR_HOST}:${SOLR_PORT}/solr/${cloud_collection}/select?q=*:*&rows=0&wt=json" 2>/dev/null)
+        if [ "$old_code" = "401" ] && [ "$known_code" = "200" ]; then
+            print_pass "drift-remediate rotated unmanaged user and preserved tenant credentials"
+        else
+            print_fail "drift-remediate result unexpected (unmanaged old pass HTTP $old_code, known tenant HTTP $known_code)"
+            cat /tmp/_drift_remediate || true
+        fi
+    else
+        print_fail "drift-remediate failed"
+        cat /tmp/_drift_remediate || true
     fi
 
     # Cleanup

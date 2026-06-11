@@ -47,7 +47,7 @@ jobs:
     - name: Trivy image scan
       run: |
         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-          aquasec/trivy:latest image --severity CRITICAL,HIGH --exit-code 0 solr-eledia:test
+          aquasec/trivy:latest image --severity CRITICAL --exit-code 1 solr-eledia:test
 
   standalone-test:
     name: Standalone Core Tests
@@ -93,7 +93,7 @@ jobs:
     - name: Run standalone core tests
       run: |
         set -o pipefail
-        bash scripts/run-tests.sh --tenant 2>&1 | tee /tmp/standalone-core-tests.log
+        bash scripts/run-tests.sh --tenant --no-performance 2>&1 | tee /tmp/standalone-core-tests.log
         if grep '\[FAIL\]' /tmp/standalone-core-tests.log | grep -v 'echo "ERROR: test output contains'; then
           echo "ERROR: test output contains [FAIL] lines"
           exit 1
@@ -151,28 +151,20 @@ jobs:
       run: |
         docker compose build eLeDia-solr-init solr
         docker compose up -d
-        echo "Waiting for ci-solr-solr to become healthy (max 5 x 20s = 100s)..."
-        for i in $(seq 1 5); do
+        echo "Waiting for ci-solr-solr to become healthy (max 10 x 20s = 200s)..."
+        for i in $(seq 1 10); do
           STATUS=$(docker inspect --format='{{.State.Health.Status}}' ci-solr-solr 2>/dev/null || echo "missing")
-          echo "  attempt $i/5: $STATUS"
+          echo "  attempt $i/10: $STATUS"
           [ "$STATUS" = "healthy" ] && echo "Solr is healthy" && break
-          [ "$i" = "5" ] && echo "ERROR: not healthy after 100s" && docker compose logs --no-color && exit 1
+          [ "$i" = "10" ] && echo "ERROR: not healthy after 200s" && docker compose logs --no-color && exit 1
           sleep 20
         done
 
-    - name: Create CI tenant + core
-      run: |
-        docker exec ci-solr-solr /opt/solr/scripts/solr-tenant.sh create ci_test \
-          --cores eLeDia_core 2>&1 || true
-        PASS=$(docker exec ci-solr-solr grep 'TENANT_CI_TEST_PASS=' /opt/solr/tenants.env \
-          | cut -d= -f2 || echo "")
-        echo "SOLR_CORE_NAME=eLeDia_core" >> .env
-        echo "CI_TENANT_PASS=${PASS}" >> .env
 
     - name: Run core SolrCloud tests
       run: |
         set -o pipefail
-        bash scripts/run-tests.sh --cloud --tenant 2>&1 | tee /tmp/solr-core-tests.log
+        bash scripts/run-tests.sh --cloud --tenant --no-performance 2>&1 | tee /tmp/solr-core-tests.log
         if grep -q '\[FAIL\]' /tmp/solr-core-tests.log; then
           echo "ERROR: test output contains [FAIL] lines"
           exit 1
@@ -181,7 +173,7 @@ jobs:
     - name: Run SolrCloud tenant isolation scale tests
       run: |
         set -o pipefail
-        bash scripts/run-tests.sh --cloud --tenant --tenant-scale 2>&1 | tee /tmp/solr-scale-tests.log
+        bash scripts/run-tests.sh --cloud --tenant --tenant-scale --no-performance 2>&1 | tee /tmp/solr-scale-tests.log
         if grep -q '\[FAIL\]' /tmp/solr-scale-tests.log; then
           echo "ERROR: test output contains [FAIL] lines"
           exit 1

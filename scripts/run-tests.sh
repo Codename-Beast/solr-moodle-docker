@@ -15,61 +15,6 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/test-lib.sh"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-BOLD='\033[1m'
-
-# Test counters
-TESTS_TOTAL=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-TESTS_SKIPPED=0
-declare -a FAILED_TESTS
-
-# Get dynamic container names from .env or fallback
-if [ -f ".env" ]; then
-    source .env
-fi
-INSTANCE_NAME="${INSTANCE_NAME:-solr}"
-SOLR_CONTAINER="${INSTANCE_NAME}-solr"
-INIT_CONTAINER="${INSTANCE_NAME}-eLeDia-solr-init"
-SOLR_HOST="127.0.0.1"
-SOLR_PORT="${SOLR_PORT:-8983}"
-SOLR_CORE_NAME="${SOLR_CORE_NAME:-eLeDia_core}"
-SOLR_MODE="${SOLR_MODE:-}"
-
-if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
-    echo "ERROR: SOLR_HEAP='${SOLR_HEAP:-}' ist ungueltig. Erwartet z.B. 2g oder 1024m." >&2
-    exit 1
-fi
-
-LOG_ROOT="${LOG_ROOT:-/var/log/solr/instances/${SOLR_CONTAINER}}"
-RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
-if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
-    LOG_ROOT="/tmp/eledia-logs"
-    RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
-    mkdir -p "${LOG_ROOT}" || {
-        echo "ERROR: cannot create fallback log dir ${LOG_ROOT}." >&2
-        exit 1
-    }
-    echo "WARN: using fallback LOG_ROOT=${LOG_ROOT}" >&2
-fi
-if ! touch "${RUN_LOG_FILE}" 2>/dev/null; then
-    LOG_ROOT="/tmp/eledia-logs"
-    RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
-    mkdir -p "${LOG_ROOT}" || true
-    touch "${RUN_LOG_FILE}" || {
-        echo "ERROR: cannot write log file ${RUN_LOG_FILE}." >&2
-        exit 1
-    }
-    echo "WARN: switched log output to ${RUN_LOG_FILE}" >&2
-fi
-exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
-
 # Parse arguments
 RUN_UNIT=1
 RUN_INTEGRATION=1
@@ -106,6 +51,7 @@ while [[ $# -gt 0 ]]; do
             RUN_NEGATIVE=0; RUN_PERFORMANCE=0; RUN_CLEANUP=0
             shift ;;
         --no-cleanup)     RUN_CLEANUP=0; shift ;;
+        --no-performance) RUN_PERFORMANCE=0; shift ;;
         --tenant)         RUN_TENANT=1; shift ;;
         --tenant-scale)   RUN_TENANT=1; RUN_TENANT_SCALE=1; shift ;;
         --cloud|--solrcloud) RUN_CLOUD=1; SOLR_MODE=solrcloud; shift ;;
@@ -120,6 +66,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --negative-only      Run only negative tests"
             echo "  --moodle-only        Run only Moodle document tests"
             echo "  --no-cleanup         Skip cleanup tests"
+            echo "  --no-performance     Skip timing/load performance tests"
             echo "  --tenant             Run multi-tenant isolation tests"
             echo "  --tenant-scale       Run tenant scale test (30 tenants/cores/users)"
             echo "  --cloud              Run SolrCloud-specific tests"

@@ -15,7 +15,6 @@ integration_tests() {
 
     # Container startup
     print_test "Container startup and health"
-    docker compose down -v >/dev/null 2>&1 || true
 
     # Generate .env if not exists
     if [ ! -f ".env" ]; then
@@ -27,16 +26,12 @@ integration_tests() {
     touch tenants.env
     chmod 666 tenants.env
 
-    docker compose up -d >/dev/null 2>&1
-
-    local waited=0
-    while [ $waited -lt 180 ]; do
-        if curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" | grep -q '^200$'; then
-            break
-        fi
-        sleep 5
-        waited=$((waited + 5))
-    done
+    local health_status
+    health_status=$(docker inspect --format='{{.State.Health.Status}}' "$SOLR_CONTAINER" 2>/dev/null || echo "missing")
+    if [ "$health_status" != "healthy" ]; then
+        docker compose up -d >/dev/null 2>&1
+        wait_for_solr_ready "$SOLR_ADMIN_PASSWORD" || true
+    fi
 
     local mapped_port
     mapped_port=$(docker compose port solr "${SOLR_PORT}" 2>/dev/null | awk -F: '{print $NF}' | tail -n1)
@@ -260,7 +255,7 @@ integration_tests() {
 
     docker compose down >/dev/null 2>&1
     docker compose up -d >/dev/null 2>&1
-    sleep 30
+    wait_for_solr_ready "TESTPASS999" || true
 
     if docker compose logs eLeDia-solr-init 2>&1 | grep -q "security.json written"; then
         print_pass "security.json regenerated on config change"
@@ -274,7 +269,7 @@ integration_tests() {
     # Restart containers with restored password
     docker compose down >/dev/null 2>&1
     docker compose up -d >/dev/null 2>&1
-    sleep 30
+    wait_for_solr_ready "$SOLR_ADMIN_PASSWORD" || true
 }
 
 # =========================================

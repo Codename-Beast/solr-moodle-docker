@@ -4,7 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.4.7] - 2026-06-12
+
 ### Fixed
+- GitLab CI branch rules now match numbered feature branches such as `feature/3.4.6` as well as legacy `feature/v*` names.
+- Removed the dead GitHub Actions CI tenant pre-step and centralized tenant creation in the runtime test harness.
+- `scripts/run-tests.sh` now delegates all logging/env/counter setup to `scripts/test-lib.sh`, eliminating duplicate tee logging and duplicated bootstrap state.
+- Moodle `/admin/system` security test now honors `${SOLR_PORT}` instead of hardcoding `8983`.
+- CI no longer runs timing/load performance assertions on shared runners; local performance tests remain available and degrade to warnings when `CI` is set.
+- SolrCloud tests now assert drift-detect/drift-remediate behavior and verify that fallback permission `all` is the last authorization rule.
+- Moodle document test result parsing now uses a machine-readable `RESULTS:total=...;passed=...;failed=...` summary line.
 - Moodle readiness now works for tenant users in both `SOLR_MODE=solrcloud` and `SOLR_MODE=standalone`; tenant read ACLs include Moodle's Solr system-read path while keeping broad admin-only fallback permissions last.
 - Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` starts reliably instead of failing Solr's root-user guard.
 - Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module-level counter resets.
@@ -16,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - `scripts/test-moodle-documents.sh`: Solr log baseline is recalculated after setup actions (core/collection ensure) so startup/setup error lines do not pollute the final actionable log healthcheck.
 
 ### Changed
+- GitLab/GitHub CI documentation now matches the current pipelines and no longer documents the removed mode-switch CI job or obsolete unit-only GitLab lane.
 - Unit/static test execution no longer requires a local `.env`, allowing fresh-checkout CI and developer sanity checks to run before runtime secrets are generated.
 
 ## [3.4.6] - 2026-05-30
