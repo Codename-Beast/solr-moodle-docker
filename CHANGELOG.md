@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
-- Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` no longer restart-loops with Solr's root-user guard.
-- GitHub Actions now includes a dedicated `SOLR_MODE=standalone` core/tenant test lane, so both Core-only and SolrCloud modes are covered on feature branches.
-- Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module loads.
+- Moodle readiness now works for tenant users in both `SOLR_MODE=solrcloud` and `SOLR_MODE=standalone`; tenant read ACLs include Moodle's Solr system-read path while keeping broad admin-only fallback permissions last.
+- Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` starts reliably instead of failing Solr's root-user guard.
+- Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module-level counter resets.
+
 - GitHub Actions SolrCloud test steps now fail closed when test output contains `[FAIL]`, even if a future harness regression would otherwise return a green exit status.
 
 - `scripts/solr-tenant-cmd.sh`: drift detection reads `tenants.env` once before iterating, avoiding same-file read/write pipeline hazards and ShellCheck SC2094/SC2143 findings.

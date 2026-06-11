@@ -19,10 +19,10 @@
       { "name": "update",           "role": ["admin", "moodle"] },
       { "name": "config-read",      "role": ["admin", "support", "moodle"] },
       { "name": "metrics-read",     "role": ["admin", "support", "moodle"] },
+      { "name": "core-system-read", "role": ["admin", "support", "moodle", "tenant"],
+        "path": ["/admin/system", "/admin/system/", "/solr/*/admin/system", "/solr/*/admin/system/"] },
       { "name": "core-admin-read",  "role": ["admin", "support", "moodle"] },
       { "name": "core-admin-edit",  "role": ["admin"] },
-      { "name": "core-system-read", "role": ["admin", "support", "moodle"],
-        "path": ["/admin/system", "/admin/system/", "/solr/*/admin/system", "/solr/*/admin/system/"] },
       { "name": "all",              "role": "admin" }
     ],
     "user-role": {

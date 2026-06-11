@@ -60,14 +60,14 @@
   <field name="description1" type="text_general" indexed="true" stored="true" multiValued="false"/>
   <field name="description2" type="text_general" indexed="true" stored="true" multiValued="false"/>
 
-  <!-- Moodle context ID — plong: contextid exceeds pint range in large Moodle installations -->
-  <field name="contextid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
+  <!-- Moodle context ID — Moodle search_solr expects int -> pint for schema validation -->
+  <field name="contextid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- Moodle course ID -->
-  <field name="courseid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
+  <field name="courseid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- Owner user ID -->
-  <field name="owneruserid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
+  <field name="owneruserid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- Modification timestamp (required) -->
   <field name="modified" type="pdate" indexed="true" stored="true" required="true" multiValued="false"/>
@@ -79,17 +79,17 @@
   <field name="areaid" type="string" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- Moodle item ID -->
-  <field name="itemid" type="plong" indexed="true" stored="true" required="true" multiValued="false"/>
+  <field name="itemid" type="pint" indexed="true" stored="true" required="true" multiValued="false"/>
 
   <!-- ===============================
        Moodle Optional Fields
   ================================== -->
 
   <!-- User ID -->
-  <field name="userid" type="plong" indexed="true" stored="true" multiValued="false"/>
+  <field name="userid" type="pint" indexed="true" stored="true" multiValued="false"/>
 
   <!-- Group ID -->
-  <field name="groupid" type="plong" indexed="true" stored="true" multiValued="false"/>
+  <field name="groupid" type="pint" indexed="true" stored="true" multiValued="false"/>
 
   <!-- Introduction/Summary -->
   <field name="intro" type="text_general" indexed="true" stored="true" multiValued="false"/>

@@ -323,6 +323,18 @@ tenant_tests() {
         print_fail "Tenant access to own core failed (HTTP $r)"
     fi
 
+    # Moodle search_solr calls SolrClient::system(), which hits the core-level
+    # /admin/system endpoint. Tenant read permissions must allow this path, or
+    # Moodle's server readiness/UI status is red even when /select works.
+    print_test "solr_schule_a can access /moodle_prod_a/admin/system (200)"
+    r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \
+        "http://${SOLR_HOST}:${SOLR_PORT}/solr/moodle_prod_a/admin/system?wt=json" 2>/dev/null)
+    if [ "$r" = "200" ]; then
+        print_pass "Moodle SolrClient::system() path allowed for tenant (HTTP 200)"
+    else
+        print_fail "Moodle SolrClient::system() path blocked for tenant (HTTP $r — expected 200)"
+    fi
+
     # Tenant blocked from admin API
     print_test "solr_schule_a CANNOT access /admin/cores (403)"
     r=$(curl -so /dev/null -w '%{http_code}' -u "solr_schule_a:${PASS_A}" \

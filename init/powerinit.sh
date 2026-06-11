@@ -361,6 +361,15 @@ sed \
   -e "s|__SUPPORT_HASH__|${SUPPORT_HASH}|g" \
   "$TEMPLATE" > "$TMP_SEC"
 
+# Template contains the fallback `all` permission for the static baseline. Remove
+# it before adding dynamic Moodle/tenant permissions and append it exactly once
+# at the end after all specific rules. Solr evaluates permissions in order; an
+# early `all` rule shadows later tenant permissions.
+TMP2="$(mktemp)"
+chmod 600 "$TMP2"
+jq '(.authorization.permissions) |= map(select(.name != "all"))' "$TMP_SEC" > "$TMP2"
+mv "$TMP2" "$TMP_SEC"
+
 # Legacy moodle user (backward compatibility — used when system_type=moodle)
 MOODLE_USER="${SOLR_MOODLE_USER:-}"
 MOODLE_PASS="${SOLR_MOODLE_PASSWORD:-}"
@@ -389,7 +398,7 @@ if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
       "name": "moodle-core-read",
       "role": ["admin","support","moodle"],
       "collection": [$c],
-      "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+      "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
     }]' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 
@@ -439,7 +448,11 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
   TMP2="$(mktemp)"
   chmod 600 "$TMP2"
   jq --arg u "$user" --arg r "$role" \
-    '.authorization["user-role"][$u] = $r' "$TMP_SEC" > "$TMP2"
+    'if $r == "tenant" then
+       .authorization["user-role"][$u] = $r
+     else
+       .authorization["user-role"][$u] = ["tenant", $r]
+     end' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 
   if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
@@ -454,7 +467,7 @@ for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do
           "name": $n,
           "role": ["admin","support",$r],
           "collection": [$c],
-          "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+          "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
         }]' "$TMP_SEC" > "$TMP2"
       mv "$TMP2" "$TMP_SEC"
 
@@ -478,7 +491,7 @@ if [ "${SOLR_MODE:-}" != "solrcloud" ] && [ "$TENANT_COUNT" -gt 0 ]; then
   jq '.authorization.permissions += [{
     "name": "tenant-read",
     "role": ["admin","support","tenant"],
-    "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+    "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
   }]' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 
@@ -511,6 +524,11 @@ if ! jq . "$TMP_SEC" > /dev/null 2>&1; then
   rm -f "$TMP_SEC"
   exit 1
 fi
+
+TMP2="$(mktemp)"
+chmod 600 "$TMP2"
+jq '.authorization.permissions += [{"name":"all","role":"admin"}]' "$TMP_SEC" > "$TMP2"
+mv "$TMP2" "$TMP_SEC"
 
 mv "$TMP_SEC" "${DATA_DIR}/security.json"
 chmod 600 "${DATA_DIR}/security.json"

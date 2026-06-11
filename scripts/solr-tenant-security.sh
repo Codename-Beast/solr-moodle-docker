@@ -63,8 +63,10 @@ _block_user() {
   _cloud_auth_api "$payload"
 }
 
-# _write_user_role: Assign a Solr authorization role to a user via the Security API.
-# Role must be a string (not array) — the Security API stores it as-is for role matching.
+# _write_user_role: Assign Solr authorization roles to a user via the Security API.
+# SolrCloud tenants get both a shared `tenant` role for Moodle's core-level
+# /admin/system readiness check and their tenant-specific role for collection
+# isolation. Standalone uses the shared `tenant` role only.
 # Args: $1 - Solr username, $2 - role name (e.g. "tenant" or "tenant-schule_a")
 # Returns: 0 on success, 1 on API failure
 
@@ -74,9 +76,11 @@ _write_user_role() {
   _log "INFO" "Writing user-role: '$user' -> '$role'"
   if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would assign role: %s -> %s\n' "$user" "$role"; return 0; fi
   local payload
-  # Role must be a string, not an array — Solr Security API stores it as-is.
-  # Using [$r] (array) causes role-matching failures in authorization checks.
-  payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): $r}}')"
+  if [ "$role" = "tenant" ]; then
+    payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): $r}}')"
+  else
+    payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): ["tenant", $r]}}')"
+  fi
   _cloud_authz_api "$payload"
 }
 
@@ -101,7 +105,7 @@ _add_permission() {
         "name": $n,
         "role": ["admin","support",$r],
         "collection": [$c],
-        "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+        "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
       }}')"
     _cloud_authz_api "$read_payload" || return 1
 
@@ -116,7 +120,7 @@ _add_permission() {
   else
     _log "INFO" "Ensuring standalone shared tenant-read and tenant-write permissions"
     local read_payload write_payload
-    read_payload='{"set-permission": {"name": "tenant-read", "role": ["admin","support","tenant"], "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]}}'
+    read_payload='{"set-permission": {"name": "tenant-read", "role": ["admin","support","tenant"], "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]}}'
     _cloud_authz_api "$read_payload"
     write_payload='{"set-permission": {"name": "tenant-write", "role": ["admin","tenant"], "path": ["/update","/update/extract"]}}'
     _cloud_authz_api "$write_payload"
@@ -165,7 +169,7 @@ _rebuild_tenant_permissions() {
           "name": $n,
           "role": ["admin","support",$r],
           "collection": [$col],
-          "path": ["/select","/admin/ping","/schema","/schema/*","/replication"]
+          "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
         }}')"
       _cloud_authz_api "$read_payload" || return 1
 
