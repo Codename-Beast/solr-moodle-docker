@@ -110,6 +110,21 @@ echo -e "${NC}"
 [ $RUN_MODE_SWITCH -eq 1 ] && { source "${SCRIPT_DIR}/test-moodle.sh"; mode_switch_tests; }
 [ $RUN_CLEANUP -eq 1 ] && { source "${SCRIPT_DIR}/test-moodle.sh"; cleanup_tests; }
 
+# Backfill the failed-test list from the run log if a sourced test emitted a
+# raw [FAIL] line without using the shared print_fail implementation. This keeps
+# the summary honest and prevents hidden failures in CI output.
+if [ "$TESTS_FAILED" -gt "${#FAILED_TESTS[@]}" ] && [ -f "$RUN_LOG_FILE" ]; then
+    while IFS= read -r fail_line; do
+        fail_msg="$(printf '%s\n' "$fail_line" | sed -E 's/.*\[FAIL\][[:space:]]*//')"
+        [ -n "$fail_msg" ] || continue
+        duplicate=0
+        for existing in "${FAILED_TESTS[@]}"; do
+            [ "$existing" = "$fail_msg" ] && duplicate=1 && break
+        done
+        [ "$duplicate" -eq 0 ] && FAILED_TESTS+=("$fail_msg")
+    done < <(grep -E '\[FAIL\]' "$RUN_LOG_FILE" || true)
+fi
+
 # Print summary
 print_header "TEST SUMMARY"
 echo -e "${BOLD}Total Tests:${NC}   $TESTS_TOTAL"
