@@ -46,8 +46,12 @@ jobs:
       run: docker build -f Dockerfile.solr -t solr-eledia:test --build-arg SOLR_VERSION=9.10.1 .
     - name: Trivy image scan
       run: |
+        # Fail closed for new CRITICAL findings. Accepted upstream Solr bundled
+        # Java dependency findings are documented in .trivyignore.
         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-          aquasec/trivy:latest image --severity CRITICAL --exit-code 1 solr-eledia:test
+          -v "${PWD}/.trivyignore:/workspace/.trivyignore:ro" \
+          aquasec/trivy:latest image --ignorefile /workspace/.trivyignore \
+          --severity CRITICAL --exit-code 1 solr-eledia:test
 
   standalone-test:
     name: Standalone Core Tests

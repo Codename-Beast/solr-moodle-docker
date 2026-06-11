@@ -1,0 +1,9 @@
+# Accepted upstream Solr 9.10.1 bundled Java dependency findings.
+# Keep Trivy fail-closed for new/unknown CRITICAL findings via --exit-code 1,
+# but do not block CI on these currently non-remediable jars in the upstream Solr image.
+# Revisit when bumping SOLR_VERSION or when Solr publishes updated bundled dependencies.
+CVE-2024-47561
+CVE-2025-54988
+CVE-2025-66516
+CVE-2026-40682
+CVE-2026-42027
