@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Init bootstrap also uses image-owned config fallbacks and the configured tenant SOT path when GitLab Docker socket runners cannot provide file bind mounts.
 - GitLab `feature-full-test` now has a 30-minute timeout so the real SolrCloud suite is not killed at the former 10-minute runner limit.
 - Test summaries now backfill unlisted raw `[FAIL]` lines from the run log, so a visible failure can no longer be omitted from the failed-test list.
+- The admin `.env` password restart-rotation test now runs only outside SolrCloud; SolrCloud keeps active security in ZooKeeper and is covered by drift/remediation tests instead.
 - Moodle readiness now works for tenant users in both `SOLR_MODE=solrcloud` and `SOLR_MODE=standalone`; tenant read ACLs include Moodle's Solr system-read path while keeping broad admin-only fallback permissions last.
 - Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` starts reliably instead of failing Solr's root-user guard.
 - Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module-level counter resets.

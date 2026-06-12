@@ -245,8 +245,17 @@ integration_tests() {
         cat /tmp/_tenant_enable || true
     fi
 
-    #Password change detection
+    # Password change detection
+    # In SolrCloud, active security is stored in ZooKeeper. Replacing .env and
+    # restarting without deleting volumes must not be treated as an immediate
+    # admin password rotation path; runtime drift/credential behavior is covered
+    # by the dedicated SolrCloud drift tests.
     print_test "Password change detection"
+    if _is_cloud_mode; then
+        print_skip "Admin .env password restart rotation skipped in SolrCloud (security is ZooKeeper-persisted)"
+        return
+    fi
+
     # Backup .env before modification
     cp .env .env.test_backup
 
