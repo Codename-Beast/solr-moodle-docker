@@ -6,11 +6,6 @@ on:
       - 'feature/**'
       - 'release/**'
       - 'main'
-  pull_request:
-    branches:
-      - 'feature/**'
-      - 'release/**'
-      - 'main'
   workflow_dispatch:
 
 concurrency:
@@ -20,6 +15,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[run-ci]')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

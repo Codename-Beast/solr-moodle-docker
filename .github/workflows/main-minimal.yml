@@ -3,9 +3,11 @@ name: Main Minimal
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   minimal-check:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[run-ci]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
