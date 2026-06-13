@@ -1,12 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Solr Tenant Security — credentials, roles, permissions
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
 # Sourced by solr-tenant.sh — do not run directly.
-
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -127,25 +125,34 @@ _add_permission() {
   fi
 }
 
-# Rebuild only tenant-scoped permissions and keep them ahead of generic rules.
-# Called after startup apply to avoid duplicate tenant-* entries that can break ACL evaluation.
+# Delete authorization permissions by their numeric index.
+# Solr's Security API does not accept permission names for delete-permission;
+# posting {"delete-permission":"all"} returns responseHeader.status=0 but only
+# embeds an errorMessages entry. Delete descending so later indexes stay stable.
+_delete_permission_indexes() {
+  local indexes="$1" idx
+  [ -z "$indexes" ] && return 0
+
+  while IFS= read -r idx; do
+    [ -z "$idx" ] && continue
+    _cloud_authz_api "$(jq -n --argjson i "$idx" '{"delete-permission": $i}')" || true
+  done <<< "$(printf '%s\n' "$indexes" | sort -rn)"
+}
+
+# Rebuild collection-scoped tenant permissions and keep them ahead of generic rules.
+# Solr stops at the first matching permission. Therefore one collection shared by
+# multiple tenants must have one combined role list, not one permission per tenant.
 _rebuild_tenant_permissions() {
   _is_cloud_mode || return 0
 
-  local authz current_names n
+  local authz tenant_indexes
   authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
-  current_names="$(printf '%s' "$authz" | jq -r '.authorization.permissions[]?.name // empty' 2>/dev/null || true)"
+  tenant_indexes="$(printf '%s' "$authz" | jq -r '.authorization.permissions[]? | select((.name // "") | test("^(tenant|collection)-.*-(read|write)$")) | .index' 2>/dev/null || true)"
+  _delete_permission_indexes "$tenant_indexes"
 
-  while IFS= read -r n; do
-    [ -z "$n" ] && continue
-    case "$n" in
-      tenant-*-read|tenant-*-write)
-        _cloud_authz_api "$(jq -n --arg x "$n" '{"delete-permission": $x}')" || true
-        ;;
-    esac
-  done <<< "$current_names"
-
-  local tenant_names t_name t_user t_role t_cores t_active c read_payload write_payload
+  local tenant_names t_name t_user t_role t_cores t_active c
+  local read_payload write_payload read_roles_json write_roles_json roles
+  declare -A collection_roles
   tenant_names="$(grep '^TENANT_.*_CORES=' "$TENANTS_ENV" 2>/dev/null | sed -E 's/^TENANT_(.+)_CORES=.*/\1/' | sort -u)"
 
   while IFS= read -r t_name; do
@@ -163,26 +170,33 @@ _rebuild_tenant_permissions() {
     for c in "${CORE_ARRAY[@]}"; do
       c="$(echo "$c" | tr -d ' ')"
       [ -z "$c" ] && continue
-
-      read_payload="$(jq -n --arg n "tenant-${t_name}-${c}-read" --arg r "$t_role" --arg col "$c" \
-        '{"set-permission": {
-          "name": $n,
-          "role": ["admin","support",$r],
-          "collection": [$col],
-          "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
-        }}')"
-      _cloud_authz_api "$read_payload" || return 1
-
-      write_payload="$(jq -n --arg n "tenant-${t_name}-${c}-write" --arg r "$t_role" --arg col "$c" \
-        '{"set-permission": {
-          "name": $n,
-          "role": ["admin",$r],
-          "collection": [$col],
-          "path": ["/update","/update/extract"]
-        }}')"
-      _cloud_authz_api "$write_payload" || return 1
+      collection_roles["$c"]="${collection_roles[$c]:-} $t_role"
     done
   done <<< "$tenant_names"
+
+  for c in "${!collection_roles[@]}"; do
+    roles="$(printf '%s' "${collection_roles[$c]}" | tr ' ' '\n' | sed '/^$/d' | sort -u)"
+    read_roles_json="$(printf 'admin\nsupport\n%s\n' "$roles" | sed '/^$/d' | sort -u | jq -R . | jq -s .)"
+    write_roles_json="$(printf 'admin\n%s\n' "$roles" | sed '/^$/d' | sort -u | jq -R . | jq -s .)"
+
+    read_payload="$(jq -n --arg n "collection-${c}-read" --arg col "$c" --argjson roles "$read_roles_json" \
+      '{"set-permission": {
+        "name": $n,
+        "role": $roles,
+        "collection": [$col],
+        "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
+      }}')"
+    _cloud_authz_api "$read_payload" || return 1
+
+    write_payload="$(jq -n --arg n "collection-${c}-write" --arg col "$c" --argjson roles "$write_roles_json" \
+      '{"set-permission": {
+        "name": $n,
+        "role": $roles,
+        "collection": [$col],
+        "path": ["/update","/update/extract"]
+      }}')"
+    _cloud_authz_api "$write_payload" || return 1
+  done
 
   return 0
 }
@@ -196,20 +210,14 @@ _ensure_all_permission_last() {
   _is_cloud_mode || return 0
   [ "$DRY_RUN" = "1" ] && return 0
 
-  local authz all_count i
+  local authz all_indexes
   authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
   [ -z "$authz" ] && return 0
 
-  all_count="$(printf '%s' "$authz" | jq -r '[.authorization.permissions[]? | select(.name=="all")] | length' 2>/dev/null || echo 0)"
+  all_indexes="$(printf '%s' "$authz" | jq -r '.authorization.permissions[]? | select(.name=="all") | .index' 2>/dev/null || true)"
 
   # Remove all existing 'all' entries first.
-  if [ "$all_count" -gt 0 ] 2>/dev/null; then
-    i=0
-    while [ "$i" -lt "$all_count" ]; do
-      _cloud_authz_api '{"delete-permission":"all"}' || true
-      i=$((i + 1))
-    done
-  fi
+  _delete_permission_indexes "$all_indexes"
 
   # Re-add fallback rule so it lands at the bottom.
   _cloud_authz_api '{"set-permission":{"name":"all","role":"admin"}}' || return 1
@@ -226,11 +234,11 @@ _remove_permission() {
   if [ "$DRY_RUN" = "1" ]; then printf '[DRY-RUN] Would remove permissions: %s-read, %s-write\n' "$perm_name" "$perm_name"; return 0; fi
   if _is_cloud_mode; then
     _log "INFO" "Removing SolrCloud permissions '${perm_name}-read' and '${perm_name}-write'"
-    local payload
-    payload="$(jq -n --arg n "${perm_name}-read" '{"delete-permission": $n}')"
-    _cloud_authz_api "$payload" || true
-    payload="$(jq -n --arg n "${perm_name}-write" '{"delete-permission": $n}')"
-    _cloud_authz_api "$payload" || true
+    local authz remove_indexes
+    authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
+    remove_indexes="$(printf '%s' "$authz" | jq -r --arg r "${perm_name}-read" --arg w "${perm_name}-write" \
+      '.authorization.permissions[]? | select(.name==$r or .name==$w) | .index' 2>/dev/null || true)"
+    _delete_permission_indexes "$remove_indexes"
   else
     _log "INFO" "Standalone: shared tenant-read/tenant-write are preserved when removing core '$perm_name'"
   fi
@@ -375,4 +383,3 @@ _print_credentials() {
 # ---------------------------------------------------------------------------
 # Subcommand: create
 # ---------------------------------------------------------------------------
-

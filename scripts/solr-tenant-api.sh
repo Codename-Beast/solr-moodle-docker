@@ -1,12 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Solr Tenant API — helpers: logging, auth, env, naming
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
 # Sourced by solr-tenant.sh — do not run directly.
-
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -286,4 +284,3 @@ _hash_password() {
 # SolrCloud:  delegates to _create_collection which uses the Collections API.
 # Args: $1 - core/collection name
 # Returns: 0 on success or if already exists; 1 on API failure
-

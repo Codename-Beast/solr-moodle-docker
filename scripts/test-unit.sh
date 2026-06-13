@@ -1,6 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Unit Tests — file checks, compose config, Dockerfile
@@ -30,6 +29,7 @@ unit_tests() {
         "eLeDia-config/solrconfig.xml"
         "scripts/solr-cloud-entrypoint.sh"
         "scripts/solr-tenant.sh"
+        "scripts/test-tenant-commands.sh"
         "tenants.env.example"
     )
     local missing=0
@@ -49,6 +49,26 @@ unit_tests() {
         print_pass "security.json.template present (embedded in image for first-start security bootstrap)"
     else
         print_fail "security.json.template missing"
+    fi
+
+    # Security API delete-permission requires numeric indexes; names are accepted
+    # only syntactically and returned as embedded errorMessages by Solr.
+    print_test "Tenant permission deletion uses numeric indexes"
+    if grep -q -- '--argjson i .*delete-permission' scripts/solr-tenant-security.sh && \
+       ! grep -q '_cloud_authz_api.*--arg [nx].*delete-permission' scripts/solr-tenant-security.sh && \
+       ! grep -q '_cloud_authz_api.*delete-permission.:.all' scripts/solr-tenant-security.sh; then
+        print_pass "Tenant permission cleanup deletes by numeric index"
+    else
+        print_fail "Tenant permission cleanup still deletes by name"
+    fi
+
+    # apply must rebuild tenant permissions before moving the fallback all rule to the end.
+    print_test "SolrCloud apply rebuilds tenant permissions"
+    if grep -A5 'if _is_cloud_mode; then' scripts/solr-tenant-cmd.sh | grep -q '_rebuild_tenant_permissions' && \
+       grep -A6 'if _is_cloud_mode; then' scripts/solr-tenant-cmd.sh | grep -q '_ensure_all_permission_last'; then
+        print_pass "SolrCloud apply rebuilds tenant permissions and then moves all last"
+    else
+        print_fail "SolrCloud apply does not rebuild tenant permissions before all fallback"
     fi
 
     # Container-first delivery: helper scripts must be baked into Solr image
@@ -101,4 +121,3 @@ unit_tests() {
 # =========================================
 # INTEGRATION TESTS - System Level
 # =========================================
-

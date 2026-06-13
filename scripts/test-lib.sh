@@ -1,6 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Test Library — colors, counters, print helpers
@@ -138,4 +137,3 @@ fi
 # =========================================
 # UNIT TESTS - Component Level
 # =========================================
-

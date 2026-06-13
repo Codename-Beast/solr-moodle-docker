@@ -275,4 +275,4 @@ solr-moodle-docker/
 
 ---
 
-**Eledia GmbH** · BSC Bernd Schreistetter · [MIT License](LICENSE)
+**eLeDia.de** · BSC Bernd Schreistetter

@@ -1,12 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Solr Tenant Core — core/collection CRUD (standalone + SolrCloud)
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
 # Sourced by solr-tenant.sh — do not run directly.
-
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -282,4 +280,3 @@ _create_collection() {
 # In SolrCloud mode, also bootstraps security.json into ZooKeeper if not already active.
 # Args: $1 - Solr username, $2 - plaintext password
 # Returns: 0 on success, 1 on API failure
-

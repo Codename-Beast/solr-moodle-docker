@@ -1,7 +1,6 @@
 # =========================================
 # Solr for Moodle — Multi-Tenant SolrCloud
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.4.6
 # =========================================
 # Init container is reintroduced as global bootstrap worker:

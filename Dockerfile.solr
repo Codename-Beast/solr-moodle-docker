@@ -1,10 +1,7 @@
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 
 # =========================================
-# Custom Solr image for Eledia multi-tenant deployment
-# Developer: BSC Bernd Schreistetter
-# Company: Eledia.de
+# Custom Solr image for eLeDia.de multi-tenant deployment
 # Extends the official Solr image and adds jq for tenant management scripts.
 # =========================================
 ARG SOLR_VERSION=9.10.1

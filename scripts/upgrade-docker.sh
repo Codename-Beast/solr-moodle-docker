@@ -155,6 +155,9 @@ export_legacy_cores() {
     core="$(basename "$d")"
     log "Export core directory: ${core}"
     run "rsync -a --delete '${d}/' '${out}/${core}/'"
+    if [ "$DRY_RUN" = "true" ]; then
+      mkdir -p "${out}/${core}"
+    fi
   done
 }
 
@@ -173,6 +176,25 @@ import_cores_into_volume() {
   local volume="solr_data_${INSTANCE_NAME}"
   local mountpoint
 
+  shopt -s nullglob
+  local entries=("${export_dir}"/*)
+  shopt -u nullglob
+
+  if [ "$DRY_RUN" = "true" ]; then
+    if [ "${#entries[@]}" -eq 0 ]; then
+      local fallback
+      fallback="$(ensure_default_core_name)"
+      log "[dry-run] Would create Moodle-optimized default core: ${fallback}"
+    else
+      local core_dir core
+      for core_dir in "${entries[@]}"; do
+        core="$(basename "$core_dir")"
+        log "[dry-run] Would import core directory into Docker volume ${volume}: ${core}"
+      done
+    fi
+    return 0
+  fi
+
   mountpoint="$(docker volume inspect "$volume" --format '{{.Mountpoint}}' 2>/dev/null || true)"
   if [ -z "$mountpoint" ]; then
     err "Docker volume ${volume} not found"
@@ -180,10 +202,6 @@ import_cores_into_volume() {
   fi
 
   mkdir -p "$mountpoint"
-
-  shopt -s nullglob
-  local entries=("${export_dir}"/*)
-  shopt -u nullglob
 
   if [ "${#entries[@]}" -eq 0 ]; then
     local fallback
@@ -222,14 +240,16 @@ main() {
   need_cmd rsync
   need_cmd systemctl
 
+  local cli_instance_name="" cli_target_mode=""
+
   while [ $# -gt 0 ]; do
     case "$1" in
-      --instance) INSTANCE_NAME="$2"; shift 2 ;;
+      --instance) INSTANCE_NAME="$2"; cli_instance_name="$2"; shift 2 ;;
       --customer-domain) CUSTOMER_DOMAIN="$2"; shift 2 ;;
       --legacy-service) LEGACY_SERVICE="$2"; shift 2 ;;
       --legacy-solr-home) LEGACY_SOLR_HOME="$2"; shift 2 ;;
       --migration-root) MIGRATION_ROOT="$2"; shift 2 ;;
-      --target-mode) TARGET_MODE="$2"; shift 2 ;;
+      --target-mode) TARGET_MODE="$2"; cli_target_mode="$2"; shift 2 ;;
       --dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) err "Unknown argument: $1"; usage; exit 1 ;;
@@ -244,6 +264,8 @@ main() {
   load_env_file
   # shellcheck disable=SC1091
   source "${ROOT_DIR}/.env"
+  INSTANCE_NAME="${cli_instance_name:-${INSTANCE_NAME:-solr}}"
+  TARGET_MODE="${cli_target_mode:-${SOLR_MODE:-$TARGET_MODE}}"
 
   detect_legacy_solr_home
 

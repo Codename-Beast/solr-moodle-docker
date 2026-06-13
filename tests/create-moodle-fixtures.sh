@@ -1,6 +1,5 @@
 #!/usr/bin/env sh
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 
 set -eu
 

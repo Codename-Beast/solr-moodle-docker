@@ -1,6 +1,6 @@
 # GitLab CI/CD Setup Guide
 
-**Autor:** BSC Bernd Schreistetter | **Eledia GmbH**
+**Autor:** BSC Bernd Schreistetter | **eLeDia.de**
 
 ---
 

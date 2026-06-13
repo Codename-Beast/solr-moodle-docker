@@ -1,11 +1,8 @@
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 
 FROM alpine:3.22@sha256:310c62b5e7ca5b08167e4384c68db0fd2905dd9c7493756d356e893909057601
 # =========================================
 # Solr Init Container
-# Developer: BSC Bernd Schreistetter
-# Company: Eledia.de
 # Version: v3.4.6
 # Multi-Tenant Support
 # =========================================

@@ -1,13 +1,9 @@
 #!/bin/bash
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.0.1
 
 # =========================================
 # Moodle Document Testing for Solr
-# Developer: BSC Bernd Schreistetter
-# Company: Eledia.de
-# Version: v2.0
 # =========================================
 #
 # Purpose:

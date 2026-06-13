@@ -1,5 +1,5 @@
 [Unit]
-Description=Eledia Solr one-way upgrade (bare-metal 8.x -> docker) for instance %i
+Description=eLeDia.de Solr one-way upgrade (bare-metal 8.x -> docker) for instance %i
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service

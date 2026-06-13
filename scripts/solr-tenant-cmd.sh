@@ -1,12 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Solr Tenant Commands — create, delete, enable, apply, export
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
 # Sourced by solr-tenant.sh — do not run directly.
-
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -82,16 +80,24 @@ cmd_create() {
     _add_permission "tenant-${name}-${core}" "$role" "$core"
   done
 
-  # Wait for Solr's PathWatcher to detect the file change and reload auth config
-  _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"
-
-  # Write tenants.env
+  # Write tenants.env before rebuilding collection-scoped SolrCloud permissions;
+  # shared collections need a combined role list from the full tenant source of truth.
   if [ "$DRY_RUN" = "0" ]; then
     _set_tenant_field "$name" "CORES" "$cores"
     _set_tenant_field "$name" "USER" "$user"
     _set_tenant_field "$name" "PASS" "$pass"
     _set_tenant_field "$name" "ACTIVE" "true"
   fi
+
+  if _is_cloud_mode; then
+    _rebuild_tenant_permissions || return 1
+    _ensure_all_permission_last || return 1
+  else
+    _ensure_all_permission_last || return 1
+  fi
+
+  # Wait for Solr's PathWatcher to detect the file change and reload auth config
+  _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"
 
   printf '✔ Tenant "%s" created\n' "$name"
   printf '  Cores: %s\n' "$cores"
@@ -195,13 +201,19 @@ cmd_enable() {
     [ -z "$core" ] && continue
     _add_permission "tenant-${name}-${core}" "$role" "$core"
   done
-
-  _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"
-
   if [ "$DRY_RUN" = "0" ]; then
     _set_tenant_field "$name" "PASS" "$new_pass"
     _set_tenant_field "$name" "ACTIVE" "true"
   fi
+
+  if _is_cloud_mode; then
+    _rebuild_tenant_permissions || return 1
+    _ensure_all_permission_last || return 1
+  else
+    _ensure_all_permission_last || return 1
+  fi
+
+  _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"
 
   printf '✔ Tenant "%s" re-enabled\n' "$name"
   _print_credentials "$name" "$user" "$new_pass" "$cores"
@@ -357,6 +369,13 @@ cmd_core_add() {
     _set_tenant_field "$name" "CORES" "$new_cores"
   fi
 
+  if _is_cloud_mode; then
+    _rebuild_tenant_permissions || return 1
+    _ensure_all_permission_last || return 1
+  else
+    _ensure_all_permission_last || return 1
+  fi
+
   local pass
   pass="$(_get_tenant_field "$name" "PASS")"
   printf '✔ Core "%s" added to tenant "%s"\n' "$core" "$name"
@@ -460,6 +479,7 @@ cmd_apply() {
   done < "$TENANTS_ENV"
 
   if _is_cloud_mode; then
+    _rebuild_tenant_permissions || return 1
     _ensure_all_permission_last || return 1
   fi
 
@@ -536,10 +556,8 @@ cmd_sync_sot() {
       done < "$TENANTS_ENV"
 
       for name in "${!tenant_has_cores[@]}"; do
-        local user active
+        local user
         user="${tenant_user_map[$name]:-solr_${name}}"
-        active="${tenant_active_map[$name]:-true}"
-        [ "$active" = "false" ] && continue
         [ -n "$user" ] && printf '%s\n' "$user"
       done
     fi
@@ -654,14 +672,14 @@ cmd_drift_detect() {
   local tenants_content
   tenants_content="$(cat "$TENANTS_ENV")"
 
-  # Build desired state snapshot (active tenants only)
+  # Build desired state snapshot from all tenants in tenants.env. Inactive tenants
+  # keep their Solr user/collections as managed preserved state; cmd_apply blocks
+  # inactive users by rotating their passwords instead of deleting runtime records.
   while IFS='=' read -r key value; do
     case "$key" in
       TENANT_*_CORES)
-        local name active user cores
+        local name user cores
         name="${key#TENANT_}"; name="${name%_CORES}"
-        active="$(printf '%s\n' "$tenants_content" | grep "^TENANT_${name}_ACTIVE=" 2>/dev/null | cut -d= -f2-)"
-        [ "${active:-true}" = "false" ] && continue
 
         user="$(printf '%s\n' "$tenants_content" | grep "^TENANT_${name}_USER=" 2>/dev/null | cut -d= -f2-)"
         user="${user:-solr_${name}}"
@@ -689,7 +707,7 @@ cmd_drift_detect() {
   if _is_cloud_mode; then
     local coll_json
     coll_json="$(_solr_api GET "/admin/collections?action=LIST&wt=json" 2>/dev/null || true)"
-    printf '%s' "$coll_json" | jq -r '.collections[]?' | sort -u > "$actual_collections_file"
+    printf '%s' "$coll_json" | jq -r '.collections[]?' | sed '/^\.system$/d' | sort -u > "$actual_collections_file"
   else
     : > "$actual_collections_file"
   fi
@@ -888,7 +906,6 @@ Examples:
 Logs: /var/log/solr/tenant.log
 EOF
 }
-
 
 
 

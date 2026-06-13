@@ -101,7 +101,7 @@
 
   <!-- Footer -->
   <line x1="40" y1="456" x2="860" y2="456" stroke="#f97316" stroke-width="1" opacity="0.3"/>
-  <text x="450" y="478" text-anchor="middle" fill="#6b7280" font-size="10">eLeDia GmbH — solr-moodle-docker — github.com/Codename-Beast/solr-moodle-docker</text>
+  <text x="450" y="478" text-anchor="middle" fill="#6b7280" font-size="10">eLeDia.de — solr-moodle-docker — github.com/Codename-Beast/solr-moodle-docker</text>
   <text x="450" y="494" text-anchor="middle" fill="#6b7280" font-size="10">Standalone: cores in solr_data/  |  SolrCloud: collections + ZooKeeper ensemble</text>
 
   <!-- Arrow marker -->

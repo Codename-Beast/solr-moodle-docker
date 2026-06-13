@@ -1,13 +1,9 @@
 #!/bin/bash
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.4.6
 
 # =========================================
 # Solr Init Container — Multi-Tenant
-# Developer: BSC Bernd Schreistetter
-# Company: Eledia.de
-# Version: v3.4.6
 # =========================================
 # Runs as init container (exit 0 = Solr starts, exit != 0 = Solr blocked)
 # Rebuilds security.json COMPLETELY on every start from:

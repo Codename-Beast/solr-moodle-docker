@@ -1,6 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 eLeDia GmbH / Bernd Schreistetter (bsc)
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # eLeDia Test Tenant Generator — Generiert N Tenant-Einträge für tenants.env
@@ -71,7 +70,7 @@ for i in $(seq 1 "$COUNT"); do
 done
 
 LINES=$(wc -l < "$OUTPUT")
-ENTRIES=$((LINES / 4))
+ENTRIES=$(grep -c '^TENANT_.*_CORES=' "$OUTPUT" || true)
 FILESIZE=$(du -h "$OUTPUT" | cut -f1)
 
 echo "=== Done: $ENTRIES tenants, $LINES lines, $FILESIZE ==="

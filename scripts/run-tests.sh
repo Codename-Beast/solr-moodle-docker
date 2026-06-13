@@ -1,6 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.1.0
 #
 # run-tests.sh — Main test orchestrator
@@ -92,7 +91,7 @@ echo -e "${BOLD}${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════╗
 ║   Solr for Moodle - Test Suite        ║
-║   Eledia Testing Framework            ║
+║   eLeDia.de Testing Framework         ║
 ╚═══════════════════════════════════════╝
 EOF
 echo -e "${NC}"
@@ -135,7 +134,7 @@ echo ""
 echo -e "${BOLD}Run Log:${NC}       ${RUN_LOG_FILE}"
 docker compose logs --no-color >> "${RUN_LOG_FILE}" 2>&1 || true
 
-if [ $TESTS_FAILED -gt 0 ]; then
+if [ "$TESTS_FAILED" -gt 0 ]; then
     echo -e "${RED}${BOLD}Failed Tests:${NC}"
     for test in "${FAILED_TESTS[@]}"; do
         echo -e "  ${RED}x${NC} $test"
@@ -143,10 +142,10 @@ if [ $TESTS_FAILED -gt 0 ]; then
     echo ""
 fi
 
-if [ $TESTS_TOTAL -gt 0 ]; then
+if [ "$TESTS_TOTAL" -gt 0 ]; then
     success_rate=$((TESTS_PASSED * 100 / TESTS_TOTAL))
     echo -e "${BOLD}Success Rate:${NC}  ${success_rate}%"
-    if [ $TESTS_FAILED -gt 0 ]; then
+    if [ "$TESTS_FAILED" -gt 0 ]; then
         echo -e "\n${RED}${BOLD}TEST SUITE FAILED${NC}"
         exit 1
     fi

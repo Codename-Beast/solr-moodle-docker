@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.4.8] - 2026-06-13
+
+### Fixed
+- Copyright headers are normalized to `Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)`, duplicate header metadata was removed, and SPDX header lines were dropped from source files.
+- `scripts/generate-test-tenants.sh` now reports the real tenant count instead of counting the header lines as one additional tenant.
+- `scripts/upgrade-docker.sh` dry-runs are now non-destructive and respect CLI `--instance`/`--target-mode` overrides after loading `.env`.
+- SolrCloud tenant ACL rebuild now groups all active tenant roles per collection, so multiple tenants can intentionally share one collection without first-match permission shadowing.
+- Solr authorization permission cleanup now deletes by numeric Security API indexes and keeps a single fallback `all` permission at the end.
+- `apply`, `create`, `enable`, and `core-add` now rebuild SolrCloud collection permissions from `tenants.env` before endpoint verification.
+- Drift detection and SOT sync now treat inactive tenant users and preserved tenant collections from `tenants.env` as managed runtime state, while ignoring Solr's internal `.system` collection.
+
+### Added
+- `scripts/test-tenant-commands.sh` command-matrix test for `solr-tenant.sh` lifecycle commands in both `standalone` and `solrcloud` modes.
+- `scripts/test-shell-runtime.sh` local runtime smoke test that executes shell entrypoints with safe inputs and validates responses.
+
 ## [3.4.7] - 2026-06-12
 
 ### Fixed
@@ -124,7 +139,7 @@ All notable changes to this project will be documented in this file.
 - `upgrade-docker.sh` — conditional `--build`: skips image rebuild when Dockerfile/config/scripts unchanged (sha256 comparison).
 
 ### Changed
-- eLeDia branding: all module headers standardized (`eLeDia GmbH / Bernd Schreistetter (bsc)`).
+- eLeDia branding: all module headers standardized (`eLeDia.de / Bernd Schreistetter (bsc)`).
 - Configset renamed: `moodle-tenant` → `eLeDia-moodle-tenant` (ZooKeeper, Collections API, all references).
 - Core/collection names: `moodle_core` → `eLeDia_core`, `moodle_cloud_*` → `eLeDia_cloud_*`.
 - Config directory: `config/` → `eLeDia-config/` (host-side schema and solrconfig).
@@ -320,9 +335,8 @@ Versioning: Semantic Versioning
 ## [3.0.2] - 2026-05-24
 
 ### Added
-- Copyright/SPDX/Version Header in allen Shell-Skripten:
-- `Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter`
-- `SPDX-License-Identifier: MIT`
+- Copyright/Version Header in allen Shell-Skripten:
+- `Copyright (c) 2026 eLeDia.de / Bernd Schreistetter`
 - `Version: v3.0.1`
 - README auf Betriebsdoku umgestellt (TL;DR, SolrCloud, Tests, CI, Security, Ops).
 - Dokumentierte Solr-Doku-Tweaks fuer `/update/extract`.

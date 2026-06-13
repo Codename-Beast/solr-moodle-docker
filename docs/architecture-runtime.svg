@@ -136,5 +136,5 @@
   <rect x="30" y="638" width="1120" height="44" rx="8" fill="#111" stroke="#f97316" stroke-width="1.5" stroke-dasharray="5"/>
   <text x="590" y="664" text-anchor="middle" fill="#fdba74" font-size="11" font-weight="700">Management Layer: Ansible (deploy/config), solr-overwatch, Solr Admin UI, Monitoring</text>
 
-  <text x="590" y="694" text-anchor="middle" fill="#374151" font-size="9">eLeDia GmbH — solr-moodle-docker — Runtime mit globalem Init-Container und Host-Logs unter /var/log/eledia/solr</text>
+  <text x="590" y="694" text-anchor="middle" fill="#374151" font-size="9">eLeDia.de — solr-moodle-docker — Runtime mit globalem Init-Container und Host-Logs unter /var/log/eledia/solr</text>
 </svg>

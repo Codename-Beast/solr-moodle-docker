@@ -1,13 +1,9 @@
 #!/bin/bash
-# Copyright (c) 2026 Eledia GmbH / Bernd Schreistetter
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
 # Version: v3.0.1
 
 # =========================================
 # Solr Multi-Tenant — Interactive Setup
-# Developer: BSC Bernd Schreistetter
-# Company: Eledia.de
-# Version: v3.0.1
 # =========================================
 # Idempotent: safe to re-run.
 # First run: creates .env, tenants.env, /var/log/eledia/solr-<instance>.log, logrotate, starts Solr.
