@@ -1,113 +1,63 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" width="900" height="540" font-family="'Segoe UI',system-ui,sans-serif">
-  <!-- Background -->
-  <rect width="900" height="540" fill="#0a0a0a"/>
-
-  <!-- Title -->
-  <text x="450" y="38" text-anchor="middle" fill="#f97316" font-size="18" font-weight="700">solr-moodle-docker — Installation Flow</text>
-  <line x1="40" y1="50" x2="860" y2="50" stroke="#f97316" stroke-width="1" opacity="0.4"/>
-
-  <!-- Step boxes -->
-  <!-- 1: Vorbereitung -->
-  <rect x="40" y="80" width="180" height="340" rx="8" fill="#111" stroke="#f97316" stroke-width="2"/>
-  <text x="130" y="108" text-anchor="middle" fill="#fdba74" font-size="13" font-weight="700">1) Vorbereitung</text>
-  <line x1="50" y1="116" x2="210" y2="116" stroke="#f97316" stroke-width="1" opacity="0.4"/>
-  <rect x="56" y="128" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="130" y="151" text-anchor="middle" fill="#fb923c" font-size="11">git clone Repo</text>
-  <rect x="56" y="174" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="130" y="197" text-anchor="middle" fill="#fb923c" font-size="11">.env aus .env.example</text>
-  <rect x="56" y="220" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="130" y="243" text-anchor="middle" fill="#fb923c" font-size="11">tenants.env pflegen</text>
-  <rect x="56" y="266" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="130" y="289" text-anchor="middle" fill="#fb923c" font-size="11">chmod 644 tenants.env</text>
-  <rect x="56" y="312" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="130" y="330" text-anchor="middle" fill="#fb923c" font-size="11">SOLR_MODE=</text>
-  <text x="130" y="344" text-anchor="middle" fill="#fb923c" font-size="11">standalone|solrcloud</text>
-  <rect x="56" y="358" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="130" y="381" text-anchor="middle" fill="#fb923c" font-size="11">eLeDia-config/ Schema</text>
-
-  <!-- Arrow 1→2 -->
-  <line x1="220" y1="250" x2="252" y2="250" stroke="#f97316" stroke-width="2" marker-end="url(#arr)"/>
-
-  <!-- 2: Bootstrap -->
-  <rect x="252" y="80" width="180" height="340" rx="8" fill="#111" stroke="#f97316" stroke-width="2"/>
-  <text x="342" y="108" text-anchor="middle" fill="#fdba74" font-size="13" font-weight="700">2) Bootstrap</text>
-  <line x1="262" y1="116" x2="422" y2="116" stroke="#f97316" stroke-width="1" opacity="0.4"/>
-  <rect x="268" y="128" width="148" height="36" rx="5" fill="#171717" stroke="#ff8a00" stroke-width="1.5"/>
-  <text x="342" y="151" text-anchor="middle" fill="#fed7aa" font-size="11">docker compose up -d</text>
-  <rect x="268" y="174" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="342" y="197" text-anchor="middle" fill="#fb923c" font-size="11">eLeDia-solr-init (global)</text>
-  <rect x="268" y="220" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="342" y="239" text-anchor="middle" fill="#fb923c" font-size="11">security.json Upload</text>
-  <text x="342" y="253" text-anchor="middle" fill="#fb923c" font-size="11">(SolrCloud: ZooKeeper)</text>
-  <rect x="268" y="266" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="342" y="285" text-anchor="middle" fill="#fb923c" font-size="11">eLeDia-moodle-tenant</text>
-  <text x="342" y="299" text-anchor="middle" fill="#fb923c" font-size="11">configset → ZK/disk</text>
-  <rect x="268" y="312" width="148" height="36" rx="5" fill="#171717" stroke="#ff8a00" stroke-width="1.5"/>
-  <text x="342" y="335" text-anchor="middle" fill="#fed7aa" font-size="11">solr-tenant.sh apply</text>
-  <rect x="268" y="358" width="148" height="36" rx="5" fill="#171717" stroke="#ff8a00" stroke-width="1.5"/>
-  <text x="342" y="381" text-anchor="middle" fill="#fed7aa" font-size="11">powerinit.sh</text>
-
-  <!-- Arrow 2→3 -->
-  <line x1="432" y1="250" x2="464" y2="250" stroke="#f97316" stroke-width="2" marker-end="url(#arr)"/>
-
-  <!-- 3: Service Start -->
-  <rect x="464" y="80" width="180" height="340" rx="8" fill="#111" stroke="#f97316" stroke-width="2"/>
-  <text x="554" y="108" text-anchor="middle" fill="#fdba74" font-size="13" font-weight="700">3) Service Start</text>
-  <line x1="474" y1="116" x2="634" y2="116" stroke="#f97316" stroke-width="1" opacity="0.4"/>
-  <rect x="480" y="128" width="148" height="36" rx="5" fill="#171717" stroke="#ff8a00" stroke-width="1.5"/>
-  <text x="554" y="151" text-anchor="middle" fill="#fed7aa" font-size="11">Solr :8983 ready</text>
-  <rect x="480" y="174" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="554" y="197" text-anchor="middle" fill="#fb923c" font-size="11">healthcheck</text>
-  <text x="554" y="211" text-anchor="middle" fill="#fb923c" font-size="10">/admin/info/system</text>
-  <rect x="480" y="220" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="554" y="243" text-anchor="middle" fill="#fb923c" font-size="11">Cores / Collections</text>
-  <text x="554" y="257" text-anchor="middle" fill="#fb923c" font-size="11">angelegt (tenants)</text>
-  <rect x="480" y="266" width="148" height="36" rx="5" fill="#1a1a1a" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="554" y="285" text-anchor="middle" fill="#fb923c" font-size="11">Auth aktiv</text>
-  <text x="554" y="299" text-anchor="middle" fill="#fb923c" font-size="11">401 anonym</text>
-  <rect x="480" y="312" width="148" height="36" rx="5" fill="#171717" stroke="#ff8a00" stroke-width="1.5"/>
-  <text x="554" y="335" text-anchor="middle" fill="#fed7aa" font-size="11">Moodle-Plugin</text>
-  <text x="554" y="349" text-anchor="middle" fill="#fed7aa" font-size="11">konfigurieren</text>
-  <rect x="480" y="358" width="148" height="36" rx="5" fill="#171717" stroke="#ff8a00" stroke-width="1.5"/>
-  <text x="554" y="381" text-anchor="middle" fill="#fed7aa" font-size="11">setup.sh (optional)</text>
-
-  <!-- Arrow 3→4 -->
-  <line x1="644" y1="250" x2="676" y2="250" stroke="#f97316" stroke-width="2" marker-end="url(#arr)"/>
-
-  <!-- 4: Persistenz -->
-  <rect x="676" y="80" width="184" height="340" rx="8" fill="#111" stroke="#f97316" stroke-width="2"/>
-  <text x="768" y="108" text-anchor="middle" fill="#fdba74" font-size="13" font-weight="700">4) Persistenz</text>
-  <line x1="686" y1="116" x2="850" y2="116" stroke="#f97316" stroke-width="1" opacity="0.4"/>
-  <!-- cylinder shapes via rect+ellipse combo -->
-  <rect x="692" y="136" width="148" height="44" rx="4" fill="#0e0e0e" stroke="#c2410c" stroke-width="1.5"/>
-  <ellipse cx="766" cy="136" rx="74" ry="8" fill="#161616" stroke="#c2410c" stroke-width="1.5"/>
-  <text x="766" y="162" text-anchor="middle" fill="#fb923c" font-size="11">solr_data/</text>
-  <text x="766" y="176" text-anchor="middle" fill="#fb923c" font-size="10">index + security.json</text>
-
-  <rect x="692" y="210" width="148" height="44" rx="4" fill="#0e0e0e" stroke="#c2410c" stroke-width="1.5"/>
-  <ellipse cx="766" cy="210" rx="74" ry="8" fill="#161616" stroke="#c2410c" stroke-width="1.5"/>
-  <text x="766" y="236" text-anchor="middle" fill="#fb923c" font-size="11">solr_backups/</text>
-  <text x="766" y="250" text-anchor="middle" fill="#fb923c" font-size="10">Snapshot-Backups</text>
-
-  <rect x="692" y="284" width="148" height="44" rx="4" fill="#0e0e0e" stroke="#c2410c" stroke-width="1.5"/>
-  <ellipse cx="766" cy="284" rx="74" ry="8" fill="#161616" stroke="#c2410c" stroke-width="1.5"/>
-  <text x="766" y="310" text-anchor="middle" fill="#fb923c" font-size="11">Host-Logs</text>
-  <text x="766" y="324" text-anchor="middle" fill="#fb923c" font-size="10">/var/log/eledia</text>
-
-  <rect x="692" y="358" width="148" height="44" rx="4" fill="#0e0e0e" stroke="#c2410c" stroke-width="1.5"/>
-  <ellipse cx="766" cy="358" rx="74" ry="8" fill="#161616" stroke="#c2410c" stroke-width="1.5"/>
-  <text x="766" y="384" text-anchor="middle" fill="#fb923c" font-size="11">tenants.env</text>
-  <text x="766" y="398" text-anchor="middle" fill="#fb923c" font-size="10">Source of Truth</text>
-
-  <!-- Footer -->
-  <line x1="40" y1="456" x2="860" y2="456" stroke="#f97316" stroke-width="1" opacity="0.3"/>
-  <text x="450" y="478" text-anchor="middle" fill="#6b7280" font-size="10">eLeDia.de — solr-moodle-docker — github.com/Codename-Beast/solr-moodle-docker</text>
-  <text x="450" y="494" text-anchor="middle" fill="#6b7280" font-size="10">Standalone: cores in solr_data/  |  SolrCloud: collections + ZooKeeper ensemble</text>
-
-  <!-- Arrow marker -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 1152" width="2048" height="1152" font-family="Segoe UI, Arial, sans-serif">
   <defs>
-    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L8,3 z" fill="#f97316"/>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L0,12 L12,6 z" fill="#f97316"/>
     </marker>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#f97316" flood-opacity="0.25"/>
+    </filter>
   </defs>
+  <rect width="2048" height="1152" fill="#090909"/>
+  <rect x="28" y="28" width="1992" height="1096" rx="26" fill="#0f0f0f" stroke="#f97316" stroke-width="3"/>
+  <text x="1024" y="82" text-anchor="middle" fill="#f97316" font-size="38" font-weight="800">solr-moodle-docker Installation</text>
+  <text x="1024" y="122" text-anchor="middle" fill="#a8a29e" font-size="22">Frischer Docker Stack ohne Repository-URL im Diagramm</text>
+  <line x1="80" y1="150" x2="1968" y2="150" stroke="#f97316" stroke-width="2" opacity="0.45"/>
+  <rect x="80" y="220" width="330" height="520" rx="18" fill="#151515" stroke="#f97316" stroke-width="3" filter="url(#glow)"/>
+  <text x="245" y="264" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">1 Vorbereitung</text>
+  <line x1="104" y1="282" x2="386" y2="282" stroke="#f97316" stroke-width="2" opacity="0.35"/>
+  <text x="114" y="324" fill="#fed7aa" font-size="21">Arbeitsverzeichnis wählen</text>
+  <text x="114" y="360" fill="#fed7aa" font-size="21">.env aus Vorlage erstellen</text>
+  <text x="114" y="396" fill="#fed7aa" font-size="21">INSTANCE_NAME setzen</text>
+  <text x="114" y="432" fill="#fed7aa" font-size="21">SOLR_MODE wählen</text>
+  <text x="114" y="468" fill="#fed7aa" font-size="21">tenants.env vorbereiten</text>
+  <text x="114" y="504" fill="#fed7aa" font-size="21">Dateirechte prüfen</text>
+  <rect x="505" y="220" width="330" height="520" rx="18" fill="#151515" stroke="#f97316" stroke-width="3" filter="url(#glow)"/>
+  <text x="670" y="264" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">2 Build</text>
+  <line x1="529" y1="282" x2="811" y2="282" stroke="#f97316" stroke-width="2" opacity="0.35"/>
+  <text x="539" y="324" fill="#fed7aa" font-size="21">docker compose build</text>
+  <text x="539" y="360" fill="#fed7aa" font-size="21">Solr Runtime Image</text>
+  <text x="539" y="396" fill="#fed7aa" font-size="21">eLeDia Init Image</text>
+  <text x="539" y="432" fill="#fed7aa" font-size="21">Helper Scripts im Image</text>
+  <text x="539" y="468" fill="#fed7aa" font-size="21">Configset im Image</text>
+  <rect x="930" y="220" width="330" height="520" rx="18" fill="#151515" stroke="#f97316" stroke-width="3" filter="url(#glow)"/>
+  <text x="1095" y="264" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">3 Start</text>
+  <line x1="954" y1="282" x2="1236" y2="282" stroke="#f97316" stroke-width="2" opacity="0.35"/>
+  <text x="964" y="324" fill="#fed7aa" font-size="21">docker compose up -d</text>
+  <text x="964" y="360" fill="#fed7aa" font-size="21">Init schreibt Config</text>
+  <text x="964" y="396" fill="#fed7aa" font-size="21">Solr startet als UID 8983</text>
+  <text x="964" y="432" fill="#fed7aa" font-size="21">Healthcheck auf 8983</text>
+  <text x="964" y="468" fill="#fed7aa" font-size="21">Logs nach ELEDIA_LOG_ROOT</text>
+  <rect x="1355" y="220" width="330" height="520" rx="18" fill="#151515" stroke="#f97316" stroke-width="3" filter="url(#glow)"/>
+  <text x="1520" y="264" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">4 Tenant</text>
+  <line x1="1379" y1="282" x2="1661" y2="282" stroke="#f97316" stroke-width="2" opacity="0.35"/>
+  <text x="1389" y="324" fill="#fed7aa" font-size="21">solr-tenant.sh apply</text>
+  <text x="1389" y="360" fill="#fed7aa" font-size="21">User und Rollen</text>
+  <text x="1389" y="396" fill="#fed7aa" font-size="21">Collections oder Cores</text>
+  <text x="1389" y="432" fill="#fed7aa" font-size="21">ACL Rebuild</text>
+  <text x="1389" y="468" fill="#fed7aa" font-size="21">Fallback all zuletzt</text>
+  <rect x="640" y="820" width="760" height="190" rx="18" fill="#151515" stroke="#f97316" stroke-width="3" filter="url(#glow)"/>
+  <text x="1020" y="864" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">5 Validierung</text>
+  <line x1="664" y1="882" x2="1376" y2="882" stroke="#f97316" stroke-width="2" opacity="0.35"/>
+  <text x="674" y="924" fill="#fed7aa" font-size="21">/admin/ping, /select, /update, /update/extract, /schema</text>
+  <text x="674" y="960" fill="#fed7aa" font-size="21">Moodle Schema Setup</text>
+  <text x="674" y="996" fill="#fed7aa" font-size="21">Moodle Search Index Task</text>
+  <text x="674" y="1032" fill="#fed7aa" font-size="21">Solr Query beweist Dokumente im Index</text>
+  <line x1="410" y1="480" x2="505" y2="480" stroke="#f97316" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="835" y1="480" x2="930" y2="480" stroke="#f97316" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1260" y1="480" x2="1355" y2="480" stroke="#f97316" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1520" y1="740" x2="1320" y2="820" stroke="#f97316" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="1420" y="766" text-anchor="middle" fill="#a8a29e" font-size="18">Moodle E2E</text>
+  <line x1="760" y1="740" x2="840" y2="820" stroke="#f97316" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="800" y="766" text-anchor="middle" fill="#a8a29e" font-size="18">Endpoint Tests</text>
+  <text x="1024" y="1065" text-anchor="middle" fill="#78716c" font-size="18">Installationsziel: reproduzierbarer Stack mit Image-basierten Runtime-Helpern und prüfbarer Moodle-Kompatibilität.</text>
 </svg>
