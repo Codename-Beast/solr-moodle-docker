@@ -295,8 +295,13 @@ solrcloud_tests() {
     if $tenant_cmd drift-remediate >/tmp/_drift_remediate 2>&1; then
         old_code=$(curl -so /dev/null -w '%{http_code}' -u "${unmanaged_user}:${unmanaged_pass}" \
             "http://${SOLR_HOST}:${SOLR_PORT}/solr/admin/info/system" 2>/dev/null)
-        known_code=$(curl -so /dev/null -w '%{http_code}' -u "${cloud_user}:${CLOUD_PASS}" \
-            "http://${SOLR_HOST}:${SOLR_PORT}/solr/${cloud_collection}/select?q=*:*&rows=0&wt=json" 2>/dev/null)
+        known_code="000"
+        for _ in $(seq 1 20); do
+            known_code=$(curl -so /dev/null -w '%{http_code}' -u "${cloud_user}:${CLOUD_PASS}" \
+                "http://${SOLR_HOST}:${SOLR_PORT}/solr/${cloud_collection}/select?q=*:*&rows=0&wt=json" 2>/dev/null)
+            [ "$known_code" = "200" ] && break
+            sleep 1
+        done
         if [ "$old_code" = "401" ] && [ "$known_code" = "200" ]; then
             print_pass "drift-remediate rotated unmanaged user and preserved tenant credentials"
         else
