@@ -4,25 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [3.4.8] - 2026-06-13
+## [3.4.8] 
 
 ### Fixed
-- Copyright headers are normalized to `Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)`, duplicate header metadata was removed, and SPDX header lines were dropped from source files.
 - `scripts/generate-test-tenants.sh` now reports the real tenant count instead of counting the header lines as one additional tenant.
-- `scripts/upgrade-docker.sh` dry-runs are now non-destructive and respect CLI `--instance`/`--target-mode` overrides after loading `.env`.
 - SolrCloud tenant ACL rebuild now groups all active tenant roles per collection, so multiple tenants can intentionally share one collection without first-match permission shadowing.
 - Solr authorization permission cleanup now deletes by numeric Security API indexes and keeps a single fallback `all` permission at the end.
 - `apply`, `create`, `enable`, and `core-add` now rebuild SolrCloud collection permissions from `tenants.env` before endpoint verification.
 - Drift detection and SOT sync now treat inactive tenant users and preserved tenant collections from `tenants.env` as managed runtime state, while ignoring Solr's internal `.system` collection.
 
-### Added
-- `scripts/test-tenant-commands.sh` command-matrix test for `solr-tenant.sh` lifecycle commands in both `standalone` and `solrcloud` modes.
-- `scripts/test-shell-runtime.sh` local runtime smoke test that executes shell entrypoints with safe inputs and validates responses.
-
-## [3.4.7] - 2026-06-12
+## [3.4.7]
 
 ### Fixed
-- GitLab CI branch rules now match numbered feature branches such as `feature/3.4.6` as well as legacy `feature/v*` names.
+
 - Removed the dead GitHub Actions CI tenant pre-step and centralized tenant creation in the runtime test harness.
 - `scripts/run-tests.sh` now delegates all logging/env/counter setup to `scripts/test-lib.sh`, eliminating duplicate tee logging and duplicated bootstrap state.
 - Moodle `/admin/system` security test now honors `${SOLR_PORT}` instead of hardcoding `8983`.
@@ -33,14 +27,11 @@ All notable changes to this project will be documented in this file.
 - GitLab Docker-in-Docker CI now tolerates runner host bind-mount limitations by using an image-owned configset fallback and a container-local tenant SOT path.
 - CI password-rotation and Moodle log-health checks now assert runtime behavior directly and ignore known Solr ZooKeeper ACL bootstrap warnings.
 - Init bootstrap also uses image-owned config fallbacks and the configured tenant SOT path when GitLab Docker socket runners cannot provide file bind mounts.
-- GitLab `feature-full-test` now has a 30-minute timeout so the real SolrCloud suite is not killed at the former 10-minute runner limit.
 - Test summaries now backfill unlisted raw `[FAIL]` lines from the run log, so a visible failure can no longer be omitted from the failed-test list.
 - The admin `.env` password restart-rotation test now runs only outside SolrCloud; SolrCloud keeps active security in ZooKeeper and is covered by drift/remediation tests instead.
 - Moodle readiness now works for tenant users in both `SOLR_MODE=solrcloud` and `SOLR_MODE=standalone`; tenant read ACLs include Moodle's Solr system-read path while keeping broad admin-only fallback permissions last.
 - Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` starts reliably instead of failing Solr's root-user guard.
 - Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module-level counter resets.
-
-- GitHub Actions SolrCloud test steps now fail closed when test output contains `[FAIL]`, even if a future harness regression would otherwise return a green exit status.
 
 - `scripts/solr-tenant-cmd.sh`: drift detection reads `tenants.env` once before iterating, avoiding same-file read/write pipeline hazards and ShellCheck SC2094/SC2143 findings.
 - `scripts/test-moodle-documents.sh`: SolrCloud precheck no longer creates a Core via Core Admin API. It now detects mode and creates/checks a Collection via Collections API in SolrCloud mode, keeping standalone Core logic only for standalone mode.
@@ -50,7 +41,7 @@ All notable changes to this project will be documented in this file.
 - GitLab/GitHub CI documentation now matches the current pipelines and no longer documents the removed mode-switch CI job or obsolete unit-only GitLab lane.
 - Unit/static test execution no longer requires a local `.env`, allowing fresh-checkout CI and developer sanity checks to run before runtime secrets are generated.
 
-## [3.4.6] - 2026-05-30
+## [3.4.6] 
 
 ### Changed
 - Restored and promoted the one-shot init service as `eLeDia-solr-init` as default runtime architecture, including updated docs/diagrams for init responsibilities, multi-instance targeting, and host log flow.
@@ -69,10 +60,8 @@ All notable changes to this project will be documented in this file.
 - SolrCloud runtime now auto-creates internal `.system` collection (idempotent) to prevent Schema Designer `Collection not found: .system` errors.
 - Added optional `ZK_MAX_CNXNS` runtime tuning and startup guardrail logging for Schema Designer sample constraints (5MB limit, no markdown).
 
-### Verified
-- Local run: `./scripts/run-tests.sh --integration-only --tenant --cloud --no-cleanup` → `8/8 PASS`.
 
-## [3.4.0] - 2026-05-27
+## [3.4.0]
 
 ### Changed
 - Removed one-shot init container (`solr-init` / `Dockerfile` / `powerinit.sh`) — SolrCloud
@@ -108,7 +97,7 @@ All notable changes to this project will be documented in this file.
   `/var/log/solr/` to `/var/log/eledia/*/` to match new host log layout.
 - `ansible-role-solr` — `tasks/setup.yml`: logrotate config renamed to `eledia-solr`.
 
-## [3.3.1] - 2026-05-27
+## [3.3.1]
 
 ### Refactored
 - Monolithic scripts split into focused modules, all under 800 lines.
@@ -139,37 +128,13 @@ All notable changes to this project will be documented in this file.
 - `upgrade-docker.sh` — conditional `--build`: skips image rebuild when Dockerfile/config/scripts unchanged (sha256 comparison).
 
 ### Changed
-- eLeDia branding: all module headers standardized (`eLeDia.de / Bernd Schreistetter (bsc)`).
 - Configset renamed: `moodle-tenant` → `eLeDia-moodle-tenant` (ZooKeeper, Collections API, all references).
 - Core/collection names: `moodle_core` → `eLeDia_core`, `moodle_cloud_*` → `eLeDia_cloud_*`.
 - Config directory: `config/` → `eLeDia-config/` (host-side schema and solrconfig).
 - SolrCloud bootstrap: automatic `security.json` + configset upload to ZooKeeper + collection creation on first start.
-- `docker-compose.cloud-test.yml` added for isolated SolrCloud integration testing.
-- `scripts/solr-mode-portability.sh` — import/export/switch interface for standalone ↔ SolrCloud migration.
-- `scripts/test-mode-switch.sh` — continuity test for `standalone → solrcloud → standalone`.
-- `scripts/upgrade-docker.sh` — one-way bare-metal Solr 8/9/10/11 → Docker upgrade script.
-- `systemd/upgrade-docker@.service` — systemd oneshot template for instance-based upgrades.
-- `Dockerfile.wizard` — containerized wizard runner (debian:12-slim, whiptail + textual).
 - `.github/workflows/solr-testing.yml` — push triggers, mode-switch job, containerized linting.
-- Moodle plugin extracted to dedicated repo: `github.com/Codename-Beast/local_eledia_solrplus` (v0.0.1).
 
-### Verified
-- SolrCloud: 8 collections, 37 credentials, security active (401 anonymous), configset in ZK.
-- Local run: `./scripts/run-tests.sh --unit-only --tenant --cloud` → 46/46 PASS.
-- Mode-switch: `./scripts/test-mode-switch.sh` → PASS (`solrcloud → standalone` API continuity).
-
-## [3.1.0] - 2026-05-26
-
-### Changed
-- `.gitlab-ci.yml` auf Runner-Realität ausgerichtet: konfigurierbarer Runner-Tag über `CI_RUNNER_TAG` klar dokumentiert und als Default im Pipeline-File hinterlegt.
-- YAML-Header (`---`) ergänzt für konsistente Lint-Auswertung.
-
-### Verified
-- Lokaler CI-äquivalenter Lint-Check erfolgreich:
-  - `docker compose --env-file .env.example config`
-  - `bash -n` über alle versionierten `*.sh`
-
-## [3.0.8] - 2026-05-25
+## [3.0.8]
 
 ### Changed
 - `config/solrconfig.xml`: `/update/extract` mappt `fmap.content` jetzt auf `content` (kanonisches Suchfeld).
@@ -178,9 +143,6 @@ All notable changes to this project will be documented in this file.
 - README bewusst vereinfacht und für Betrieb/Onboarding klarer gemacht.
 - Alle Markdown-Dokumente auf Release-1.0-Hinweis und aktuellen Stand gebracht.
 
-### Verified
-- Lokaler Lauf: `./scripts/test-moodle-documents.sh` erfolgreich (48/48).
-- GitHub Actions Run `26415360780` erfolgreich (Code Quality, Security Scan, Solr Tests, SolrCloud Tests).
 
 ### Branch-Merge Übersicht (release_1.0)
 - Für `release_1.0` wurden CHANGELOG-Linien aus allen verfügbaren Remote-Branches geprüft:
@@ -191,7 +153,7 @@ All notable changes to this project will be documented in this file.
 - Relevante Versionslinien sind jetzt im Release-Changelog enthalten: `2.0.0` bis `3.0.8`.
 - Historische Branch-Sync-Hinweise bleiben im Verlauf erhalten, damit nichts still verloren geht.
 
-## [3.0.7] - 2026-05-25
+## [3.0.7]
 
 ### Added
 - Neue Shell-Fixture-Generierung (`tests/create-moodle-fixtures.sh`) fuer Moodle/Solr Tika-Tests ohne Python-Abhaengigkeit.
@@ -209,12 +171,7 @@ All notable changes to this project will be documented in this file.
 - bekannte, nicht-funktionale Startup-/PDFBox-Font-WARNs werden als non-actionable gefiltert.
 - neue harte Pruefung auf `URI is too large` bleibt separat aktiv.
 
-### Verified
-- `./scripts/test-moodle-documents.sh` -> PASS (47/47).
-- `./scripts/run-tests.sh --moodle-only` -> PASS (47/47).
-- Solr Log Healthcheck: keine actionable WARN/ERROR/SEVERE und keine URI-Overflow-WARN im Testlauf.
-
-## [3.0.6] - 2026-05-25
+## [3.0.6] 
 
 ### Changed
 - `scripts/test-moodle-documents.sh` fachlich verfeinert, damit die Query-Checks Moodle-Solr-Engine-Logik realistisch abbilden (Moodle 4.1 bis 5.2 Zielbild):
@@ -238,14 +195,9 @@ All notable changes to this project will be documented in this file.
 - Root cause: `-1` ohne Escaping fuehrte zu falscher Query-Interpretation.
 - Fix: URL-encodiertes `\-1` (`%5C-1`) fuer stabile Trefferlogik.
 
-### Verified
-- `./scripts/test-moodle-documents.sh` -> PASS (32/32)
-- `./scripts/run-tests.sh --moodle-only` -> PASS (32/32)
-- Solr Log Healthcheck im Testlauf: keine actionable WARN/ERROR gefunden.
-
 ---
 
-## Branch-Sync-Check (2026-05-24)
+## Branch-Sync-Check
 
 - Nicht uebernommene CHANGELOG-Commits aus anderen Branches geprueft.
 - Offene Branch-Eintraege fuer moeglichen Rueckmerge:
@@ -253,23 +205,17 @@ All notable changes to this project will be documented in this file.
 - `feature/v2.5.0`: 85d9821
 Versioning: Semantic Versioning
 
-## [3.0.5] - 2026-05-24
+## [3.0.5]
 
 ### Changed
 - GitHub Actions (`.github/workflows/solr-testing.yml`): `paths-ignore` fuer Docs-only Commits hinzugefuegt.
 - CI-Topologie optimiert: `solrcloud-test` haengt jetzt direkt an `security-scan` (parallel zu `solr-test`).
 - `Dockerfile.solr`: Base-Image auf Digest gepinnt (`solr:9.10.1@sha256:...`).
 - Operatives Snapshot-Dokument `REPORT.md` aus dem Repository entfernt.
-- README um Kompatibilitaetsmatrix zur ansible-role-solr ergaenzt.
-
-### Verified
-- `./scripts/run-tests.sh --unit-only` erfolgreich.
-- `./scripts/run-tests.sh --integration-only --no-cleanup` erfolgreich.
-- `./scripts/test-moodle-documents.sh` erfolgreich.
 
 ---
 
-## [3.0.4] - 2026-05-24
+## [3.0.4]
 
 ### Fixed
 - CI-Regression in `Run Moodle document tests` behoben (GitHub Actions Run 26352731461):
@@ -285,14 +231,9 @@ Versioning: Semantic Versioning
 - `captureAttr=false` bleibt aktiv.
 - Upload-Limits via System-Properties bleiben aktiv (`solr.multipartUploadLimitKB`, `solr.formdataUploadLimitKB`).
 
-### Verified
-- Lokal reproduziert und verifiziert:
-- `./scripts/test-moodle-documents.sh` -> PASS inkl. Tika PDF Indexing
-- `./scripts/run-tests.sh --integration-only --no-cleanup` -> PASS
-
 ---
 
-## [3.0.3] - 2026-05-24
+## [3.0.3]
 
 ### Fixed
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
@@ -319,7 +260,6 @@ Versioning: Semantic Versioning
 - jeweils mit Zustandsverifikation via `solr-tenant.sh info`.
 
 ### Changed
-- Statusdokumentation konsolidiert.
 - CI-Testablauf angepasst, damit Analyzer-Details nicht mehr zu False-Negatives im Build fuehren.
 - `docs/architecture.md` in beiden Repos um ASCII-Architekturdiagramme erweitert.
 - Compose-/Runtime-Warnungen reduziert:
@@ -328,11 +268,11 @@ Versioning: Semantic Versioning
 - Security-Manager/JVM-Noise reduziert (`SOLR_SECURITY_MANAGER_ENABLED=false`, `-XX:-UseLargePages`).
 
 ### Docs
-- README + Betriebsdoku auf aktuellen Stand gebracht; tenantbezogene Testabdeckung und Fehlerstatus nachgezogen.
+- README aktuellen Stand nachgezogen.
 
 ---
 
-## [3.0.2] - 2026-05-24
+## [3.0.2]
 
 ### Added
 - Copyright/Version Header in allen Shell-Skripten:
@@ -354,18 +294,9 @@ Versioning: Semantic Versioning
 - `DOCKER_DRIVER=overlay2`
 - `docker:24-dind` Service in Test-Template
 - Docker-Readiness-Wait (`until docker info ...`)
-
-### Verified
-- Lokale Testsuite erfolgreich gelaufen (port-isoliert):
-- `./scripts/run-tests.sh --unit-only`
-- `./scripts/run-tests.sh --integration-only --no-cleanup`
-- `./scripts/run-tests.sh --security-only --no-cleanup`
-- Shell-Syntax-Pruefung ueber alle `.sh` im Repo: OK (`bash -n`).
-- GitHub Actions Runs fuer beide Repos erneut angestossen / rerun gestartet.
-
 ---
 
-## [3.0.1] - 2026-05-22
+## [3.0.1]
 
 ### Fixed
 - `setup.sh` Re-Run-Idempotenz: bestehende `.env` wird nicht mehr ungefragt ueberschrieben.
@@ -376,7 +307,7 @@ Versioning: Semantic Versioning
 
 ---
 
-## [3.0.0] - 2026-05-10
+## [3.0.0]
 
 ### Added
 - Multi-Tenant CLI (`scripts/solr-tenant.sh`) mit create/delete/list/passwd/apply/export/caddy-config.
@@ -389,42 +320,5 @@ Versioning: Semantic Versioning
 - `managed-schema` verschlankt (kein `_text_` copyField-Pattern mehr).
 - Monitoring/Setup Altlasten aus Compose entfernt.
 
-[3.0.4]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.3...v3.0.4
-[3.0.3]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.2...v3.0.3
-[3.0.2]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.1...v3.0.2
-[3.0.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v3.0.0...v3.0.1
-[3.0.0]: https://github.com/Codename-Beast/solr-moodle-docker/releases/tag/v3.0.0
-
 ---
 
-## v1 Era (v2.0 – v2.5) — 2024-12 to 2026-04
-
-The v2.x generation was the first stable Docker release of solr-moodle-docker.
-It ran as a **single-tenant setup** (one Moodle per Solr core) with optional
-Prometheus/Grafana monitoring and BasicAuth security.
-
-Full details: [docs/HISTORY-v1.md](docs/HISTORY-v1.md)
-
-| Version | Date       | Theme                                                  |
-|---------|------------|--------------------------------------------------------|
-| 2.0.0   | 2024-12-27 | Initial Docker release — Solr 9.10.0, single-tenant   |
-| 2.1.0   | 2026-01-14 | GitLab CI, dynamic core name, `.env` location refactor |
-| 2.1.1   | 2026-01-15 | Dockerfile simplified via `powerinit.sh` (273→30 lines)|
-| 2.2.0   | 2026-01-15 | Security hardening, Trivy scanning, resource limits    |
-| 2.2.1   | 2026-01-18 | CVE-2025-26519 musl hotfix (untagged)                  |
-| 2.2.2   | 2026-01-24 | Apache reverse proxy templates, CI lint stage (untagged)|
-| 2.3.0   | 2026-03-27 | Moodle 4.x `config-read` 403 fix, password entropy     |
-| 2.3.1   | 2026-03-28 | Solr 9.10.1 CVE update                                 |
-| 2.3.2   | 2026-03-30 | Security permission cleanup, monitoring removed        |
-| 2.4.0   | 2026-04-18 | CI trigger cleanup                                     |
-| 2.5.0   | 2026-04-18 | Log volume documentation                               |
-
-[2.5.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.4.0...v2.5.0
-[2.4.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.2...v2.4.0
-[2.3.2]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.1...v2.3.2
-[2.3.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.3.0...v2.3.1
-[2.3.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.2.0...v2.3.0
-[2.2.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.1.1...v2.2.0
-[2.1.1]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.1.0...v2.1.1
-[2.1.0]: https://github.com/Codename-Beast/solr-moodle-docker/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/Codename-Beast/solr-moodle-docker/releases/tag/v2.0.0
