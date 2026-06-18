@@ -71,6 +71,16 @@ unit_tests() {
         print_fail "SolrCloud apply does not rebuild tenant permissions before all fallback"
     fi
 
+    # Orchestrators must call the first-class command instead of carrying their
+    # own curl/jq authorization writer.
+    print_test "Tenant permission rebuild command is public"
+    if grep -q 'rebuild-permissions).*cmd_rebuild_permissions' scripts/solr-tenant.sh && \
+       grep -q '^cmd_rebuild_permissions()' scripts/solr-tenant-cmd.sh; then
+        print_pass "solr-tenant.sh exposes rebuild-permissions"
+    else
+        print_fail "solr-tenant.sh does not expose rebuild-permissions"
+    fi
+
     # Container-first delivery: helper scripts must be baked into Solr image
     print_test "Dockerfile.solr embeds runtime helper scripts"
     if grep -q 'COPY --chown=solr:solr scripts/ /opt/solr/scripts/' Dockerfile.solr; then

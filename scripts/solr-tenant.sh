@@ -34,6 +34,7 @@ case "$cmd" in
   core-remove)  cmd_core_remove "$@" ;;
   apply)        cmd_apply ;;
   sync-sot)       cmd_sync_sot ;;
+  rebuild-permissions) cmd_rebuild_permissions ;;
   drift-detect)   cmd_drift_detect ;;
   drift-remediate) cmd_drift_remediate ;;
   export)         cmd_export ;;

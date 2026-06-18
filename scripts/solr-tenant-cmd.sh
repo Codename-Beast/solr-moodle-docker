@@ -590,6 +590,37 @@ cmd_sync_sot() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: rebuild-permissions
+#
+# Rebuilds tenant authorization rules from tenants.env and keeps the broad
+# fallback permission `all` as the last rule. This is intentionally exposed as
+# a first-class command so orchestration layers (Ansible) delegate tenant ACL
+# mutation to the container script instead of carrying their own curl/jq writer.
+# ---------------------------------------------------------------------------
+
+# --- cmd_rebuild_permissions ---
+cmd_rebuild_permissions() {
+  _load_admin_creds
+  _log_action "rebuild-permissions"
+
+  if ! _is_cloud_mode; then
+    printf '✔ Standalone mode: tenant permissions are shared; nothing to rebuild\n'
+    return 0
+  fi
+
+  if [ ! -f "$TENANTS_ENV" ]; then
+    printf 'ERROR: tenants.env not found: %s\n' "$TENANTS_ENV" >&2
+    return 1
+  fi
+
+  _rebuild_tenant_permissions || return 1
+  _ensure_all_permission_last || return 1
+
+  printf '✔ Rebuilt tenant permissions from tenants.env and kept fallback all last\n'
+  _log "INFO" "rebuild-permissions completed"
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: export (YAML for Ansible host_vars)
 # ---------------------------------------------------------------------------
 
@@ -882,6 +913,7 @@ Commands:
   core-remove <name> --core <core>    Remove core permission from tenant
   apply                               Re-apply all tenants from tenants.env (idempotent)
   sync-sot                            Enforce .env+tenants.env as SOT and rotate unknown API users
+  rebuild-permissions                 Rebuild tenant ACLs from tenants.env and keep all last
   drift-detect                        Detect runtime drift vs tenants.env (users/collections)
   drift-remediate                     Reconcile runtime drift via sync-sot
   export                              YAML output for Ansible host_vars
@@ -906,6 +938,3 @@ Examples:
 Logs: /var/log/solr/tenant.log
 EOF
 }
-
-
-
