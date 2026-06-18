@@ -108,7 +108,15 @@ echo -e "${NC}"
 [ $RUN_MOODLE -eq 1 ] && { source "${SCRIPT_DIR}/test-moodle.sh"; moodle_document_tests; }
 [ $RUN_TENANT -eq 1 ] && { source "${SCRIPT_DIR}/test-integration.sh"; tenant_tests; }
 if [ $RUN_TENANT_COMMANDS -eq 1 ]; then
-    if SOLR_TEST_PREFIX="cmdtest$$" "${SCRIPT_DIR}/test-tenant-commands.sh"; then
+    tenant_command_container="${SOLR_TEST_CONTAINER:-}"
+    if [ -z "$tenant_command_container" ]; then
+        tenant_command_instance="${INSTANCE_NAME:-}"
+        if [ -z "$tenant_command_instance" ] && [ -f .env ]; then
+            tenant_command_instance="$(grep -E '^INSTANCE_NAME=' .env | tail -n1 | cut -d= -f2-)"
+        fi
+        tenant_command_container="${tenant_command_instance:-solr}-solr"
+    fi
+    if SOLR_TEST_CONTAINER="$tenant_command_container" SOLR_TEST_PREFIX="cmdtest$$" "${SCRIPT_DIR}/test-tenant-commands.sh"; then
         print_pass "solr-tenant.sh command matrix"
     else
         print_fail "solr-tenant.sh command matrix"
