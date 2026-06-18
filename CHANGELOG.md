@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Added `solr-tenant.sh rebuild-permissions` as a first-class command that rebuilds SolrCloud tenant ACLs from `tenants.env` and keeps fallback permission `all` last.
+- Rebuilt SolrCloud collection ACLs are inserted before the broad built-in `read`/`update` permissions, so tenant collection write rules are evaluated before generic first-match rules.
 - Unit coverage now asserts that the public dispatcher exposes the tenant permission rebuild command for orchestration layers.
 
 ## [3.4.8] 

@@ -179,22 +179,32 @@ _rebuild_tenant_permissions() {
     read_roles_json="$(printf 'admin\nsupport\n%s\n' "$roles" | sed '/^$/d' | sort -u | jq -R . | jq -s .)"
     write_roles_json="$(printf 'admin\n%s\n' "$roles" | sed '/^$/d' | sort -u | jq -R . | jq -s .)"
 
-    read_payload="$(jq -n --arg n "collection-${c}-read" --arg col "$c" --argjson roles "$read_roles_json" \
-      '{"set-permission": {
+    # Generic Solr permissions such as "read" and "update" are broad first-match
+    # rules. Tenant collection permissions must be inserted before them or the
+    # tenant-specific role will never be evaluated and writes return HTTP 403.
+    local read_before update_before
+    authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
+    read_before="$(printf '%s' "$authz" | jq -r '.authorization.permissions[]? | select(.name=="read") | .index' 2>/dev/null | head -1)"
+    [ -n "$read_before" ] || read_before="null"
+    read_payload="$(jq -n --arg n "collection-${c}-read" --arg col "$c" --argjson roles "$read_roles_json" --argjson before "$read_before" \
+      '{"set-permission": ({
         "name": $n,
         "role": $roles,
         "collection": [$col],
         "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
-      }}')"
+      } + (if $before == null then {} else {"before": $before} end))}')"
     _cloud_authz_api "$read_payload" || return 1
 
-    write_payload="$(jq -n --arg n "collection-${c}-write" --arg col "$c" --argjson roles "$write_roles_json" \
-      '{"set-permission": {
+    authz="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
+    update_before="$(printf '%s' "$authz" | jq -r '.authorization.permissions[]? | select(.name=="update") | .index' 2>/dev/null | head -1)"
+    [ -n "$update_before" ] || update_before="null"
+    write_payload="$(jq -n --arg n "collection-${c}-write" --arg col "$c" --argjson roles "$write_roles_json" --argjson before "$update_before" \
+      '{"set-permission": ({
         "name": $n,
         "role": $roles,
         "collection": [$col],
         "path": ["/update","/update/extract"]
-      }}')"
+      } + (if $before == null then {} else {"before": $before} end))}')"
     _cloud_authz_api "$write_payload" || return 1
   done
 
