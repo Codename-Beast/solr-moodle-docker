@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.6
+# Version: v3.4.9
 
 # =========================================
 # Solr Init Container — Multi-Tenant

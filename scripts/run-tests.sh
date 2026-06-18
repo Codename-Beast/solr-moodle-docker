@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.1.0
+# Version: v3.4.9
 #
 # run-tests.sh — Main test orchestrator
 # Sources modular test suites and dispatches by CLI flags.
@@ -24,6 +24,7 @@ RUN_MOODLE=1
 RUN_CLEANUP=1
 RUN_TENANT=0
 RUN_TENANT_SCALE=0
+RUN_TENANT_COMMANDS=0
 RUN_CLOUD=0
 RUN_MODE_SWITCH=0
 
@@ -51,7 +52,8 @@ while [[ $# -gt 0 ]]; do
             shift ;;
         --no-cleanup)     RUN_CLEANUP=0; shift ;;
         --no-performance) RUN_PERFORMANCE=0; shift ;;
-        --tenant)         RUN_TENANT=1; shift ;;
+        --tenant)         RUN_TENANT=1; RUN_TENANT_COMMANDS=1; shift ;;
+        --tenant-commands) RUN_TENANT_COMMANDS=1; shift ;;
         --tenant-scale)   RUN_TENANT=1; RUN_TENANT_SCALE=1; shift ;;
         --cloud|--solrcloud) RUN_CLOUD=1; SOLR_MODE=solrcloud; shift ;;
         --mode-switch)    RUN_MODE_SWITCH=1; shift ;;
@@ -66,7 +68,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --moodle-only        Run only Moodle document tests"
             echo "  --no-cleanup         Skip cleanup tests"
             echo "  --no-performance     Skip timing/load performance tests"
-            echo "  --tenant             Run multi-tenant isolation tests"
+            echo "  --tenant             Run multi-tenant isolation tests and command matrix"
+            echo "  --tenant-commands    Run solr-tenant.sh command matrix against running stack"
             echo "  --tenant-scale       Run tenant scale test (30 tenants/cores/users)"
             echo "  --cloud              Run SolrCloud-specific tests"
             echo "  --mode-switch        Validate standalone <-> solrcloud switch continuity"
@@ -83,7 +86,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Tenant/Cloud suites require running stack
-if [ $RUN_TENANT -eq 1 ] || [ $RUN_CLOUD -eq 1 ] || [ $RUN_MODE_SWITCH -eq 1 ]; then
+if [ $RUN_TENANT -eq 1 ] || [ $RUN_TENANT_COMMANDS -eq 1 ] || [ $RUN_CLOUD -eq 1 ] || [ $RUN_MODE_SWITCH -eq 1 ]; then
     RUN_INTEGRATION=1
 fi
 
@@ -104,6 +107,13 @@ echo -e "${NC}"
 [ $RUN_PERFORMANCE -eq 1 ] && { source "${SCRIPT_DIR}/test-security.sh"; performance_tests; }
 [ $RUN_MOODLE -eq 1 ] && { source "${SCRIPT_DIR}/test-moodle.sh"; moodle_document_tests; }
 [ $RUN_TENANT -eq 1 ] && { source "${SCRIPT_DIR}/test-integration.sh"; tenant_tests; }
+if [ $RUN_TENANT_COMMANDS -eq 1 ]; then
+    if SOLR_TEST_PREFIX="cmdtest$$" "${SCRIPT_DIR}/test-tenant-commands.sh"; then
+        print_pass "solr-tenant.sh command matrix"
+    else
+        print_fail "solr-tenant.sh command matrix"
+    fi
+fi
 [ $RUN_TENANT_SCALE -eq 1 ] && { source "${SCRIPT_DIR}/test-integration.sh"; tenant_scale_tests; }
 [ $RUN_CLOUD -eq 1 ] && { source "${SCRIPT_DIR}/test-moodle.sh"; solrcloud_tests; }
 [ $RUN_MODE_SWITCH -eq 1 ] && { source "${SCRIPT_DIR}/test-moodle.sh"; mode_switch_tests; }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.1.0
+# Version: v3.4.9
 #
 # eLeDia Test Library — colors, counters, print helpers
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.

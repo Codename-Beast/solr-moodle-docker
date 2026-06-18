@@ -290,7 +290,20 @@ main() {
   # Checksum file tracks the last built state.
   local build_checksum_file="${MIGRATION_ROOT}/${INSTANCE_NAME}/.build-checksum"
   local current_checksum
-  current_checksum="$({ sha256sum "${ROOT_DIR}/Dockerfile.solr" "${ROOT_DIR}/docker-compose.yml" "${ROOT_DIR}/eLeDia-config/managed-schema" "${ROOT_DIR}/eLeDia-config/solrconfig.xml" "${ROOT_DIR}/init/powerinit.sh" "${ROOT_DIR}/scripts/solr-cloud-entrypoint.sh" 2>/dev/null; } | sort | sha256sum | cut -d' ' -f1)"
+  current_checksum="$(
+    {
+      printf '%s\0' \
+        "${ROOT_DIR}/Dockerfile" \
+        "${ROOT_DIR}/Dockerfile.solr" \
+        "${ROOT_DIR}/docker-compose.yml" \
+        "${ROOT_DIR}/security.json.template" \
+        "${ROOT_DIR}/init/security.json.template" \
+        "${ROOT_DIR}/eLeDia-config/managed-schema" \
+        "${ROOT_DIR}/eLeDia-config/solrconfig.xml" \
+        "${ROOT_DIR}/init/powerinit.sh"
+      find "${ROOT_DIR}/scripts" -maxdepth 1 -type f -name '*.sh' -print0
+    } | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
+  )" # includes solr-tenant-cmd.sh and all runtime scripts copied by Dockerfile.solr
   local needs_build="yes"
   if [ -f "$build_checksum_file" ] && [ -f "$state_file" ]; then
     local last_checksum

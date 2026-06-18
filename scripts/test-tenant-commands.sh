@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.1.0
+# Version: v3.4.9
 #
 # eLeDia tenant command matrix test.
 # Exercises solr-tenant.sh commands against a running Solr container.
@@ -111,6 +111,16 @@ main() {
   code="$(probe_code "$user_a" "$pass_a" "/${CORE_SHARED}/select?q=*:*&rows=0")"
   assert_code 'new password works after passwd' 200 "$code"
 
+  local explicit_pass_a="ExplicitTenantCommandPassword2026"
+  local generated_pass_a="$pass_a"
+  if run_tenant passwd "$TENANT_A" --password "$explicit_pass_a" >/tmp/tenant-command-passwd-explicit.out; then pass 'passwd --password command'; else fail 'passwd --password command'; fi
+  pass_a="$(get_tenant_field "$TENANT_A" PASS)"
+  if [ "$pass_a" = "$explicit_pass_a" ]; then pass 'tenants.env stores explicit passwd value'; else fail 'tenants.env does not store explicit passwd value'; fi
+  code="$(probe_code "$user_a" "$generated_pass_a" "/${CORE_SHARED}/select?q=*:*&rows=0")"
+  assert_code 'generated password rejected after explicit passwd' 401 "$code"
+  code="$(probe_code "$user_a" "$explicit_pass_a" "/${CORE_SHARED}/select?q=*:*&rows=0")"
+  assert_code 'explicit password works after passwd --password' 200 "$code"
+
   if run_tenant core-add "$TENANT_A" --core "$CORE_A_EXTRA" >/tmp/tenant-command-core-add.out; then pass 'core-add command'; else fail 'core-add command'; fi
   code="$(probe_code "$user_a" "$pass_a" "/${CORE_A_EXTRA}/select?q=*:*&rows=0")"
   assert_code 'tenant A select added core' 200 "$code"
@@ -158,4 +168,6 @@ main() {
   [ "$fail_count" -eq 0 ]
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi

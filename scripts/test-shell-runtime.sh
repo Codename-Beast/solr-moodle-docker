@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.1.0
+# Version: v3.4.9
 #
 # Local runtime smoke tests for shell entrypoints.
 # Executes scripts with safe local inputs and validates their responses.
@@ -185,7 +185,7 @@ test_setup_isolated_stack() {
     assert_contains "setup summary" "$WORK_DIR/setup.out" 'Setup Complete'
     if (cd "$ws" && SOLR_TEST_CONTAINER="${instance}-solr" SOLR_TEST_PREFIX="rtstand$$" ./scripts/test-tenant-commands.sh) >"$WORK_DIR/setup-command-matrix.out" 2>&1; then
       pass "tenant command matrix on setup stack"
-      assert_contains "tenant matrix summary" "$WORK_DIR/setup-command-matrix.out" 'passed=26 failed=0'
+      assert_contains "tenant matrix summary" "$WORK_DIR/setup-command-matrix.out" 'failed=0'
     else
       fail "tenant command matrix on setup stack failed"
       sed -n '1,160p' "$WORK_DIR/setup-command-matrix.out" | sed 's/^/  | /'

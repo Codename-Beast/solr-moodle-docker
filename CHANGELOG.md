@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - `solr-tenant.sh passwd` now accepts `--password <pass>` so orchestration can enforce hostvars-provided tenant passwords through the container script without inline Security API writers.
 - Rebuilt SolrCloud collection ACLs are inserted before the broad built-in `read`/`update` permissions, so tenant collection write rules are evaluated before generic first-match rules.
 - Unit coverage now asserts that the public dispatcher exposes the tenant permission rebuild command for orchestration layers.
+- `scripts/run-tests.sh --tenant` now executes the tenant command matrix, and that matrix verifies `passwd --password` with old-password rejection and explicit-password login success.
+- `upgrade-docker.sh` smart rebuild checksums now include all runtime shell scripts copied into the Solr image, plus both security templates.
+- Docker Compose and script version headers now consistently advertise v3.4.9, and the init image tag is derived from `${STACK_VERSION:-v3.4.9}` documented in `.env.example`.
+- The init container mounts `tenants.env` read-only, and unit tests now assert both security templates stay identical.
 
 ## [3.4.8] 
 

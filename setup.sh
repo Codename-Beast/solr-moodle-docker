@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.0.1
+# Version: v3.4.9
 
 # =========================================
 # Solr Multi-Tenant — Interactive Setup

@@ -12,18 +12,18 @@
   "authorization": {
     "class": "solr.RuleBasedAuthorizationPlugin",
     "permissions": [
-      { "name": "health",          "role": ["admin", "support", "moodle"] },
-      { "name": "schema-read",     "role": ["admin", "support", "moodle"] },
-      { "name": "schema-edit",     "role": ["admin", "moodle"] },
-      { "name": "read",            "role": ["admin", "support", "moodle"] },
-      { "name": "update",          "role": ["admin", "moodle"] },
-      { "name": "config-read",     "role": ["admin", "support", "moodle"] },
-      { "name": "metrics-read",    "role": ["admin", "support", "moodle"] },
+      { "name": "health",           "role": ["admin", "support", "moodle"] },
+      { "name": "schema-read",      "role": ["admin", "support", "moodle"] },
+      { "name": "schema-edit",      "role": ["admin", "moodle"] },
+      { "name": "read",             "role": ["admin", "support", "moodle"] },
+      { "name": "update",           "role": ["admin", "moodle"] },
+      { "name": "config-read",      "role": ["admin", "support", "moodle"] },
+      { "name": "metrics-read",     "role": ["admin", "support", "moodle"] },
       { "name": "core-system-read", "role": ["admin", "support", "moodle", "tenant"],
         "path": ["/admin/system", "/admin/system/", "/solr/*/admin/system", "/solr/*/admin/system/"] },
-      { "name": "core-admin-read", "role": ["admin", "support", "moodle"] },
-      { "name": "core-admin-edit", "role": ["admin"] },
-      { "name": "all",             "role": "admin" }
+      { "name": "core-admin-read",  "role": ["admin", "support", "moodle"] },
+      { "name": "core-admin-edit",  "role": ["admin"] },
+      { "name": "all",              "role": "admin" }
     ],
     "user-role": {
       "__ADMIN_USER__":   "admin",

@@ -1,12 +1,13 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.1.0
+# Version: v3.4.9
 #
 # eLeDia Unit Tests — file checks, compose config, Dockerfile
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
 # Sourced by run-tests.sh — do not run directly.
 
 # shellcheck disable=SC2153  # Variables are initialized by run-tests.sh/test-lib.sh before sourcing modules.
+# shellcheck disable=SC2016  # Static grep patterns intentionally match literal shell variables.
 # Unit Tests Module
 
 unit_tests() {
@@ -95,6 +96,38 @@ unit_tests() {
         print_fail "docker-compose still bind-mounts ./scripts into solr service"
     else
         print_pass "docker-compose runtime is image-based for /opt/solr/scripts"
+    fi
+
+
+
+    # The central test orchestrator must execute the tenant command matrix when
+    # --tenant is used by CI; otherwise passwd/rebuild command contracts are only
+    # verified indirectly by downstream repos.
+    print_test "run-tests executes tenant command matrix"
+    if grep -q 'RUN_TENANT_COMMANDS=1' scripts/run-tests.sh && \
+       grep -q 'test-tenant-commands.sh' scripts/run-tests.sh && \
+       grep -q 'passwd "\$TENANT_A" --password' scripts/test-tenant-commands.sh; then
+        print_pass "tenant command matrix is wired into run-tests and covers passwd --password"
+    else
+        print_fail "tenant command matrix is not wired into run-tests or misses passwd --password"
+    fi
+
+    # Dockerfile.solr copies the complete scripts/ tree into the runtime image.
+    # Smart rebuild checksums must therefore include script changes, especially
+    # solr-tenant-cmd.sh and related helper modules.
+    print_test "upgrade smart rebuild tracks runtime scripts"
+    if grep -q 'find "${ROOT_DIR}/scripts"' scripts/upgrade-docker.sh && \
+       grep -q 'solr-tenant-cmd.sh' scripts/upgrade-docker.sh; then
+        print_pass "upgrade-docker checksum covers runtime scripts"
+    else
+        print_fail "upgrade-docker checksum does not cover runtime scripts"
+    fi
+
+    print_test "security templates stay in sync"
+    if cmp -s security.json.template init/security.json.template; then
+        print_pass "root and init security.json.template are identical"
+    else
+        print_fail "security.json.template files drifted apart"
     fi
 
     # Test 4: Environment variable template
