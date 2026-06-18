@@ -226,16 +226,17 @@ cmd_enable() {
 
 # --- cmd_passwd ---
 cmd_passwd() {
-  local name=""
+  local name="" provided_pass=""
   while [ $# -gt 0 ]; do
     case "$1" in
+      --password) provided_pass="$2"; shift 2 ;;
       --dry-run) DRY_RUN=1; shift ;;
       -*) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
       *) name="$1"; shift ;;
     esac
   done
 
-  [ -z "$name" ] && { printf 'Usage: solr-tenant.sh passwd <name>\n' >&2; exit 1; }
+  [ -z "$name" ] && { printf 'Usage: solr-tenant.sh passwd <name> [--password <password>]\n' >&2; exit 1; }
   _validate_name "$name"
 
   if ! _tenant_exists "$name"; then
@@ -251,7 +252,11 @@ cmd_passwd() {
   cores="$(_get_tenant_field "$name" "CORES")"
 
   local new_pass first_core
-  new_pass="$(_gen_password)"
+  if [ -n "$provided_pass" ]; then
+    new_pass="$provided_pass"
+  else
+    new_pass="$(_gen_password)"
+  fi
   first_core="$(printf '%s' "$cores" | cut -d, -f1)"
   _write_credential "$user" "$new_pass"
   _wait_for_security_reload "$user" "$new_pass" "$first_core"
@@ -906,7 +911,7 @@ Commands:
   create <name> --cores <c1>[,<c2>]  Create tenant with one or more Solr cores
   delete <name>                       Deactivate tenant (data preserved)
   enable <name>                       Re-enable deactivated tenant (new password)
-  passwd <name>                       Reset tenant password
+  passwd <name> [--password <pass>]     Reset tenant password or enforce provided one
   list                                List all tenants
   info <name>                         Show tenant details
   core-add <name> --core <core>       Add a core to existing tenant
