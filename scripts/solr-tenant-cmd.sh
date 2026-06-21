@@ -513,7 +513,7 @@ cmd_apply() {
     esac
   done < "$TENANTS_ENV"
 
-  if _is_cloud_mode; then
+  if [ "$count" -gt 0 ] && _is_cloud_mode; then
     _rebuild_tenant_permissions || return 1
     _ensure_all_permission_last || return 1
   fi
@@ -545,6 +545,11 @@ cmd_sync_sot() {
   _log_action "sync-sot"
 
   cmd_apply
+
+  if [ ! -f "$TENANTS_ENV" ] || ! grep -q '^TENANT_.*_CORES=' "$TENANTS_ENV"; then
+    _log "INFO" "No tenant collections configured — skipping sync-sot"
+    return 0
+  fi
 
   if _is_cloud_mode; then
     _rebuild_tenant_permissions || return 1

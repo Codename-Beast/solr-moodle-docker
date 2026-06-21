@@ -65,8 +65,10 @@ unit_tests() {
 
     # apply must rebuild tenant permissions before moving the fallback all rule to the end.
     print_test "SolrCloud apply rebuilds tenant permissions"
-    if grep -A5 'if _is_cloud_mode; then' scripts/solr-tenant-cmd.sh | grep -q '_rebuild_tenant_permissions' && \
-       grep -A6 'if _is_cloud_mode; then' scripts/solr-tenant-cmd.sh | grep -q '_ensure_all_permission_last'; then
+    if awk '/^cmd_apply\(\) \{/,/^cmd_sync_sot\(\) \{/' scripts/solr-tenant-cmd.sh | \
+       grep -q '_rebuild_tenant_permissions' && \
+       awk '/^cmd_apply\(\) \{/,/^cmd_sync_sot\(\) \{/' scripts/solr-tenant-cmd.sh | \
+       grep -q '_ensure_all_permission_last'; then
         print_pass "SolrCloud apply rebuilds tenant permissions and then moves all last"
     else
         print_fail "SolrCloud apply does not rebuild tenant permissions before all fallback"

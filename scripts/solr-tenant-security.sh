@@ -262,7 +262,7 @@ _remove_permission() {
 
 # --- _wait_for_security_reload ---
 _wait_for_security_reload() {
-  local user="$1" pass="$2" core="${3:-}" max_secs="${4:-10}"
+  local user="$1" pass="$2" core="${3:-}" max_secs="${4:-30}"
   local url
   if [ -n "$core" ]; then
     url="${SOLR_BASE}/${core}/admin/ping"

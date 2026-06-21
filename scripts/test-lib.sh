@@ -71,6 +71,64 @@ exec > >(tee -a "${RUN_LOG_FILE}") 2>&1
 
 _is_cloud_mode() { [ "${SOLR_MODE}" = "solrcloud" ]; }
 
+_solr_local_url_prefix() {
+    printf 'http://%s:%s/solr/' "${SOLR_HOST}" "${SOLR_PORT}"
+}
+
+_solr_url_matches_local_container() {
+    local prefix arg
+    prefix="$(_solr_local_url_prefix)"
+    for arg in "$@"; do
+        case "$arg" in
+            "${prefix}"*)
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+curl() {
+    local output status
+    if _solr_url_matches_local_container "$@"; then
+        output="$(command curl "$@" 2>/dev/null)"
+        status=$?
+        if [ $status -eq 0 ] && [ -n "$output" ] && [ "$output" != "000" ]; then
+            printf '%s' "$output"
+            return 0
+        fi
+
+        output="$(docker exec "$SOLR_CONTAINER" curl "$@" 2>/dev/null)"
+        status=$?
+        printf '%s' "$output"
+        return $status
+    fi
+
+    command curl "$@"
+}
+
+timeout() {
+    local limit="$1"
+    shift
+
+    if [ $# -gt 0 ] && [ "$1" = "curl" ] && _solr_url_matches_local_container "$@"; then
+        shift
+        local output status
+        output="$(command timeout "$limit" curl "$@" 2>/dev/null)"
+        status=$?
+        if [ $status -eq 0 ] && [ -n "$output" ] && [ "$output" != "000" ]; then
+            printf '%s' "$output"
+            return 0
+        fi
+
+        output="$(command timeout "$limit" docker exec "$SOLR_CONTAINER" curl "$@" 2>/dev/null)"
+        status=$?
+        printf '%s' "$output"
+        return $status
+    fi
+
+    command timeout "$limit" "$@"
+}
 
 wait_for_solr_ready() {
     local admin_pass="$1"

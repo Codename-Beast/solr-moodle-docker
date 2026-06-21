@@ -5,14 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
-- `solr-cloud-entrypoint.sh` now fails hard when `solr-tenant.sh apply` or `sync-sot` fails during startup. Root cause: the entrypoint only logged warnings and kept booting with a half-initialized tenant/security state.
-- Security reload waits now fail the command instead of silently continuing on timeout. Root cause: `_wait_for_security_reload` returned success even when Solr never picked up the new auth state.
-- Tenant password and enable flows now persist `PASS` / `ACTIVE` before the reload wait and abort cleanly if the reload does not happen. Root cause: the script could move on while `tenants.env` and the live Solr auth state were no longer in sync.
-- Core names are validated consistently before they are written into Solr or tenant config. Root cause: the first version of the validator was too strict for existing branded names like `eLeDia_core_a`, so valid tenants were rejected before the stack could come up.
-- `cmd_apply` now stops on a failing core creation instead of swallowing the error and pretending the tenant was applied. Root cause: the loop ignored `_create_core` failures, so a broken core left `apply` in a false-success state.
+- `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Startup fehlschlägt. Root-cause: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
+- Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Root-cause: `_wait_for_security_reload` lieferte Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
+- Tenant-Passwort- und Enable-Flows schreiben `PASS` / `ACTIVE` jetzt vor dem Reload-Wait weg und brechen sauber ab, wenn der Reload nicht kommt. Root-cause: Das Script konnte weiterlaufen, obwohl `tenants.env` und der Live-Solr-Auth-State nicht mehr synchron waren.
+- Core-Namen werden jetzt konsistent validiert, bevor sie in Solr oder die Tenant-Konfiguration geschrieben werden. Root-cause: Die erste Validator-Version war für bestehende branded Namen wie `eLeDia_core_a` zu streng, dadurch wurden gültige Tenants vor dem Start abgelehnt.
+- `cmd_apply` stoppt jetzt bei einem fehlschlagenden Core-Create, statt den Fehler zu schlucken und den Tenant als erfolgreich angewendet zu markieren. Root-cause: Die Schleife ignorierte `_create_core`-Fehler, dadurch blieb `apply` fälschlich auf Erfolg.
 
 ### Added
-- Unit coverage now checks the hard-fail bootstrap path, the core-name validation path, and the security reload timeout behavior.
+- Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.
 
 ## [3.4.9]
 
