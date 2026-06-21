@@ -1,79 +1,49 @@
-# Monitoring-Integration
+# 📈 Monitoring
 
-> Monitoring ist optional. Der Stack enthält keinen eingebauten Monitoring-Service.
-> Integration läuft über separate `docker-compose.monitoring.yml` (nicht im Repo enthalten).
+Monitoring ist optional. Der Stack liefert Solr-Metriken, aber er bringt keinen vollständigen Monitoring-Betrieb als Pflichtbestandteil mit.
 
 ---
 
-## Metriken-Endpunkt
+## Endpunkte
 
-Solr stellt Metriken bereit (BasicAuth erforderlich):
+| Zweck | Endpoint |
+|---|---|
+| Systeminfo | `/solr/admin/info/system` |
+| Health | `/solr/admin/ping` |
+| Metriken | `/solr/admin/metrics` |
 
-```
-http://localhost:${SOLR_PORT:-8983}/solr/admin/metrics?wt=json
-```
-
-Auth: `SOLR_SUPPORT_USER` / `SOLR_SUPPORT_PASSWORD` aus `.env`
+Der Zugriff läuft über Basic Auth. Für reine Status- und Metrikabfragen ist der Support-User vorgesehen.
 
 ---
 
 ## Prometheus
 
-Der Solr Prometheus Exporter ist im offiziellen Solr-Image enthalten.
+Ein externer Prometheus kann Solr-Metriken über den Proxy oder lokal auf dem Host abfragen. Wichtig ist, dass der Solr-Port nicht öffentlich geöffnet wird.
 
-Beispiel-Integration via separatem Compose-File:
-
-```yaml
-# docker-compose.monitoring.yml
-services:
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    network_mode: host   # direkt auf 127.0.0.1:${SOLR_PORT}
-```
-
-Credentials: `SOLR_SUPPORT_USER` / `SOLR_SUPPORT_PASSWORD` aus `.env`.
-
-Dokumentation: [Apache Solr Prometheus Exporter](https://solr.apache.org/guide/solr/latest/deployment-guide/monitoring-with-prometheus-and-grafana.html)
-
----
-
-## Loki (Log-Aggregation)
-
-Solr-Container schreibt Logs via Docker JSON-Driver (`json-file`, max 10MB, 3 Dateien).
-
-Promtail-Beispiel:
+Beispielidee:
 
 ```yaml
-# promtail-config.yaml
 scrape_configs:
   - job_name: solr
-    docker_sd_configs:
-      - host: unix:///var/run/docker.sock
-        filters:
-          - name: name
-            values: ["${INSTANCE_NAME:-solr}-solr"]
-    relabel_configs:
-      - source_labels: [__meta_docker_container_name]
-        target_label: container
+    metrics_path: /solr/admin/metrics
+    static_configs:
+      - targets: ['127.0.0.1:8983']
 ```
 
 ---
 
-## Empfohlene Alerts
+## Logs
 
-| Alert | Schwelle | Priorität |
-|-------|----------|-----------|
-| Container unhealthy | sofort | kritisch |
-| Backup-Log ERROR | täglich prüfen | hoch |
-| Disk > 80% (Backup-Verzeichnis) | täglich prüfen | mittel |
-| Heap-Nutzung > 85% | täglich prüfen | mittel |
+Runtime-Logs liegen unter dem in `.env` gesetzten `ELEDIA_LOG_ROOT`. Container-Logs bleiben zusätzlich über Docker verfügbar:
+
+```bash
+docker compose logs --no-color solr
+```
 
 ---
 
-## Vollständiges Monitoring-Setup
+## Hinweise
 
-Für ein vollständiges Monitoring-Setup (Prometheus + Grafana + Loki + Alloy)
-steht die [ansible-role-solr](https://github.com/Codename-Beast/ansible-role-solr)
-zur Verfügung — diese richtet den kompletten Monitoring-Stack automatisiert ein.
+- Kein direkter öffentlicher Zugriff auf Solr nur für Monitoring.
+- Alerts sollten HTTP-Status, Heap, Query-Fehler und Disk-Füllstand abdecken.
+- Für produktive Dashboards ist der externe Monitoring-Stack zuständig.

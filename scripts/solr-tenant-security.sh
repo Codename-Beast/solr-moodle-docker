@@ -258,7 +258,7 @@ _remove_permission() {
 # The Security API updates in-memory state immediately; this confirms propagation.
 # Args: $1 - username, $2 - password, $3 - optional core for /admin/ping (default: system info),
 #        $4 - max wait seconds (default: 10)
-# Returns: 0 when auth succeeds within timeout; 0 with WARN log if timeout is exceeded
+# Returns: 0 when auth succeeds within timeout; 1 with ERROR log if timeout is exceeded
 
 # --- _wait_for_security_reload ---
 _wait_for_security_reload() {
@@ -281,8 +281,8 @@ _wait_for_security_reload() {
     sleep 1
     i=$((i + 1))
   done
-  _log "WARN" "Security reload not confirmed after ${max_secs}s — continuing"
-  return 0
+  _log "ERROR" "Security reload not confirmed after ${max_secs}s"
+  return 1
 }
 
 # ---------------------------------------------------------------------------

@@ -1,78 +1,62 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 1152" width="2048" height="1152" font-family="Segoe UI, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560" role="img" aria-label="Installation und Bootstrap">
   <defs>
-    <marker id="arr" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0,0 L0,14 L14,7 z" fill="#f97316"/></marker>
-    <radialGradient id="coreGlow" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#3b1f0f"/><stop offset="100%" stop-color="#111111"/></radialGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#f97316" flood-opacity="0.25"/></filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#262626" stroke-width="0.6"/>
+    </pattern>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#f97316"/>
+    </marker>
+    <style>
+      .bg{fill:#0a0a0a} .title{font:700 22px Arial,sans-serif;fill:#fdba74} .sub{font:400 12px Arial,sans-serif;fill:#a8a29e}
+      .box{fill:#171717;stroke:#f97316;stroke-width:1.6;rx:12} .box2{fill:#111827;stroke:#fb923c;stroke-width:1.4;rx:12}
+      .store{fill:#0e0e0e;stroke:#c2410c;stroke-width:1.5} .muted{fill:#1a1a1a;stroke:#78716c;stroke-width:1.2;stroke-dasharray:5 4;rx:10}
+      .label{font:700 14px Arial,sans-serif;fill:#fed7aa} .small{font:400 11px Arial,sans-serif;fill:#d6d3d1} .tiny{font:400 10px Arial,sans-serif;fill:#a8a29e}
+      .arrow{stroke:#f97316;stroke-width:2;fill:none;marker-end:url(#arr)} .dash{stroke:#fb923c;stroke-width:1.7;fill:none;stroke-dasharray:6 5;marker-end:url(#arr)}
+      .group{fill:none;stroke:#7c2d12;stroke-width:1.4;stroke-dasharray:8 6;rx:16}
+    </style>
   </defs>
-  <rect width="2048" height="1152" fill="#090909"/>
-  <rect x="32" y="32" width="1984" height="1088" rx="28" fill="#0d0d0d" stroke="#f97316" stroke-width="3"/>
-  <text x="1024" y="82" text-anchor="middle" fill="#f97316" font-size="40" font-weight="800">solr-moodle-docker Installation</text>
-  <text x="1024" y="122" text-anchor="middle" fill="#a8a29e" font-size="22">Dateien, Images, Containerstart, Tenant Bootstrap und Moodle-Verifikation</text>
-  <line x1="80" y1="154" x2="1968" y2="154" stroke="#f97316" stroke-width="2" opacity="0.45"/>
-  <rect x="80" y="215" width="340" height="650" rx="18" fill="#141414" stroke="#fb923c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="250.0" y="257" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Konfiguration</text>
-  <line x1="106" y1="277" x2="394" y2="277" stroke="#fb923c" stroke-width="2" opacity="0.35"/>
-  <text x="112" y="313" fill="#fed7aa" font-size="20">.env</text>
-  <text x="112" y="347" fill="#fed7aa" font-size="20">INSTANCE_NAME</text>
-  <text x="112" y="381" fill="#fed7aa" font-size="20">SOLR_MODE</text>
-  <text x="112" y="415" fill="#fed7aa" font-size="20">Admin und Support User</text>
-  <text x="112" y="449" fill="#fed7aa" font-size="20">tenants.env</text>
-  <text x="112" y="483" fill="#fed7aa" font-size="20">eLeDia-config</text>
-  <text x="112" y="517" fill="#fed7aa" font-size="20">ELEDIA_LOG_ROOT</text>
-  <rect x="520" y="215" width="340" height="650" rx="18" fill="#141414" stroke="#fb923c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="690.0" y="257" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Image Build</text>
-  <line x1="546" y1="277" x2="834" y2="277" stroke="#fb923c" stroke-width="2" opacity="0.35"/>
-  <text x="552" y="313" fill="#fed7aa" font-size="20">Dockerfile.solr</text>
-  <text x="552" y="347" fill="#fed7aa" font-size="20">Solr Runtime</text>
-  <text x="552" y="381" fill="#fed7aa" font-size="20">eLeDia-solr-init</text>
-  <text x="552" y="415" fill="#fed7aa" font-size="20">Scripts nach /opt/solr/scripts</text>
-  <text x="552" y="449" fill="#fed7aa" font-size="20">Configset Bake-In</text>
-  <text x="552" y="483" fill="#fed7aa" font-size="20">keine Host-Script-Mounts</text>
-  <rect x="960" y="215" width="340" height="650" rx="18" fill="url(#coreGlow)" stroke="#f97316" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1130.0" y="257" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Compose Start</text>
-  <line x1="986" y1="277" x2="1274" y2="277" stroke="#f97316" stroke-width="2" opacity="0.35"/>
-  <text x="992" y="313" fill="#fed7aa" font-size="20">docker compose up</text>
-  <text x="992" y="347" fill="#fed7aa" font-size="20">Init Container läuft vor</text>
-  <text x="992" y="381" fill="#fed7aa" font-size="20">Solr läuft als UID 8983</text>
-  <text x="992" y="415" fill="#fed7aa" font-size="20">Healthcheck wartet</text>
-  <text x="992" y="449" fill="#fed7aa" font-size="20">Ports intern gebunden</text>
-  <text x="992" y="483" fill="#fed7aa" font-size="20">Volumes verbunden</text>
-  <rect x="1400" y="215" width="340" height="650" rx="18" fill="#141414" stroke="#c2410c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1570.0" y="257" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Tenant Bootstrap</text>
-  <line x1="1426" y1="277" x2="1714" y2="277" stroke="#c2410c" stroke-width="2" opacity="0.35"/>
-  <text x="1432" y="313" fill="#fed7aa" font-size="20">solr-tenant.sh apply</text>
-  <text x="1432" y="347" fill="#fed7aa" font-size="20">User schreiben</text>
-  <text x="1432" y="381" fill="#fed7aa" font-size="20">Rollen schreiben</text>
-  <text x="1432" y="415" fill="#fed7aa" font-size="20">Collections anlegen</text>
-  <text x="1432" y="449" fill="#fed7aa" font-size="20">ACLs neu bauen</text>
-  <text x="1432" y="483" fill="#fed7aa" font-size="20">Endpoint Tests</text>
-  <rect x="1760" y="330" width="220" height="420" rx="18" fill="#141414" stroke="#ea580c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1870.0" y="372" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Moodle Check</text>
-  <line x1="1786" y1="392" x2="1954" y2="392" stroke="#ea580c" stroke-width="2" opacity="0.35"/>
-  <text x="1792" y="428" fill="#fed7aa" font-size="20">/admin/ping</text>
-  <text x="1792" y="462" fill="#fed7aa" font-size="20">/select</text>
-  <text x="1792" y="496" fill="#fed7aa" font-size="20">/update</text>
-  <text x="1792" y="530" fill="#fed7aa" font-size="20">/update/extract</text>
-  <text x="1792" y="564" fill="#fed7aa" font-size="20">/schema</text>
-  <text x="1792" y="598" fill="#fed7aa" font-size="20">Index Task</text>
-  <line x1="420" y1="540" x2="520" y2="540" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="380.0" y="502.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="470.0" y="523.0" text-anchor="middle" fill="#a8a29e" font-size="15">Input</text>
-  <line x1="860" y1="540" x2="960" y2="540" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="820.0" y="502.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="910.0" y="523.0" text-anchor="middle" fill="#a8a29e" font-size="15">Images</text>
-  <line x1="1300" y1="540" x2="1400" y2="540" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="1260.0" y="502.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1350.0" y="523.0" text-anchor="middle" fill="#a8a29e" font-size="15">Runtime</text>
-  <line x1="1740" y1="540" x2="1760" y2="540" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="1660.0" y="502.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1750.0" y="523.0" text-anchor="middle" fill="#a8a29e" font-size="15">Verify</text>
-  <rect x="130" y="900" width="240" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="250.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">Runtime Source of Truth</text>
-  <rect x="430" y="900" width="220" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="540.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">Solr API</text>
-  <rect x="700" y="900" width="220" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="810.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">ZooKeeper</text>
-  <rect x="970" y="900" width="220" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1080.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">Collections</text>
-  <rect x="1240" y="900" width="220" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1350.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">Security</text>
-  <rect x="1510" y="900" width="220" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1620.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">Moodle Index</text>
-  <line x1="250" y1="900" x2="430" y2="900" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <line x1="650" y1="900" x2="700" y2="900" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <line x1="920" y1="900" x2="970" y2="900" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <line x1="1190" y1="900" x2="1240" y2="900" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <line x1="1460" y1="900" x2="1510" y2="900" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <text x="1024" y="1088" text-anchor="middle" fill="#6b7280" font-size="18">© 2026 eLeDia GmbH</text>
+  <rect class="bg" width="980" height="560"/><rect width="980" height="560" fill="url(#grid)" opacity="0.55"/>
+  <text x="28" y="38" class="title">Installation und Bootstrap</text>
+  <text x="28" y="58" class="sub">Vom Projektverzeichnis bis zur gestarteten Solr Runtime</text>
+  <rect x="30" y="90" width="210" height="120" class="box"/>
+  <text x="54" y="124" class="label">Projektdateien</text>
+  <text x="54" y="152" class="small">docker-compose.yml</text>
+  <text x="54" y="172" class="small">.env + tenants.env</text>
+  <text x="54" y="192" class="small">eLeDia-config/</text>
+  <rect x="300" y="90" width="210" height="120" class="box2"/>
+  <text x="324" y="124" class="label">Compose Start</text>
+  <text x="324" y="152" class="small">docker compose up -d</text>
+  <text x="324" y="172" class="small">Volumes + Network</text>
+  <text x="324" y="192" class="small">Healthchecks</text>
+  <rect x="570" y="90" width="220" height="120" class="box"/>
+  <text x="594" y="124" class="label">eLeDia-solr-init</text>
+  <text x="594" y="152" class="small">security.json</text>
+  <text x="594" y="172" class="small">Configsets</text>
+  <text x="594" y="192" class="small">Bootstrap-Metadaten</text>
+  <rect x="570" y="300" width="220" height="120" class="box"/>
+  <text x="594" y="334" class="label">Solr Runtime</text>
+  <text x="594" y="362" class="small">Solr 9.10.1</text>
+  <text x="594" y="382" class="small">Standalone / SolrCloud</text>
+  <text x="594" y="402" class="small">AuthN + AuthZ aktiv</text>
+  <rect x="300" y="300" width="210" height="120" class="box2"/>
+  <text x="324" y="334" class="label">Tenant-CLI</text>
+  <text x="324" y="362" class="small">create / passwd</text>
+  <text x="324" y="382" class="small">sync-sot</text>
+  <text x="324" y="402" class="small">rebuild-permissions</text>
+  <rect x="30" y="300" width="210" height="120" class="muted"/>
+  <text x="54" y="334" class="label">Reverse Proxy</text>
+  <text x="54" y="362" class="small">Apache / Caddy</text>
+  <text x="54" y="382" class="small">TLS extern</text>
+  <text x="54" y="402" class="small">Solr bleibt lokal</text>
+  <line x1="240" y1="150" x2="300" y2="150" class="arrow"/>
+  <line x1="510" y1="150" x2="570" y2="150" class="arrow"/>
+  <path d="M680 210 V300" class="arrow"/>
+  <line x1="570" y1="360" x2="510" y2="360" class="dash"/>
+  <line x1="300" y1="360" x2="240" y2="360" class="dash"/>
+  <rect x="830" y="104" width="120" height="66" class="store" rx="8"/>
+  <ellipse cx="890" cy="104" rx="60" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="858" y="132" class="label">Volume</text><text x="848" y="152" class="tiny">Index + Security</text>
+  <line x1="790" y1="150" x2="830" y2="136" class="arrow"/>
+  <text x="36" y="500" class="small">Reihenfolge: erst Init, dann Runtime. Tenant-Änderungen laufen danach über solr-tenant.sh im Container.</text>
+  <text x="830" y="542" class="tiny">© 2026 eLeDia GmbH</text>
 </svg>

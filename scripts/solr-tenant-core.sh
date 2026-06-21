@@ -35,6 +35,7 @@ SOLR_MODE="${SOLR_MODE:-}"
 # --- _create_core ---
 _create_core() {
   local core="$1"
+  _validate_core_name "$core"
   if _is_cloud_mode; then
     _create_collection "$core"
   else

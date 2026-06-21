@@ -72,6 +72,39 @@ unit_tests() {
         print_fail "SolrCloud apply does not rebuild tenant permissions before all fallback"
     fi
 
+    # Core names must be validated before they touch the API or generated config.
+    print_test "Core names are validated before tenant mutations"
+    if grep -q '^_validate_core_name()' scripts/solr-tenant-api.sh && \
+       grep -q '^_validate_core_list()' scripts/solr-tenant-api.sh && \
+       grep -q '_validate_core_list "\$cores"' scripts/solr-tenant-cmd.sh && \
+       grep -q '_validate_core_name "\$core"' scripts/solr-tenant-cmd.sh; then
+        print_pass "Core names are validated before create/apply/enable/passwd/caddy-config mutations"
+    else
+        print_fail "Core names are not validated consistently before tenant mutations"
+    fi
+
+    # Security reload timeouts must fail fast so password changes do not drift
+    # away from tenants.env.
+    print_test "Security reload timeouts fail fast"
+    if grep -q 'return 1' scripts/solr-tenant-security.sh && \
+       [ "$(grep -c 'if ! _wait_for_security_reload' scripts/solr-tenant-cmd.sh)" -ge 3 ] && \
+       grep -q '_set_tenant_field "\$name" "PASS" "\$new_pass"' scripts/solr-tenant-cmd.sh; then
+        print_pass "Security reload timeouts are treated as errors and PASS is persisted before waiting"
+    else
+        print_fail "Security reload timeouts still look soft or PASS persists too late"
+    fi
+
+    # Startup bootstrap should fail if tenant apply/sync-sot fails, rather than
+    # logging a warning and continuing with a half-initialized security state.
+    print_test "SolrCloud bootstrap fails hard on tenant sync errors"
+    if grep -q 'run_logged_step' scripts/solr-cloud-entrypoint.sh && \
+       grep -q 'ERROR: solr-tenant.sh apply failed during startup' scripts/solr-cloud-entrypoint.sh && \
+       grep -q 'ERROR: solr-tenant.sh sync-sot failed during startup' scripts/solr-cloud-entrypoint.sh; then
+        print_pass "Startup tenant sync errors are fatal"
+    else
+        print_fail "Startup tenant sync errors still look soft"
+    fi
+
     # Orchestrators must call the first-class command instead of carrying their
     # own curl/jq authorization writer.
     print_test "Tenant permission rebuild command is public"

@@ -1,84 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 1152" width="2048" height="1152" font-family="Segoe UI, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="600" viewBox="0 0 1040 600" role="img" aria-label="Runtime: Moodle, Proxy, Solr und Tenant-Isolation">
   <defs>
-    <marker id="arr" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0,0 L0,14 L14,7 z" fill="#f97316"/></marker>
-    <radialGradient id="coreGlow" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#3b1f0f"/><stop offset="100%" stop-color="#111111"/></radialGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#f97316" flood-opacity="0.25"/></filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#262626" stroke-width="0.6"/>
+    </pattern>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#f97316"/>
+    </marker>
+    <style>
+      .bg{fill:#0a0a0a} .title{font:700 22px Arial,sans-serif;fill:#fdba74} .sub{font:400 12px Arial,sans-serif;fill:#a8a29e}
+      .box{fill:#171717;stroke:#f97316;stroke-width:1.6;rx:12} .box2{fill:#111827;stroke:#fb923c;stroke-width:1.4;rx:12}
+      .store{fill:#0e0e0e;stroke:#c2410c;stroke-width:1.5} .muted{fill:#1a1a1a;stroke:#78716c;stroke-width:1.2;stroke-dasharray:5 4;rx:10}
+      .label{font:700 14px Arial,sans-serif;fill:#fed7aa} .small{font:400 11px Arial,sans-serif;fill:#d6d3d1} .tiny{font:400 10px Arial,sans-serif;fill:#a8a29e}
+      .arrow{stroke:#f97316;stroke-width:2;fill:none;marker-end:url(#arr)} .dash{stroke:#fb923c;stroke-width:1.7;fill:none;stroke-dasharray:6 5;marker-end:url(#arr)}
+      .group{fill:none;stroke:#7c2d12;stroke-width:1.4;stroke-dasharray:8 6;rx:16}
+    </style>
   </defs>
-  <rect width="2048" height="1152" fill="#090909"/>
-  <rect x="32" y="32" width="1984" height="1088" rx="28" fill="#0d0d0d" stroke="#f97316" stroke-width="3"/>
-  <text x="1024" y="82" text-anchor="middle" fill="#f97316" font-size="40" font-weight="800">solr-moodle-docker Runtime</text>
-  <text x="1024" y="122" text-anchor="middle" fill="#a8a29e" font-size="22">Moodle Tenants, SolrCloud Collections, Security API und persistente Runtime-SOT</text>
-  <line x1="80" y1="154" x2="1968" y2="154" stroke="#f97316" stroke-width="2" opacity="0.45"/>
-  <rect x="80" y="210" width="300" height="650" rx="18" fill="#141414" stroke="#fb923c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="230.0" y="252" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Moodle Tenants</text>
-  <line x1="106" y1="272" x2="354" y2="272" stroke="#fb923c" stroke-width="2" opacity="0.35"/>
-  <text x="112" y="308" fill="#fed7aa" font-size="20">Tenant A: Search UI</text>
-  <text x="112" y="342" fill="#fed7aa" font-size="20">Tenant B: Course Search</text>
-  <text x="112" y="376" fill="#fed7aa" font-size="20">Tenant C: File Index</text>
-  <text x="112" y="410" fill="#fed7aa" font-size="20">500+ Tenants möglich</text>
-  <text x="112" y="444" fill="#fed7aa" font-size="20">BasicAuth je Tenant</text>
-  <text x="112" y="478" fill="#fed7aa" font-size="20">/select und /update</text>
-  <rect x="470" y="250" width="260" height="250" rx="18" fill="#141414" stroke="#fb923c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="600.0" y="292" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Proxy</text>
-  <line x1="496" y1="312" x2="704" y2="312" stroke="#fb923c" stroke-width="2" opacity="0.35"/>
-  <text x="502" y="348" fill="#fed7aa" font-size="20">Apache oder Caddy</text>
-  <text x="502" y="382" fill="#fed7aa" font-size="20">TLS Terminierung</text>
-  <text x="502" y="416" fill="#fed7aa" font-size="20">Header Weitergabe</text>
-  <text x="502" y="450" fill="#fed7aa" font-size="20">Solr nur intern</text>
-  <rect x="820" y="210" width="390" height="650" rx="18" fill="url(#coreGlow)" stroke="#f97316" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1015.0" y="252" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Solr Container</text>
-  <line x1="846" y1="272" x2="1184" y2="272" stroke="#f97316" stroke-width="2" opacity="0.35"/>
-  <text x="852" y="308" fill="#fed7aa" font-size="20">INSTANCE_NAME-solr</text>
-  <text x="852" y="342" fill="#fed7aa" font-size="20">Solr 9.10.1</text>
-  <text x="852" y="376" fill="#fed7aa" font-size="20">Runtime Helper im Image</text>
-  <text x="852" y="410" fill="#fed7aa" font-size="20">solr-tenant.sh</text>
-  <text x="852" y="444" fill="#fed7aa" font-size="20">Admin API intern</text>
-  <text x="852" y="478" fill="#fed7aa" font-size="20">Healthcheck</text>
-  <text x="852" y="512" fill="#fed7aa" font-size="20">Logs nach ELEDIA_LOG_ROOT</text>
-  <rect x="1320" y="210" width="300" height="300" rx="18" fill="#141414" stroke="#c2410c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1470.0" y="252" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">ZooKeeper</text>
-  <line x1="1346" y1="272" x2="1594" y2="272" stroke="#c2410c" stroke-width="2" opacity="0.35"/>
-  <text x="1352" y="308" fill="#fed7aa" font-size="20">Embedded ZK</text>
-  <text x="1352" y="342" fill="#fed7aa" font-size="20">security.json</text>
-  <text x="1352" y="376" fill="#fed7aa" font-size="20">Cluster State</text>
-  <text x="1352" y="410" fill="#fed7aa" font-size="20">Configsets</text>
-  <text x="1352" y="444" fill="#fed7aa" font-size="20">Collections</text>
-  <rect x="1320" y="560" width="300" height="300" rx="18" fill="#141414" stroke="#c2410c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1470.0" y="602" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Security API</text>
-  <line x1="1346" y1="622" x2="1594" y2="622" stroke="#c2410c" stroke-width="2" opacity="0.35"/>
-  <text x="1352" y="658" fill="#fed7aa" font-size="20">BasicAuthPlugin</text>
-  <text x="1352" y="692" fill="#fed7aa" font-size="20">RuleBasedAuthorization</text>
-  <text x="1352" y="726" fill="#fed7aa" font-size="20">Collection ACLs</text>
-  <text x="1352" y="760" fill="#fed7aa" font-size="20">Fallback all zuletzt</text>
-  <text x="1352" y="794" fill="#fed7aa" font-size="20">Reload-Probe</text>
-  <rect x="1700" y="210" width="260" height="650" rx="18" fill="#141414" stroke="#ea580c" stroke-width="3" filter="url(#shadow)"/>
-  <text x="1830.0" y="252" text-anchor="middle" fill="#fdba74" font-size="25" font-weight="800">Persistenz</text>
-  <line x1="1726" y1="272" x2="1934" y2="272" stroke="#ea580c" stroke-width="2" opacity="0.35"/>
-  <text x="1732" y="308" fill="#fed7aa" font-size="20">solr_data Volume</text>
-  <text x="1732" y="342" fill="#fed7aa" font-size="20">tenants.env</text>
-  <text x="1732" y="376" fill="#fed7aa" font-size="20">eLeDia-config</text>
-  <text x="1732" y="410" fill="#fed7aa" font-size="20">Indexdaten</text>
-  <text x="1732" y="444" fill="#fed7aa" font-size="20">Backups</text>
-  <text x="1732" y="478" fill="#fed7aa" font-size="20">Host Logs</text>
-  <line x1="380" y1="535" x2="470" y2="380" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="335.0" y="419.5" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="425.0" y="440.5" text-anchor="middle" fill="#a8a29e" font-size="15">HTTPS</text>
-  <line x1="730" y1="380" x2="820" y2="380" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="685.0" y="342.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="775.0" y="363.0" text-anchor="middle" fill="#a8a29e" font-size="15">intern</text>
-  <line x1="1210" y1="370" x2="1320" y2="370" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="1175.0" y="332.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1265.0" y="353.0" text-anchor="middle" fill="#a8a29e" font-size="15">state</text>
-  <line x1="1210" y1="680" x2="1320" y2="680" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="1175.0" y="642.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1265.0" y="663.0" text-anchor="middle" fill="#a8a29e" font-size="15">authz</text>
-  <line x1="1620" y1="370" x2="1700" y2="370" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="1570.0" y="332.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1660.0" y="353.0" text-anchor="middle" fill="#a8a29e" font-size="15">writes</text>
-  <line x1="1620" y1="710" x2="1700" y2="710" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="1570.0" y="672.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1660.0" y="693.0" text-anchor="middle" fill="#a8a29e" font-size="15">reads</text>
-  <rect x="850" y="900" width="120" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="910.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">create</text>
-  <rect x="960" y="900" width="120" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1020.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">apply</text>
-  <rect x="1070" y="900" width="120" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1130.0" y="928" text-anchor="middle" fill="#fed7aa" font-size="18">sync-sot</text>
-  <rect x="850" y="960" width="120" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="910.0" y="988" text-anchor="middle" fill="#fed7aa" font-size="18">drift-detect</text>
-  <rect x="1000" y="960" width="160" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1080.0" y="988" text-anchor="middle" fill="#fed7aa" font-size="18">drift-remediate</text>
-  <rect x="1160" y="960" width="120" height="42" rx="21" fill="#1a1a1a" stroke="#fb923c" stroke-width="2"/><text x="1220.0" y="988" text-anchor="middle" fill="#fed7aa" font-size="18">core-add</text>
-  <line x1="1030" y1="900" x2="1030" y2="860" stroke="#f97316" stroke-width="4" marker-end="url(#arr)"/>
-  <rect x="940.0" y="842.0" width="180" height="30" rx="15" fill="#0d0d0d" stroke="#78716c" stroke-width="1"/><text x="1030.0" y="863.0" text-anchor="middle" fill="#a8a29e" font-size="15">Tenant Befehle</text>
-  <text x="1024" y="1088" text-anchor="middle" fill="#6b7280" font-size="18">© 2026 eLeDia GmbH</text>
+  <rect class="bg" width="1040" height="600"/><rect width="1040" height="600" fill="url(#grid)" opacity="0.55"/>
+  <text x="28" y="38" class="title">Runtime: Moodle, Proxy, Solr und Tenant-Isolation</text>
+  <text x="28" y="58" class="sub">Normale Requests, Tenant-Rechte und Runtime Source of Truth</text>
+  <rect x="34" y="110" width="180" height="100" class="box2"/>
+  <text x="58" y="144" class="label">Moodle</text>
+  <text x="58" y="172" class="small">Global Search</text>
+  <text x="58" y="192" class="small">Basic Auth</text>
+  <rect x="280" y="110" width="190" height="100" class="muted"/>
+  <text x="304" y="144" class="label">Proxy</text>
+  <text x="304" y="172" class="small">HTTPS / TLS</text>
+  <text x="304" y="192" class="small">Header weiterreichen</text>
+  <rect x="540" y="80" width="240" height="160" class="box"/>
+  <text x="564" y="114" class="label">Solr</text>
+  <text x="564" y="142" class="small">AuthN/AuthZ</text>
+  <text x="564" y="162" class="small">Cores oder Collections</text>
+  <text x="564" y="182" class="small">/select /update /schema</text>
+  <text x="564" y="202" class="small">/update/extract für Tika</text>
+  <rect x="835" y="90" width="160" height="130" class="box2"/>
+  <text x="859" y="124" class="label">Tenant</text>
+  <text x="859" y="152" class="small">eigener User</text>
+  <text x="859" y="172" class="small">eigene Rechte</text>
+  <text x="859" y="192" class="small">eigene Daten</text>
+  <rect x="540" y="320" width="240" height="125" class="box"/>
+  <text x="564" y="354" class="label">solr-tenant.sh</text>
+  <text x="564" y="382" class="small">sync-sot</text>
+  <text x="564" y="402" class="small">rebuild-permissions</text>
+  <text x="564" y="422" class="small">drift-detect / export</text>
+  <rect x="835" y="315" width="160" height="80" class="store" rx="8"/><ellipse cx="915" cy="315" rx="80" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="868" y="348" class="label">tenants.env</text><text x="862" y="372" class="tiny">Tenant-SOT</text>
+  <rect x="835" y="440" width="160" height="80" class="store" rx="8"/><ellipse cx="915" cy="440" rx="80" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="878" y="473" class="label">ZooKeeper</text><text x="862" y="497" class="tiny">SolrCloud Runtime</text>
+  <line x1="214" y1="160" x2="280" y2="160" class="arrow"/><line x1="470" y1="160" x2="540" y2="160" class="arrow"/><line x1="780" y1="155" x2="835" y2="155" class="arrow"/>
+  <path d="M660 240 V320" class="dash"/><line x1="780" y1="360" x2="835" y2="350" class="dash"/><line x1="780" y1="410" x2="835" y2="474" class="dash"/>
+  <rect x="34" y="320" width="435" height="135" class="group"/>
+  <text x="58" y="350" class="label">Security-Regel</text>
+  <text x="58" y="378" class="small">tenant-spezifische Regeln stehen vor generischen Regeln.</text>
+  <text x="58" y="402" class="small">Die Fallback-Permission all bleibt am Ende.</text>
+  <text x="58" y="426" class="small">Damit wird kein Tenant von einer generischen Regel überdeckt.</text>
+  <text x="890" y="582" class="tiny">© 2026 eLeDia GmbH</text>
 </svg>

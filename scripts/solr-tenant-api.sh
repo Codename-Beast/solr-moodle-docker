@@ -174,6 +174,40 @@ _validate_name() {
   esac
 }
 
+# _validate_core_name: Enforce the same conservative naming convention for
+# Solr core/collection names as for tenant identifiers.
+# Args: $1 - core name to validate
+# Returns: nothing on success; exits with code 1 if the core name is empty or
+# contains invalid chars
+
+# --- _validate_core_name ---
+_validate_core_name() {
+  local core="$1"
+  case "$core" in
+    *[!a-z0-9_]*)
+      printf 'ERROR: Invalid core "%s" — only lowercase letters, digits, underscore allowed.\n' "$core" >&2
+      exit 1
+      ;;
+    '') printf 'ERROR: Core name must not be empty.\n' >&2; exit 1 ;;
+  esac
+}
+
+# _validate_core_list: Validate a comma-separated list of Solr cores.
+# Args: $1 - comma-separated core list
+# Returns: nothing on success; exits with code 1 if any core is invalid
+
+# --- _validate_core_list ---
+_validate_core_list() {
+  local cores="$1" core
+  local -a CORE_ARRAY
+  IFS=',' read -ra CORE_ARRAY <<< "$cores"
+  for core in "${CORE_ARRAY[@]}"; do
+    core="$(printf '%s' "$core" | tr -d ' ')"
+    [ -z "$core" ] && continue
+    _validate_core_name "$core"
+  done
+}
+
 # _core_exists: Check whether a Solr core (standalone) or collection (SolrCloud) exists.
 # Args: $1 - core/collection name
 # Returns: 0 if it exists, 1 otherwise

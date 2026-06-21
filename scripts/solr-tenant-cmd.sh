@@ -62,12 +62,19 @@ cmd_create() {
   local role
   role="$(_get_tenant_role "$name")"
 
-  # Create cores via Admin API
+  # Validate and create cores via Admin API.
   IFS=',' read -ra CORE_ARRAY <<< "$cores"
   for core in "${CORE_ARRAY[@]}"; do
     core="$(echo "$core" | tr -d ' ')"
     [ -z "$core" ] && continue
-    _create_core "$core"
+    _validate_core_name "$core"
+  done
+  for core in "${CORE_ARRAY[@]}"; do
+    core="$(echo "$core" | tr -d ' ')"
+    [ -z "$core" ] && continue
+    if ! _create_core "$core"; then
+      return 1
+    fi
   done
 
   # Write all security changes directly to security.json (no Security API writes).
@@ -97,7 +104,9 @@ cmd_create() {
   fi
 
   # Wait for Solr's PathWatcher to detect the file change and reload auth config
-  _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"
+  if ! _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"; then
+    return 1
+  fi
 
   printf '✔ Tenant "%s" created\n' "$name"
   printf '  Cores: %s\n' "$cores"
@@ -189,6 +198,8 @@ cmd_enable() {
   local role
   role="$(_get_tenant_role "$name")"
 
+  _validate_core_list "$cores"
+
   local new_pass
   new_pass="$(_gen_password)"
 
@@ -213,7 +224,9 @@ cmd_enable() {
     _ensure_all_permission_last || return 1
   fi
 
-  _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"
+  if ! _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"; then
+    return 1
+  fi
 
   printf '✔ Tenant "%s" re-enabled\n' "$name"
   _print_credentials "$name" "$user" "$new_pass" "$cores"
@@ -251,6 +264,8 @@ cmd_passwd() {
   user="${user:-solr_${name}}"
   cores="$(_get_tenant_field "$name" "CORES")"
 
+  _validate_core_list "$cores"
+
   local new_pass first_core
   if [ -n "$provided_pass" ]; then
     new_pass="$provided_pass"
@@ -259,10 +274,13 @@ cmd_passwd() {
   fi
   first_core="$(printf '%s' "$cores" | cut -d, -f1)"
   _write_credential "$user" "$new_pass"
-  _wait_for_security_reload "$user" "$new_pass" "$first_core"
 
   if [ "$DRY_RUN" = "0" ]; then
     _set_tenant_field "$name" "PASS" "$new_pass"
+  fi
+
+  if ! _wait_for_security_reload "$user" "$new_pass" "$first_core"; then
+    return 1
   fi
 
   printf '✔ Password reset for tenant "%s"\n' "$name"
@@ -359,6 +377,8 @@ cmd_core_add() {
   role="$(_get_tenant_role "$name")"
   existing_cores="$(_get_tenant_field "$name" "CORES")"
 
+  _validate_core_name "$core"
+
   # Skip if core already assigned to this tenant (idempotent)
   if echo ",${existing_cores}," | grep -q ",${core},"; then
     _log "INFO" "Core '$core' already assigned to tenant '$name' — skipping"
@@ -366,7 +386,9 @@ cmd_core_add() {
     return 0
   fi
 
-  _create_core "$core"
+  if ! _create_core "$core"; then
+    return 1
+  fi
   _add_permission "tenant-${name}-${core}" "$role" "$core"
 
   if [ "$DRY_RUN" = "0" ]; then
@@ -386,7 +408,9 @@ cmd_core_add() {
   printf '✔ Core "%s" added to tenant "%s"\n' "$core" "$name"
 
   if [ -n "$pass" ]; then
-    _wait_for_security_reload "$user" "$pass" "$core"
+    if ! _wait_for_security_reload "$user" "$pass" "$core"; then
+      return 1
+    fi
     _test_endpoints "$user" "$pass" "$core" || true
   fi
 
@@ -418,6 +442,8 @@ cmd_core_remove() {
 
   _load_admin_creds
   _log_action "core-remove $name --core $core"
+
+  _validate_core_name "$core"
 
   _remove_permission "tenant-${name}-${core}"
 
@@ -461,6 +487,8 @@ cmd_apply() {
         role="$(_get_tenant_role "$name")"
         user="${user:-solr_${name}}"
 
+        _validate_core_list "$cores"
+
         if [ "${active:-true}" = "false" ]; then
           _block_user "$user"
           continue
@@ -475,7 +503,9 @@ cmd_apply() {
         for core in "${CORE_ARRAY[@]}"; do
           core="$(echo "$core" | tr -d ' ')"
           [ -z "$core" ] && continue
-          _create_core "$core" || true
+          if ! _create_core "$core"; then
+            return 1
+          fi
         done
 
         ((count++)) || true
@@ -861,6 +891,7 @@ cmd_caddy_config() {
         [ "${active:-true}" = "false" ] && continue
 
         cores="$value"
+        _validate_core_list "$cores"
         # Build path matcher list: /solr/<core> and /solr/<core>/*
         local path_args=""
         IFS=',' read -ra CORE_ARRAY <<< "$cores"

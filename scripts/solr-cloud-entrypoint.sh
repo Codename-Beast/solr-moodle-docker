@@ -42,6 +42,16 @@ log() {
   printf '[solr-entrypoint] %s\n' "$*"
 }
 
+run_logged_step() {
+  local prefix="$1"
+  local command="$2"
+  local output status
+  output="$(sh -c "$command" 2>&1)"
+  status=$?
+  printf '%s\n' "$output" | while IFS= read -r line; do log "[${prefix}] $line"; done
+  return "$status"
+}
+
 # hash_solr_password: Produce a Solr BasicAuthPlugin-compatible credential string.
 # Algorithm: base64(SHA256(SHA256(random_salt || password))) + " " + base64(salt)
 # Args: $1 - plaintext password
@@ -282,16 +292,16 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   fi
 
   log "Applying tenant collections via solr-tenant.sh apply (reason: ${apply_reason})"
-  (
-    /opt/solr/scripts/solr-tenant.sh apply 2>&1
-  ) | while IFS= read -r line; do log "[tenant] $line"; done || \
-    log "WARNING: solr-tenant.sh apply returned non-zero — check tenant logs"
+  if ! run_logged_step "tenant" "/opt/solr/scripts/solr-tenant.sh apply"; then
+    log "ERROR: solr-tenant.sh apply failed during startup"
+    exit 1
+  fi
 
   log "Rebuilding tenant permission order after apply"
-  (
-    /opt/solr/scripts/solr-tenant.sh sync-sot 2>&1
-  ) | while IFS= read -r line; do log "[tenant-sync] $line"; done || \
-    log "WARNING: solr-tenant.sh sync-sot returned non-zero — check tenant logs"
+  if ! run_logged_step "tenant-sync" "/opt/solr/scripts/solr-tenant.sh sync-sot"; then
+    log "ERROR: solr-tenant.sh sync-sot failed during startup"
+    exit 1
+  fi
 
   if [ -f "$APPLY_MARKER_FILE" ]; then
     rm -f "$APPLY_MARKER_FILE" || true
@@ -301,10 +311,9 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   while kill -0 "$solr_pid" 2>/dev/null; do
     if [ -f "$APPLY_MARKER_FILE" ]; then
       log "Detected init apply marker during runtime — applying tenant collections"
-      (
-        /opt/solr/scripts/solr-tenant.sh apply 2>&1
-      ) | while IFS= read -r line; do log "[tenant] $line"; done || \
+      if ! run_logged_step "tenant" "/opt/solr/scripts/solr-tenant.sh apply"; then
         log "WARNING: runtime solr-tenant.sh apply returned non-zero — check tenant logs"
+      fi
 
       rm -f "$APPLY_MARKER_FILE" || true
       log "Cleared init apply marker: $APPLY_MARKER_FILE"

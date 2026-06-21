@@ -1,77 +1,59 @@
-# GitLab CI/CD Quick Start
+# 🚀 GitLab Quickstart
 
-Setup-Zeit: 5 Minuten.
+Kurzer Ablauf, um die GitLab-Pipeline für den Docker-Stack laufen zu lassen.
 
 ---
 
-## Für GitLab.com
+## Voraussetzungen
 
-### 1. Repository pushen
+| Punkt | Wert |
+|---|---|
+| Runner | Docker-fähig |
+| Compose | Docker Compose V2 |
+| Repository | Branch mit `.gitlab-ci.yml` |
+| Netzwerk | Zugriff auf Registry und GitLab |
+
+---
+
+## Runner prüfen
 
 ```bash
-git remote add gitlab https://gitlab.com/DEIN-USERNAME/solr-moodle-docker.git
-git push -u gitlab main
-```
-
-### 2. Shared Runners aktivieren
-
-**Settings → CI/CD → Runners** → "Enable shared runners for this project"
-
-### 3. Pipeline läuft
-
-**Build → Pipelines** — dauert ~5-10 Minuten.
-
----
-
-## Für lokale/self-hosted GitLab
-
-### Runner-Tag konfigurieren
-
-In GitLab: **Settings → CI/CD → Variables**
-
-```
-CI_RUNNER_TAG = docker   ← euren Runner-Namen eintragen
-```
-
-Runner `config.toml` (`/etc/gitlab-runner/config.toml`):
-
-```toml
-concurrent = 2
-
-[[runners]]
-  executor = "docker"
-  clone_url = "http://host.docker.internal:8928"
-  [runners.docker]
-    image = "alpine:3.20"
-    privileged = true
-    pull_policy = "if-not-present"
-    volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
-    extra_hosts = ["host.docker.internal:host-gateway"]
+gitlab-runner status
+docker version
+docker compose version
 ```
 
 ---
 
-## Was bei jedem Push getestet wird
+## Pipeline starten
 
-| Stage | Dauer | Was |
-|-------|-------|-----|
-| lint | ~30s | docker compose config, bash -n auf alle .sh |
-| test | ~5-8 min | Unit-Tests (Dateien, Permissions, Config) |
+```bash
+git push gitlab <branch>
+```
 
----
+Oder im GitLab UI:
 
-## Häufige Probleme
-
-**"No runners available":**
-Settings → CI/CD → Runners → Shared Runners einschalten
-oder `CI_RUNNER_TAG` korrekt setzen.
-
-**Tests schlagen fehl:**
-Logs unter Build → Pipelines → Job-Name → Log.
-
-**Pipeline zu langsam:**
-5-8 Minuten ist normal (Docker-Container-Startup).
+```text
+CI/CD -> Pipelines -> Run pipeline
+```
 
 ---
 
-Mehr Details: [GITLAB-CI-CD-SETUP.md](GITLAB-CI-CD-SETUP.md)
+## Erwartete Jobs
+
+| Job | Ergebnis |
+|---|---|
+| lint | Shell/Compose ok |
+| unit | Unit-Tests ok |
+| standalone | Stack läuft im Core-Modus |
+| solrcloud | Stack läuft im SolrCloud-Modus |
+
+---
+
+## Wenn ein Job rot ist
+
+1. Job-Log öffnen.
+2. Erste echte Fehlermeldung suchen, nicht nur den letzten Cleanup-Block.
+3. Bei Stack-Fehlern Container-Logs prüfen.
+4. Fix lokal nachstellen.
+5. Pushen und Pipeline erneut laufen lassen.

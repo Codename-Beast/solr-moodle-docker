@@ -1,125 +1,64 @@
-# CI/CD — solr-moodle-docker
+# 🧪 CI/CD — solr-moodle-docker
 
-## GitHub Actions
-
-Workflow: [.github/workflows/solr-testing.yml](../.github/workflows/solr-testing.yml)
-
-Läuft automatisch bei Push auf `feature/*` und `release*`, sowie bei PRs gegen `main`.
-
-Manueller Start:
-- GitHub: `workflow_dispatch` in `solr-testing.yml` (Standalone + SolrCloud; Performance-Tests sind in CI deaktiviert, damit Shared Runner nicht flaken).
-- GitLab: Pipeline auf Branch `release*` oder `feature/*` starten.
-
-### Pipeline-Stages
-
-| Stage | Job | Was geprüft wird |
-|-------|-----|-------------------|
-| Lint | Code Quality Checks | shellcheck, hadolint, yamllint |
-| Security | Security Vulnerability Scan | Trivy CVE-Scan (init + Solr Image) |
-| Test | Solr Tests | Auth, Permissions, Tika, Multi-Tenant, Placeholder-Schutz |
-| Test | SolrCloud Mode Tests | Collections API, echte Isolation, Neustart-Persistenz |
-
-### Solr Tests (Standalone)
-
-- Container-Start + Healthcheck
-- Admin/Support-Authentifizierung
-- Tenant anlegen via `solr-tenant.sh create`
-- Tenant-User kann eigene Cores lesen/schreiben
-- Tika `/update/extract` — harter Fehler wenn nicht funktional
-- Placeholder-Passwort-Schutz (CHANGE_ME wird abgewiesen)
-- Multi-Tenant-Isolation (403 beim Zugriff auf fremden Core)
-
-### SolrCloud Tests
-
-- `SOLR_MODE=solrcloud` — eingebetteter ZooKeeper
-- Security Bootstrap via ZooKeeper
-- Collections API statt Core Admin API
-- Echte Collection-Level-Isolation (403 ohne Proxy)
-- Moodle-Dokument indexieren + Neustart-Persistenz
-- Tika `/update/extract` im SolrCloud-Modus
-- Drift-Detection/-Remediation und Permission-Ordering (`all` als letzte Permission)
+Die Pipeline prüft den Docker-Stack in Standalone und SolrCloud. Wichtig ist nicht nur, ob Container starten, sondern ob Moodle-relevante Pfade wirklich funktionieren.
 
 ---
 
-## GitLab CI
+## Jobs
 
-Pipeline: [.gitlab-ci.yml](../.gitlab-ci.yml)
-
-### Runner-Konfiguration
-
-Runner-Tag via GitLab-Variable konfigurieren:
-
-```
-Settings → CI/CD → Variables → CI_RUNNER_TAG = <euer Runner-Name>
-```
-
-Default: `docker` (für lokale Testinstanz).
-
-Anforderungen:
-- Docker-Socket-Mount (`/var/run/docker.sock`)
-- Mind. 4 GB RAM
-- `pull_policy = if-not-present` in `config.toml`
-
-### Stages
-
-| Stage | Jobs |
-|-------|------|
-| lint | shellcheck, docker compose config, bash -n |
-| test | feature-full-test (`--cloud --no-performance --no-cleanup`, 30min Timeout) |
+| Job | Prüft |
+|---|---|
+| Lint | Shell-Syntax, ShellCheck, Compose-Konfiguration |
+| Security Scan | einfache Security- und Secret-Prüfungen |
+| Standalone Core Tests | Core-Modus, Auth, Tenant-Befehle, Tika |
+| SolrCloud Tests | Collections, ZooKeeper-Persistenz, ACL-Reihenfolge, Drift |
 
 ---
 
-## Lokale Tests
+## Lokale Checks
 
 ```bash
-# Stack starten
-docker compose up -d --build
+bash -n scripts/*.sh setup.sh apache/generate-apache-config.sh init/powerinit.sh
+shellcheck scripts/*.sh setup.sh apache/generate-apache-config.sh init/powerinit.sh
+docker compose config --quiet
+```
 
-# Unit-Tests
+Unit-Tests:
+
+```bash
 ./scripts/run-tests.sh --unit-only
+```
 
-# Integration-Tests
-./scripts/run-tests.sh --integration-only --no-cleanup
+Tenant-Tests:
 
-# Sicherheits-Tests
-./scripts/run-tests.sh --security-only --no-cleanup
+```bash
+./scripts/run-tests.sh --tenant
+```
 
-# Moodle-Dokument-Indexierung
-./scripts/test-moodle-documents.sh
+Nur Tenant-CLI-Vertrag:
 
-# Alles ohne flake-anfällige Performance-Checks
-./scripts/run-tests.sh --no-performance
-
-# Voller lokaler Lauf inklusive Performance-Checks
-./scripts/run-tests.sh
-
-# Aufräumen
-docker compose down -v
+```bash
+./scripts/run-tests.sh --tenant-commands
 ```
 
 ---
 
-## Troubleshooting
+## Was die Pipeline absichert
 
-**Init-Container schlägt fehl:**
-```bash
-docker compose logs eLeDia-solr-init
-# Häufig: SOLR_ADMIN_PASSWORD nicht gesetzt oder noch CHANGE_ME
-```
+- `solr-tenant.sh passwd --password` funktioniert mit expliziten Passwörtern.
+- alte Passwörter werden nach Rotation abgelehnt.
+- neue Passwörter funktionieren gegen den Solr-Endpoint.
+- `rebuild-permissions` hält die Fallback-Permission `all` am Ende.
+- Tika indexiert Moodle-Dokumente über `/update/extract`.
+- SolrCloud-Daten überleben einen Restart.
 
-**Solr antwortet nicht:**
-```bash
-docker compose logs solr
-docker inspect --format='{{.State.Health.Status}}' solr-solr
-```
+---
 
-**Tika-Test schlägt fehl:**
-```bash
-# Prüfen ob SOLR_MODULES=extraction in docker-compose.yml gesetzt ist
-grep SOLR_MODULES docker-compose.yml
-```
+## GitLab
 
-**Permission Denied bei Scripts:**
-```bash
-chmod +x scripts/*.sh
-```
+GitLab nutzt dieselben Grundchecks. Der Runner muss Docker Compose ausführen können und Zugriff auf die benötigten Images haben.
+
+Details stehen in:
+
+- [GITLAB-CI-CD-SETUP.md](GITLAB-CI-CD-SETUP.md)
+- [GITLAB-QUICKSTART.md](GITLAB-QUICKSTART.md)

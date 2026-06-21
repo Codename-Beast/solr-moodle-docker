@@ -1,105 +1,57 @@
-# GitLab CI/CD Setup Guide
+# ⚙ GitLab CI/CD Setup
 
-**Autor:** BSC Bernd Schreistetter | **eLeDia.de**
-
----
-
-## Pipeline-Struktur
-
-```
-lint → test
-```
-
-| Stage | Jobs | Dauer |
-|-------|------|-------|
-| lint | main-minimal (main), feature-lint (feature/release) | ~30s |
-| test | feature-full-test | ~5-8 min |
+Diese Notizen sind für Runner gedacht, die den Docker-Stack wirklich starten. Reine Shell-Runner reichen dafür nicht.
 
 ---
 
-## Voraussetzungen
+## Runner
 
-### GitLab.com (SaaS)
-- GitLab.com Account mit Shared Runners
-
-### Self-Hosted
-- GitLab CE/EE 16.0+
-- GitLab Runner mit Docker-Executor
-- Docker auf dem Runner-Host
-- Mindestens 4 GB RAM
+| Einstellung | Empfehlung |
+|---|---|
+| Executor | shell oder docker mit Docker-Zugriff |
+| Docker | Engine + Compose V2 |
+| Tags | passend zur `.gitlab-ci.yml` setzen |
+| Volumes | genug Platz für Solr-Images und Testdaten |
 
 ---
 
-## Runner konfigurieren
+## System prüfen
 
-### Runner-Tag setzen
-
-In GitLab: **Settings → CI/CD → Variables → Add Variable**
-
-```
-Key:   CI_RUNNER_TAG
-Value: <euer Runner-Name>   # z.B. xen-04, docker-runner, ...
-```
-
-Default (lokal): `docker`
-
-### config.toml
-
-```toml
-concurrent = 2
-
-[[runners]]
-  name = "euer-runner"
-  url = "http://gitlab.example.com"
-  executor = "docker"
-  clone_url = "http://host.docker.internal:8928"  # bei lokalem GitLab
-  [runners.docker]
-    image = "alpine:3.20"
-    privileged = true
-    pull_policy = "if-not-present"
-    volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
-    extra_hosts = ["host.docker.internal:host-gateway"]
+```bash
+docker version
+docker compose version
+gitlab-runner verify
 ```
 
 ---
 
-## Troubleshooting
+## Repository anbinden
 
-**"No runners available":**
-Settings → CI/CD → Runners → Shared Runners einschalten,
-oder `CI_RUNNER_TAG` korrekt setzen.
-
-**"Cannot connect to Docker daemon":**
-```toml
-[runners.docker]
-  privileged = true
-  volumes = ["/var/run/docker.sock:/var/run/docker.sock"]
+```bash
+git remote add gitlab <gitlab-repo-url>
+git push gitlab <branch>
 ```
 
-**Timeout (10 Minuten):**
-Die GitLab CI führt die SolrCloud-Suite mit `--cloud --no-performance --no-cleanup` aus. Der Full-Test-Job hat 30 Minuten Timeout; Performance-/Lasttests sind bewusst deaktiviert, vollständige Läufe inklusive Performance laufen lokal.
-
-**"docker compose: command not found":**
-```yaml
-before_script:
-  - apk add --no-cache docker-cli docker-cli-compose
-```
+Die Pipeline startet beim Push oder manuell über die GitLab-Oberfläche.
 
 ---
 
-## Checkliste
+## Typische Fehler
 
-- [ ] `.gitlab-ci.yml` committed und gepusht
-- [ ] `CI_RUNNER_TAG` Variable gesetzt
-- [ ] Erste Pipeline erfolgreich
-- [ ] `config.toml` mit `pull_policy = if-not-present`
+| Symptom | Ursache | Fix |
+|---|---|---|
+| `docker: permission denied` | Runner-User darf Docker nicht nutzen | Gruppe/Rechte prüfen |
+| Compose nicht gefunden | altes Docker Setup | Compose V2 installieren |
+| Port belegt | alter Test-Stack läuft noch | `docker compose down -v` im Workspace |
+| Image alt | Cache greift | Build erzwingen oder Cache leeren |
 
 ---
 
-## Links
+## Logs
 
-- [GitLab CI/CD Docs](https://docs.gitlab.com/ee/ci/)
-- [GitLab Runner Installation](https://docs.gitlab.com/runner/install/)
-- [.gitlab-ci.yml Reference](https://docs.gitlab.com/ee/ci/yaml/)
-- [README.md](../README.md)
-- [CHANGELOG.md](../CHANGELOG.md)
+Bei fehlgeschlagenen Stack-Tests sind diese Ausgaben wichtig:
+
+```bash
+docker compose ps
+docker compose logs --no-color
+```
