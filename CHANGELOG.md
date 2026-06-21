@@ -4,19 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Fixed
-- `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Startup fehlschlägt. Root-cause: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
-- Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Root-cause: `_wait_for_security_reload` lieferte Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
-- Tenant-Passwort- und Enable-Flows schreiben `PASS` / `ACTIVE` jetzt vor dem Reload-Wait weg und brechen sauber ab, wenn der Reload nicht kommt. Root-cause: Das Script konnte weiterlaufen, obwohl `tenants.env` und der Live-Solr-Auth-State nicht mehr synchron waren.
-- Core-Namen werden jetzt konsistent validiert, bevor sie in Solr oder die Tenant-Konfiguration geschrieben werden. Root-cause: Die erste Validator-Version war für bestehende branded Namen wie `eLeDia_core_a` zu streng, dadurch wurden gültige Tenants vor dem Start abgelehnt.
-- `cmd_apply` stoppt jetzt bei einem fehlschlagenden Core-Create, statt den Fehler zu schlucken und den Tenant als erfolgreich angewendet zu markieren. Root-cause: Die Schleife ignorierte `_create_core`-Fehler, dadurch blieb `apply` fälschlich auf Erfolg.
+### Behoben
+- `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Startup fehlschlägt. Ursache: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
+- Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Ursache: `_wait_for_security_reload` lieferte Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
+- Tenant-Passwort- und Enable-Flows schreiben `PASS` / `ACTIVE` jetzt vor dem Reload-Wait weg und brechen sauber ab, wenn der Reload nicht kommt. Ursache: Das Script konnte weiterlaufen, obwohl `tenants.env` und der Live-Solr-Auth-State nicht mehr synchron waren.
+- Core-Namen werden jetzt konsistent validiert, bevor sie in Solr oder die Tenant-Konfiguration geschrieben werden. Ursache: Die erste Validator-Version war für bestehende branded Namen wie `eLeDia_core_a` zu streng, dadurch wurden gültige Tenants vor dem Start abgelehnt.
+- `cmd_apply` stoppt jetzt bei einem fehlschlagenden Core-Create, statt den Fehler zu schlucken und den Tenant als erfolgreich angewendet zu markieren. Ursache: Die Schleife ignorierte `_create_core`-Fehler, dadurch blieb `apply` fälschlich auf Erfolg.
 
-### Added
+### Hinzugefügt
 - Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.
 
 ## [3.4.9]
 
-### Fixed
+### Behoben
 - Added `solr-tenant.sh rebuild-permissions` as a first-class command that rebuilds SolrCloud tenant ACLs from `tenants.env` and keeps fallback permission `all` last.
 - `solr-tenant.sh passwd` now accepts `--password <pass>` so orchestration can enforce hostvars-provided tenant passwords through the container script without inline Security API writers.
 - Rebuilt SolrCloud collection ACLs are inserted before the broad built-in `read`/`update` permissions, so tenant collection write rules are evaluated before generic first-match rules.
@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.4.8] 
 
-### Fixed
+### Behoben
 - `scripts/generate-test-tenants.sh` now reports the real tenant count instead of counting the header lines as one additional tenant.
 - SolrCloud tenant ACL rebuild now groups all active tenant roles per collection, so multiple tenants can intentionally share one collection without first-match permission shadowing.
 - Solr authorization permission cleanup now deletes by numeric Security API indexes and keeps a single fallback `all` permission at the end.
@@ -37,7 +37,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.4.7]
 
-### Fixed
+### Behoben
 
 - Removed the dead GitHub Actions CI tenant pre-step and centralized tenant creation in the runtime test harness.
 - `scripts/run-tests.sh` now delegates all logging/env/counter setup to `scripts/test-lib.sh`, eliminating duplicate tee logging and duplicated bootstrap state.
@@ -59,19 +59,19 @@ All notable changes to this project will be documented in this file.
 - `scripts/test-moodle-documents.sh`: SolrCloud precheck no longer creates a Core via Core Admin API. It now detects mode and creates/checks a Collection via Collections API in SolrCloud mode, keeping standalone Core logic only for standalone mode.
 - `scripts/test-moodle-documents.sh`: Solr log baseline is recalculated after setup actions (core/collection ensure) so startup/setup error lines do not pollute the final actionable log healthcheck.
 
-### Changed
+### Geändert
 - GitLab/GitHub CI documentation now matches the current pipelines and no longer documents the removed mode-switch CI job or obsolete unit-only GitLab lane.
 - Unit/static test execution no longer requires a local `.env`, allowing fresh-checkout CI and developer sanity checks to run before runtime secrets are generated.
 
 ## [3.4.6] 
 
-### Changed
+### Geändert
 - Restored and promoted the one-shot init service as `eLeDia-solr-init` as default runtime architecture, including updated docs/diagrams for init responsibilities, multi-instance targeting, and host log flow.
 - Standardized defaults around `eLeDia-config/` and `eLeDia-moodle-tenant` so schema/solrconfig are always bootstrapped from the eLeDia configset path.
 - Clarified and aligned host log handling toward `/var/log/eledia/solr` style layouts (setup/runtime/install logs via host-mounted log roots).
 - SolrCloud test suite now uses unique per-run cloud tenant/collection names to avoid stale-state collisions and make restart-persistence checks deterministic.
 
-### Fixed
+### Behoben
 - `solr-tenant-api.sh`: replaced static `/tmp/_solr_resp` and `/tmp/_solr_err` files with `mktemp`-based request-local files to eliminate cross-run permission collisions that caused intermittent `HTTP <no response>` in tenant API operations.
 - SolrCloud integration tests no longer depend on potentially inactive legacy `cloud_tenant` entries in `tenants.env`; this fixes false 401/collection-missing/persistence regressions in long-lived local test environments.
 - Multi-tenant verification in integration tests now checks Solr Security API credentials (runtime source of truth) instead of relying on local `security.json` file inspection.
@@ -85,7 +85,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.4.0]
 
-### Changed
+### Geändert
 - Removed one-shot init container (`solr-init` / `Dockerfile` / `powerinit.sh`) — SolrCloud
   bootstrap is fully handled by `solr-cloud-entrypoint.sh` on every container start.
   No more dead init container leaking per instance after first deploy.
@@ -99,7 +99,7 @@ All notable changes to this project will be documented in this file.
 - Architecture diagram (`docs/architecture-runtime.svg`) updated: standalone mode removed,
   ZooKeeper / Collections layout and new log path documented.
 
-### Added
+### Hinzugefügt
 - `ansible-role-solr` — `tasks/config.yml`: new `solr_config` task for rolling out updated
   Solr configs (managed-schema, solrconfig.xml) without container restart:
   - Detects changed files via checksum (`solr_config_new_dir` on control node)
@@ -112,7 +112,7 @@ All notable changes to this project will be documented in this file.
 - `ansible-role-solr` — `defaults/main.yml`: `solr_eledia_log_root: /var/log/eledia`.
 - `ansible-role-solr` — `templates/env.j2`: `ELEDIA_LOG_ROOT` written to `.env`.
 
-### Fixed
+### Behoben
 - `ansible-role-solr` — `defaults/main.yml`: `solr_mode` default corrected to `solrcloud`.
 - `ansible-role-solr` — `defaults/main.yml`: `solr_repo_version` updated to `feature/3.4.0`.
 - `ansible-role-solr` — `tasks/setup.yml`: log dir and logrotate target changed from
@@ -129,7 +129,7 @@ All notable changes to this project will be documented in this file.
 - Removed `docs/SOLR-8-to-10-impact.md` and `docs/STATUS-2026-05-24.md` (consolidated into README/CHANGELOG).
 - Architecture diagrams replaced: stale `.d2` prototypes removed, clean SVG diagrams added (`docs/architecture-install.svg`, `docs/architecture-runtime.svg`).
 
-### Fixed
+### Behoben
 - `cmd_core_add` — skips if core already assigned; prevents duplicate entries in `tenants.env`.
 - `import_manifest` — `enable`/`delete` only triggered when tenant active state actually changes.
 - `_create_core` — handles `coreNodeName missing` gracefully and verifies existence instead of relying on HTTP 200.
@@ -149,7 +149,7 @@ All notable changes to this project will be documented in this file.
 ### Performance
 - `upgrade-docker.sh` — conditional `--build`: skips image rebuild when Dockerfile/config/scripts unchanged (sha256 comparison).
 
-### Changed
+### Geändert
 - Configset renamed: `moodle-tenant` → `eLeDia-moodle-tenant` (ZooKeeper, Collections API, all references).
 - Core/collection names: `moodle_core` → `eLeDia_core`, `moodle_cloud_*` → `eLeDia_cloud_*`.
 - Config directory: `config/` → `eLeDia-config/` (host-side schema and solrconfig).
@@ -158,7 +158,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.0.8]
 
-### Changed
+### Geändert
 - `config/solrconfig.xml`: `/update/extract` mappt `fmap.content` jetzt auf `content` (kanonisches Suchfeld).
 - `config/managed-schema`: `copyField content -> solr_filecontent` ergänzt (Rückwärtskompatibilität für bestehende Abfragen/Tools).
 - `scripts/test-moodle-documents.sh`: PDF-Marker-Prüfung jetzt strikt und deterministisch (`q=content:...` + `fq=id:tika_test_pdf`).
@@ -177,7 +177,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.0.7]
 
-### Added
+### Hinzugefügt
 - Neue Shell-Fixture-Generierung (`tests/create-moodle-fixtures.sh`) fuer Moodle/Solr Tika-Tests ohne Python-Abhaengigkeit.
 - Multi-Format-Testabdeckung in `scripts/test-moodle-documents.sh` erweitert:
 - TXT, HTML, CSV, RTF, PNG (Photo-Fixture) zusaetzlich zur PDF-Pruefung.
@@ -185,7 +185,7 @@ All notable changes to this project will be documented in this file.
 - Fuer textbasierte Formate: `extractOnly`-Pruefung auf erwartete Marker.
 - Persistente Log-Dokumentation: `tests/solr-log-findings.md` wird pro Testlauf erzeugt (WARN/ERROR/SEVERE-Befunde).
 
-### Changed
+### Geändert
 - Test-Hinweise/Erzeugung auf Shell umgestellt (`sh tests/create-moodle-fixtures.sh`).
 - Fehlende `print_skip`-Hilfsfunktion in `scripts/test-moodle-documents.sh` ergänzt.
 - Lange Moodle-Kompatibilitaetsabfragen auf `POST /select` umgestellt (group visibility + combined filters), um Jetty-`URI is too large >8192` Warnungen zu vermeiden.
@@ -195,7 +195,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.0.6] 
 
-### Changed
+### Geändert
 - `scripts/test-moodle-documents.sh` fachlich verfeinert, damit die Query-Checks Moodle-Solr-Engine-Logik realistisch abbilden (Moodle 4.1 bis 5.2 Zielbild):
 - hinzugefuegt: `{!cache=false}`-Filter-Patterns fuer `courseid` und `areaid`.
 - hinzugefuegt: Owner-Visibility-Filter (`owneruserid:(-1 OR <userid>)`) inkl. korrektem Escaping fuer negative IDs (`\-1`).
@@ -203,13 +203,13 @@ All notable changes to this project will be documented in this file.
 - hinzugefuegt: kombinierte Mehrfach-Filter-Query (q + mehrere fq), wie sie Moodle beim Eingrenzen nutzt.
 - Query-Assertions in Hilfsfunktion `assert_min_hits()` konsolidiert, damit Checks reproduzierbar und wartbar bleiben.
 
-### Added
+### Hinzugefügt
 - Neuer Abschnitt `SOLR LOG HEALTHCHECK` in `scripts/test-moodle-documents.sh`:
 - prueft nach dem Query-/Indexing-Workload die letzten Solr-Logs auf actionable `ERROR/SEVERE`.
 - prueft actionable `WARN` separat.
 - gibt bei Befunden die ersten Logzeilen sichtbar aus, statt still zu scheitern.
 
-### Fixed
+### Behoben
 - False-Positive im neuen Logcheck entfernt:
 - Root cause: naive Suche auf `ERROR` matchte auch harmlose Info-Zeilen wie `solr.log.level=ERROR`.
 - Fix: Regex auf echtes Solr-Loglevel-Format verschaerft (`... ERROR|SEVERE (`).
@@ -229,7 +229,7 @@ Versioning: Semantic Versioning
 
 ## [3.0.5]
 
-### Changed
+### Geändert
 - GitHub Actions (`.github/workflows/solr-testing.yml`): `paths-ignore` fuer Docs-only Commits hinzugefuegt.
 - CI-Topologie optimiert: `solrcloud-test` haengt jetzt direkt an `security-scan` (parallel zu `solr-test`).
 - `Dockerfile.solr`: Base-Image auf Digest gepinnt (`solr:9.10.1@sha256:...`).
@@ -239,7 +239,7 @@ Versioning: Semantic Versioning
 
 ## [3.0.4]
 
-### Fixed
+### Behoben
 - CI-Regression in `Run Moodle document tests` behoben (GitHub Actions Run 26352731461):
 - Root Cause: `/update/extract` wurde mit `literalsOverride=false` konfiguriert; dadurch konnten `literal.*`-Metadaten fuer Moodle-Pflichtfelder beim Tika-Indexing nicht verlaesslich greifen.
 - Symptom: `PDF indexing via Tika failed (HTTP 400)` in CI, obwohl `extractOnly=true` HTTP 200 lieferte.
@@ -257,7 +257,7 @@ Versioning: Semantic Versioning
 
 ## [3.0.3]
 
-### Fixed
+### Behoben
 - Markdown-Dokumente bereinigt (entfernte versehentliche Zeilenpraefix-Artefakte wie `123|`).
 - CI-YAML-Lintfehler beseitigt (`docker-compose.yml` Zeilenlaenge in `SOLR_OPTS` auf block-scalar umgestellt).
 - `scripts/test-moodle-documents.sh` robust gemacht fuer lokale/non-CI Runs:
@@ -272,7 +272,7 @@ Versioning: Semantic Versioning
 - Konsequenz: exakte Query `ELEDIA_TIKA_TEST_MARKER` ist schema-/analyzer-abhaengig und kann 0 Treffer liefern, obwohl Inhalt indexiert ist.
 - Fix: Fallback-Query (`ELEDIA+TIKA+TEST+MARKER`) und semantischer Folgecheck bleiben verpflichtend.
 
-### Added
+### Hinzugefügt
 - Tenant-Management-Lifecycle in `scripts/run-tests.sh` erweitert:
 - `create` (mehrere Cores)
 - `core-remove`
@@ -281,7 +281,7 @@ Versioning: Semantic Versioning
 - `enable` (reactivate)
 - jeweils mit Zustandsverifikation via `solr-tenant.sh info`.
 
-### Changed
+### Geändert
 - CI-Testablauf angepasst, damit Analyzer-Details nicht mehr zu False-Negatives im Build fuehren.
 - `docs/architecture.md` in beiden Repos um ASCII-Architekturdiagramme erweitert.
 - Compose-/Runtime-Warnungen reduziert:
@@ -296,14 +296,14 @@ Versioning: Semantic Versioning
 
 ## [3.0.2]
 
-### Added
+### Hinzugefügt
 - Copyright/Version Header in allen Shell-Skripten:
 - `Copyright (c) 2026 eLeDia.de / Bernd Schreistetter`
 - `Version: v3.0.1`
 - README auf Betriebsdoku umgestellt (TL;DR, SolrCloud, Tests, CI, Security, Ops).
 - Dokumentierte Solr-Doku-Tweaks fuer `/update/extract`.
 
-### Changed
+### Geändert
 - `docker-compose.yml`: dynamische Portbelegung bewusst beibehalten:
 - `${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`
 - Healthcheck URLs weiter mit `${SOLR_PORT}` (kein Hardcode auf 8983).
@@ -320,7 +320,7 @@ Versioning: Semantic Versioning
 
 ## [3.0.1]
 
-### Fixed
+### Behoben
 - `setup.sh` Re-Run-Idempotenz: bestehende `.env` wird nicht mehr ungefragt ueberschrieben.
 - `tenants.env` Rechte/Owner fuer Solr UID 8983 verbessert.
 - `powerinit.sh` fail-fast bei fehlenden/Placeholder-Passwoertern.
@@ -331,13 +331,13 @@ Versioning: Semantic Versioning
 
 ## [3.0.0]
 
-### Added
+### Hinzugefügt
 - Multi-Tenant CLI (`scripts/solr-tenant.sh`) mit create/delete/list/passwd/apply/export/caddy-config.
 - SolrCloud Modus (`SOLR_MODE=solrcloud`) inkl. Collections API Pfad.
 - `tenants.env` als Source of Truth fuer Tenant-Konfiguration.
 - CI-Abdeckung fuer Standalone + SolrCloud + Tika.
 
-### Changed
+### Geändert
 - `init/powerinit.sh` generiert Tenant-Permissions dynamisch.
 - `managed-schema` verschlankt (kein `_text_` copyField-Pattern mehr).
 - Monitoring/Setup Altlasten aus Compose entfernt.
