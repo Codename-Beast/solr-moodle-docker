@@ -65,9 +65,10 @@ Vor dem Start müssen die Pflichtpasswörter in `.env` gesetzt sein. Platzhalter
 
 ```bash
 docker compose ps
-curl -u "admin:<SOLR_ADMIN_PASSWORD>" \
-  "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/info/system"
+docker exec solr-solr /opt/solr/scripts/solr-tenant.sh healthcheck
 ```
+
+Der Compose-Healthcheck prüft nicht nur, ob Solr antwortet, sondern in SolrCloud auch, ob der Tenant-Zustand noch zum `tenants.env` passt.
 
 ---
 

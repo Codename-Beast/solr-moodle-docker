@@ -111,10 +111,19 @@ unit_tests() {
     # own curl/jq authorization writer.
     print_test "Tenant permission rebuild command is public"
     if grep -q 'rebuild-permissions).*cmd_rebuild_permissions' scripts/solr-tenant.sh && \
-       grep -q '^cmd_rebuild_permissions()' scripts/solr-tenant-cmd.sh; then
-        print_pass "solr-tenant.sh exposes rebuild-permissions"
+       grep -q 'healthcheck).*cmd_healthcheck' scripts/solr-tenant.sh && \
+       grep -q '^cmd_rebuild_permissions()' scripts/solr-tenant-cmd.sh && \
+       grep -q '^cmd_healthcheck()' scripts/solr-tenant-cmd.sh; then
+        print_pass "solr-tenant.sh exposes rebuild-permissions and healthcheck"
     else
-        print_fail "solr-tenant.sh does not expose rebuild-permissions"
+        print_fail "solr-tenant.sh does not expose rebuild-permissions and healthcheck"
+    fi
+
+    print_test "docker-compose healthcheck uses tenant-aware command"
+    if grep -q '/opt/solr/scripts/solr-tenant.sh healthcheck' docker-compose.yml; then
+        print_pass "docker-compose healthcheck delegates to tenant-aware command"
+    else
+        print_fail "docker-compose healthcheck still uses a raw curl probe"
     fi
 
     # Container-first delivery: helper scripts must be baked into Solr image

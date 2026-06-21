@@ -713,6 +713,47 @@ cmd_export() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: healthcheck
+# Validates Solr availability and, in SolrCloud mode, tenant runtime drift.
+# ---------------------------------------------------------------------------
+
+# --- cmd_healthcheck ---
+cmd_healthcheck() {
+  _load_admin_creds
+  _log_action "healthcheck"
+
+  local system_code auth_code drift_out drift_rc
+
+  system_code="$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+    "${SOLR_BASE}/admin/info/system" 2>/dev/null || true)"
+  auth_code="$(curl -s -o /dev/null -w '%{http_code}' \
+    "${SOLR_BASE}/admin/authentication" 2>/dev/null || true)"
+
+  if [ "$system_code" != "200" ]; then
+    printf 'ERROR: Solr system endpoint unhealthy (HTTP %s)\n' "$system_code" >&2
+    return 1
+  fi
+
+  if _is_cloud_mode && [ "$auth_code" != "401" ]; then
+    printf 'ERROR: SolrCloud authentication endpoint did not return 401 (HTTP %s)\n' "$auth_code" >&2
+    return 1
+  fi
+
+  if _is_cloud_mode; then
+    drift_out="$(cmd_drift_detect 2>&1)"
+    drift_rc=$?
+    if [ "$drift_rc" -ne 0 ]; then
+      printf '%s\n' "$drift_out" >&2
+      printf 'ERROR: tenant drift detected\n' >&2
+      return 1
+    fi
+  fi
+
+  printf '✔ Healthcheck passed (system=%s auth=%s mode=%s)\n' "$system_code" "$auth_code" "${SOLR_MODE:-standalone}"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: drift-detect
 # Detect runtime drift between tenants.env (desired state) and Solr runtime state
 # (authentication + authorization + collections API in SolrCloud).
@@ -955,6 +996,7 @@ Commands:
   apply                               Re-apply all tenants from tenants.env (idempotent)
   sync-sot                            Enforce .env+tenants.env as SOT and rotate unknown API users
   rebuild-permissions                 Rebuild tenant ACLs from tenants.env and keep all last
+  healthcheck                         Validate Solr availability and tenant drift
   drift-detect                        Detect runtime drift vs tenants.env (users/collections)
   drift-remediate                     Reconcile runtime drift via sync-sot
   export                              YAML output for Ansible host_vars

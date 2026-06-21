@@ -35,6 +35,7 @@ case "$cmd" in
   apply)        cmd_apply ;;
   sync-sot)       cmd_sync_sot ;;
   rebuild-permissions) cmd_rebuild_permissions ;;
+  healthcheck)   cmd_healthcheck ;;
   drift-detect)   cmd_drift_detect ;;
   drift-remediate) cmd_drift_remediate ;;
   export)         cmd_export ;;

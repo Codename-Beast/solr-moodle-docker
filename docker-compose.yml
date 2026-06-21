@@ -30,7 +30,7 @@ services:
     volumes:
       - solr_data:/var/solr/data
       - ./.env:/.env:ro,z
-      - ./tenants.env:/opt/solr/tenants.env:ro
+      - ./tenants.env:${TENANTS_ENV:-/opt/solr/tenants.env}:ro
       - ./eLeDia-config:/config:ro
       - ${ELEDIA_LOG_ROOT:-/var/log/eledia/solr}/${INSTANCE_NAME:-solr}:/var/log/solr:z
     env_file:
@@ -68,7 +68,7 @@ services:
     volumes:
       - solr_data:/var/solr/data
       # tenants.env: source of truth for tenant CRUD operations
-      - ./tenants.env:/opt/solr/tenants.env:rw
+      - ./tenants.env:${TENANTS_ENV:-/opt/solr/tenants.env}:rw
       # eLeDia-config: schema + solrconfig source for configset upload
       - ./eLeDia-config:/opt/solr/eledia-config:ro
       # Host log mount — all Solr logs go to /var/log/eledia/<instance>/
@@ -118,9 +118,7 @@ services:
       test:
         - "CMD-SHELL"
         - >-
-          curl -sf -u "$${SOLR_ADMIN_USER}:$${SOLR_ADMIN_PASSWORD}"
-          http://localhost:${SOLR_PORT:-8983}/solr/admin/info/system >/dev/null &&
-          [ "$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${SOLR_PORT:-8983}/solr/admin/authentication)" = "401" ]
+          /opt/solr/scripts/solr-tenant.sh healthcheck
       interval: 15s
       timeout: 10s
       retries: 5
