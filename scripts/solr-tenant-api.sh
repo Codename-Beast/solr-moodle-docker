@@ -184,8 +184,8 @@ _validate_name() {
 _validate_core_name() {
   local core="$1"
   case "$core" in
-    *[!a-z0-9_]*)
-      printf 'ERROR: Invalid core "%s" — only lowercase letters, digits, underscore allowed.\n' "$core" >&2
+    *[!A-Za-z0-9_]*)
+      printf 'ERROR: Invalid core "%s" — only letters, digits, underscore allowed.\n' "$core" >&2
       exit 1
       ;;
     '') printf 'ERROR: Core name must not be empty.\n' >&2; exit 1 ;;
