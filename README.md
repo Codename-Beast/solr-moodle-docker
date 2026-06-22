@@ -8,8 +8,6 @@
 
 Ein Solr-Stack für Moodle Global Search, gebaut für mehrere Moodle-Instanzen auf einem Solr. Jeder Tenant bekommt eigene Zugangsdaten und nur Zugriff auf die eigenen Cores oder Collections. Datei-Inhalte laufen über Tika, der Betrieb geht wahlweise als Standalone oder SolrCloud.
 
-Für Moodle ist es egal, ob der Solr-Modus Standalone oder SolrCloud ist — die Tenant-Logik bleibt gleich. Wichtig ist vor allem, dass die Abläufe idempotent bleiben und sich sauber wiederholen lassen.
-
 > Solr ist standardmäßig nur auf `127.0.0.1` gebunden. Externe Zugriffe gehören über einen Reverse Proxy mit TLS davor.
 
 ---
