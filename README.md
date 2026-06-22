@@ -8,7 +8,7 @@
 
 Ein Solr-Stack für Moodle Global Search, gebaut für mehrere Moodle-Instanzen auf einem Solr. Jeder Tenant bekommt eigene Zugangsdaten und nur Zugriff auf die eigenen Cores oder Collections. Datei-Inhalte laufen über Tika, der Betrieb geht wahlweise als Standalone oder SolrCloud.
 
-Kurz gesagt: ein Setup, das man installieren, testen und später noch verstehen kann.
+Für Moodle ist es egal, ob der Solr-Modus Standalone oder SolrCloud ist — die Tenant-Logik bleibt gleich. Wichtig ist vor allem, dass die Abläufe idempotent bleiben und sich sauber wiederholen lassen.
 
 > Solr ist standardmäßig nur auf `127.0.0.1` gebunden. Externe Zugriffe gehören über einen Reverse Proxy mit TLS davor.
 
@@ -243,15 +243,24 @@ solr-moodle-docker/
 
 ## 🧪 Tests
 
-| Zweck | Befehl |
-|---|---|
-| Unit-Tests | `./scripts/run-tests.sh --unit-only` |
-| Stack-Test mit Tenant-Checks | `./scripts/run-tests.sh --tenant` |
-| Nur Tenant-CLI-Vertrag | `./scripts/run-tests.sh --tenant-commands` |
-| Moodle/Tika-Dokumentindexierung | `./scripts/test-moodle-documents.sh` |
-| Moduswechsel Standalone/SolrCloud | `./scripts/run-tests.sh --mode-switch` *(lokaler Helfer, nicht Teil der GitLab-Pipeline)* |
+Die wichtigsten Prüfläufe im Projekt sind:
 
-Die CI baut Standalone und SolrCloud. Der Tenant-CLI-Pfad hängt an `run-tests.sh --tenant` und läuft damit in der regulären Pipeline mit.
+| Zweck | Befehl | Was dabei geprüft wird |
+|---|---|---|
+| Einheitstests | `./scripts/run-tests.sh --unit-only` | Shell-Logik, Validierung, Sicherheitsregeln |
+| Stack mit Tenant-Checks | `./scripts/run-tests.sh --tenant` | echter Start, Tenant-Anlage, Login, Rechte, Tika |
+| Nur Tenant-CLI-Vertrag | `./scripts/run-tests.sh --tenant-commands` | `create`, `passwd`, `core-add`, `healthcheck`, `drift-detect` |
+| Moodle/Tika-Indexierung | `./scripts/test-moodle-documents.sh` | Dokumente landen in Solr und lassen sich suchen |
+| Moduswechsel Standalone/SolrCloud | `./scripts/run-tests.sh --mode-switch` | Wechsel zwischen beiden Betriebsarten ohne Datenchaos |
+
+### Was die Meldungen meist bedeuten
+
+- `Security reload not confirmed after 30s` → Solr hat die neue Security-Datei nicht rechtzeitig übernommen.
+- `Tenant create failed` → Tenant, Core oder Rechte konnten nicht sauber angelegt werden.
+- `healthcheck command` fehlgeschlagen → Solr antwortet nicht sauber oder der Bootstrap-Zustand passt nicht.
+- `drift-detect` meldet Fehler → Runtime und `tenants.env` sind auseinander gelaufen.
+
+Die CI baut und testet sowohl Standalone als auch SolrCloud. Der Tenant-CLI-Pfad hängt an `run-tests.sh --tenant` und läuft damit in der regulären Pipeline mit.
 
 ---
 
@@ -264,6 +273,7 @@ Die CI baut Standalone und SolrCloud. Der Tenant-CLI-Pfad hängt an `run-tests.s
 | [docs/GITLAB-CI-CD-SETUP.md](docs/GITLAB-CI-CD-SETUP.md) | GitLab Runner Setup |
 | [docs/GITLAB-QUICKSTART.md](docs/GITLAB-QUICKSTART.md) | GitLab Schnellstart |
 | [docs/monitoring.md](docs/monitoring.md) | Prometheus und Loki Integration |
+| [proxy_guid.md](proxy_guid.md) | Reverse-Proxy-Guide für Caddy, Apache und Nginx |
 | [CHANGELOG.md](CHANGELOG.md) | Änderungshistorie |
 
 ---

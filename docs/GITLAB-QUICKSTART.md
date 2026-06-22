@@ -1,6 +1,6 @@
 # 🚀 GitLab Quickstart
 
-Kurzer Ablauf, um die GitLab-Pipeline für den Docker-Stack laufen zu lassen.
+Kurzer Weg, um die GitLab-Pipeline für den Stack zu starten.
 
 ---
 
@@ -10,8 +10,8 @@ Kurzer Ablauf, um die GitLab-Pipeline für den Docker-Stack laufen zu lassen.
 |---|---|
 | Runner | Docker-fähig |
 | Compose | Docker Compose V2 |
-| Repository | Branch mit `.gitlab-ci.yml` |
-| Netzwerk | Zugriff auf Registry und GitLab |
+| Zugriff | Registry und GitLab erreichbar |
+| Branch | enthält `.gitlab-ci.yml` |
 
 ---
 
@@ -34,27 +34,27 @@ git push gitlab <branch>
 Oder im GitLab UI:
 
 ```text
-CI/CD -> Pipelines -> Run pipeline
+CI/CD → Pipelines → Run pipeline
 ```
 
 ---
 
-## Erwartete Jobs
+## Aktuelle Jobs
 
-| Job | Wann | Ergebnis |
+| Job | Wann | Was es macht |
 |---|---|---|
-| `main-minimal` | `main` | Shell/Compose-Checks |
-| `feature-lint` | `feature/v...` und `release...` | Shell/Compose-Checks |
-| `feature-full-test` | `feature/v...` und `release...` | vollständiger Stack-Test im SolrCloud-Modus |
+| `main-minimal` | `main` | kurze Shell-/Compose-Prüfung |
+| `feature-lint` | Feature- und Release-Branches | Shell-/Compose-Prüfung |
+| `feature-full-test` | Feature- und Release-Branches | voller Stack-Test in SolrCloud |
 
-Es gibt keinen separaten `unit`-Job und keinen eigenen `standalone`-/`solrcloud`-Job mehr; die Pipeline ist nach Branch-Regeln aufgebaut.
+Die Branch-Regeln sind bewusst einfach gehalten: klein auf `main`, ausführlich auf Feature- und Release-Branches.
 
 ---
 
-## Wenn ein Job rot ist
+## Wenn etwas rot ist
 
-1. Job-Log öffnen.
-2. Erste echte Fehlermeldung suchen, nicht nur den letzten Cleanup-Block.
-3. Bei Stack-Fehlern Container-Logs prüfen.
-4. Fix lokal nachstellen.
-5. Pushen und Pipeline erneut laufen lassen.
+1. Das Job-Log öffnen.
+2. Die erste echte Fehlermeldung suchen.
+3. Container-Logs prüfen, wenn der Stack selbst rot wurde.
+4. Lokal nachstellen.
+5. Fixen und erneut pushen.

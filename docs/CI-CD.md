@@ -1,17 +1,17 @@
 # 🧪 CI/CD — solr-moodle-docker
 
-Die Pipeline prüft den Docker-Stack in Standalone und SolrCloud. Wichtig ist nicht nur, ob Container starten, sondern ob Moodle-relevante Pfade wirklich funktionieren.
+Diese Pipeline prüft den Stack nicht nur auf „Container startet“, sondern auf das, was Moodle wirklich braucht: Login, Tenant-Rechte, SolrCloud-Persistenz und Dokumentsuche.
 
 ---
 
-## Jobs
+## Was läuft in der CI?
 
-| Job | Prüft |
+| Job | Was geprüft wird |
 |---|---|
-| Lint | Shell-Syntax, ShellCheck, Compose-Konfiguration |
-| Security Scan | einfache Security- und Secret-Prüfungen |
-| Standalone Core Tests | Core-Modus, Auth, Tenant-Befehle, Tika |
-| SolrCloud Tests | Collections, ZooKeeper-Persistenz, ACL-Reihenfolge, Drift |
+| Lint | Shell-Syntax, ShellCheck, Compose-Datei |
+| Security Scan | einfache Sicherheitschecks und Image-Scan |
+| Standalone Core Tests | Standalone-Modus, Tenant-Befehle, Auth, Tika |
+| SolrCloud Tests | Collections, ACLs, Drift, Persistenz, Restart-Verhalten |
 
 ---
 
@@ -23,44 +23,35 @@ shellcheck scripts/*.sh setup.sh apache/generate-apache-config.sh init/powerinit
 docker compose config --quiet
 ```
 
-Unit-Tests:
+---
+
+## Die wichtigsten Testläufe
 
 ```bash
-./scripts/run-tests.sh --cloud --no-performance --no-cleanup
-```
-
-Hinweis: `--mode-switch` bleibt ein lokaler Helfer, wird aber nicht in der GitLab-Pipeline ausgeführt.
-
-Tenant-Tests:
-
-```bash
+./scripts/run-tests.sh --unit-only
 ./scripts/run-tests.sh --tenant
-```
-
-Nur Tenant-CLI-Vertrag:
-
-```bash
 ./scripts/run-tests.sh --tenant-commands
+./scripts/test-moodle-documents.sh
 ```
+
+`--mode-switch` ist ein lokaler Helfer für den Wechsel zwischen Standalone und SolrCloud. Er ist bewusst nicht Teil der GitLab-Pipeline.
 
 ---
 
-## Was die Pipeline absichert
+## Was die Meldungen meist bedeuten
 
-- `solr-tenant.sh passwd --password` funktioniert mit expliziten Passwörtern.
-- alte Passwörter werden nach Rotation abgelehnt.
-- neue Passwörter funktionieren gegen den Solr-Endpoint.
-- `rebuild-permissions` hält die Fallback-Permission `all` am Ende.
-- Tika indexiert Moodle-Dokumente über `/update/extract`.
-- SolrCloud-Daten überleben einen Restart.
+- `Security reload not confirmed after 30s` → Solr hat die neue Security-Datei nicht rechtzeitig übernommen.
+- `Tenant create failed` → Tenant, Core oder ACLs konnten nicht sauber angelegt werden.
+- `healthcheck command` fehlgeschlagen → Solr antwortet nicht sauber oder der Bootstrap-Zustand passt nicht.
+- `drift-detect` meldet Fehler → Runtime und `tenants.env` sind nicht mehr synchron.
 
 ---
 
 ## GitLab
 
-GitLab nutzt dieselben Grundchecks. Der Runner muss Docker Compose ausführen können und Zugriff auf die benötigten Images haben.
+GitLab nutzt dieselben Grundprüfungen. Der Runner muss Docker Compose ausführen können und Zugriff auf die benötigten Images haben.
 
-Details stehen in:
+Mehr dazu:
 
-- [GITLAB-CI-CD-SETUP.md](GITLAB-CI-CD-SETUP.md)
 - [GITLAB-QUICKSTART.md](GITLAB-QUICKSTART.md)
+- [GITLAB-CI-CD-SETUP.md](GITLAB-CI-CD-SETUP.md)
