@@ -138,8 +138,7 @@ unit_tests() {
         source scripts/solr-tenant-cmd.sh
 
         _load_admin_creds() {
-            ADMIN_USER=admin
-            ADMIN_PASS=secret
+            export ADMIN_USER=admin ADMIN_PASS=secret
         }
 
         curl() {
