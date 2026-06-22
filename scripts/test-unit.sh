@@ -85,15 +85,16 @@ unit_tests() {
         print_fail "Core names are not validated consistently before tenant mutations"
     fi
 
-    # Security reload timeouts must fail fast so password changes do not drift
-    # away from tenants.env.
+    # Security reload timeouts must fail fast in standalone mode. SolrCloud
+    # skips the local wait because the auth state is ZooKeeper-persisted.
     print_test "Security reload timeouts fail fast"
     if grep -q 'return 1' scripts/solr-tenant-security.sh && \
        [ "$(grep -c 'if ! _wait_for_security_reload' scripts/solr-tenant-cmd.sh)" -ge 3 ] && \
+       [ "$(grep -c 'if ! _is_cloud_mode; then' scripts/solr-tenant-cmd.sh)" -ge 3 ] && \
        grep -q '_set_tenant_field "\$name" "PASS" "\$new_pass"' scripts/solr-tenant-cmd.sh; then
-        print_pass "Security reload timeouts are treated as errors and PASS is persisted before waiting"
+        print_pass "Security reload timeouts are treated as errors and SolrCloud skips the local wait"
     else
-        print_fail "Security reload timeouts still look soft or PASS persists too late"
+        print_fail "Security reload handling still looks soft or Cloud wait guards are missing"
     fi
 
     # Startup bootstrap should fail if tenant apply/sync-sot fails, rather than

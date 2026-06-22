@@ -226,8 +226,10 @@ cmd_enable() {
     _ensure_all_permission_last || return 1
   fi
 
-  if ! _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"; then
-    return 1
+  if ! _is_cloud_mode; then
+    if ! _wait_for_security_reload "$user" "$new_pass" "${CORE_ARRAY[0]:-}"; then
+      return 1
+    fi
   fi
 
   printf '✔ Tenant "%s" re-enabled\n' "$name"
@@ -281,8 +283,10 @@ cmd_passwd() {
     _set_tenant_field "$name" "PASS" "$new_pass"
   fi
 
-  if ! _wait_for_security_reload "$user" "$new_pass" "$first_core"; then
-    return 1
+  if ! _is_cloud_mode; then
+    if ! _wait_for_security_reload "$user" "$new_pass" "$first_core"; then
+      return 1
+    fi
   fi
 
   printf '✔ Password reset for tenant "%s"\n' "$name"
@@ -410,8 +414,10 @@ cmd_core_add() {
   printf '✔ Core "%s" added to tenant "%s"\n' "$core" "$name"
 
   if [ -n "$pass" ]; then
-    if ! _wait_for_security_reload "$user" "$pass" "$core"; then
-      return 1
+    if ! _is_cloud_mode; then
+      if ! _wait_for_security_reload "$user" "$pass" "$core"; then
+        return 1
+      fi
     fi
     _test_endpoints "$user" "$pass" "$core" || true
   fi
