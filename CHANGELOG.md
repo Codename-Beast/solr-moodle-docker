@@ -30,70 +30,76 @@ All notable changes to this project will be documented in this file.
 ## [3.4.9]
 
 ### Fixed
-- Added `solr-tenant.sh rebuild-permissions` as a first-class command that rebuilds SolrCloud tenant ACLs from `tenants.env` and keeps fallback permission `all` last.
-- `solr-tenant.sh passwd` now accepts `--password <pass>` so orchestration can enforce hostvars-provided tenant passwords through the container script without inline Security API writers.
-- Rebuilt SolrCloud collection ACLs are inserted before the broad built-in `read`/`update` permissions, so tenant collection write rules are evaluated before generic first-match rules.
-- Unit coverage now asserts that the public dispatcher exposes the tenant permission rebuild command for orchestration layers.
-- `scripts/run-tests.sh --tenant` now executes the tenant command matrix, and that matrix verifies `passwd --password` with old-password rejection and explicit-password login success.
-- `upgrade-docker.sh` smart rebuild checksums now include all runtime shell scripts copied into the Solr image, plus both security templates.
-- Docker Compose and script version headers now consistently advertise v3.4.9, and the init image tag is derived from `${STACK_VERSION:-v3.4.9}` documented in `.env.example`.
-- The init container mounts `tenants.env` read-only, and unit tests now assert both security templates stay identical.
+- `solr-tenant.sh rebuild-permissions` ist jetzt ein eigener Befehl und baut SolrCloud-Tenant-ACLs aus `tenants.env` neu auf, wobei die Fallback-Permission `all` zuletzt bleibt.
+- `solr-tenant.sh passwd` akzeptiert jetzt `--password <pass>`, damit die Orchestrierung hostvars-gelieferte Tenant-Passwörter direkt über das Container-Skript durchsetzen kann, ohne inline Security-API-Schreiblogik.
+- Die neu aufgebauten SolrCloud-Collection-ACLs werden vor den breiten eingebauten `read`-/`update`-Berechtigungen eingefügt, damit tenant-spezifische Schreibregeln vor generischen First-Match-Regeln greifen.
+- Die Unit-Abdeckung prüft jetzt, dass der öffentliche Dispatcher den Tenant-Permission-Rebuild-Befehl für Orchestrierungsschichten sichtbar macht.
+- `scripts/run-tests.sh --tenant` führt jetzt die Tenant-Command-Matrix aus, und diese Matrix prüft `passwd --password` mit Ablehnung des alten Passworts und erfolgreichem Login mit explizitem Passwort.
+- Die Smart-Rebuild-Checksummen von `upgrade-docker.sh` umfassen jetzt alle Runtime-Shellskripte im Solr-Image sowie beide Security-Templates.
+- Die Version-Header von Docker Compose und Skripten werben jetzt konsistent mit v3.4.9, und der Init-Image-Tag wird aus `${STACK_VERSION:-v3.4.9}` aus der `.env.example` abgeleitet.
+- Der Init-Container bindet `tenants.env` jetzt read-only ein, und die Unit-Tests stellen sicher, dass beide Security-Templates identisch bleiben.
 
-## [3.4.8] 
+### Removed
+- Keine.
+
+### Deprecated
+- Keine.
+
+### Breaking Changes
+- Keine.
+
+## [3.4.8]
 
 ### Fixed
-- `scripts/generate-test-tenants.sh` now reports the real tenant count instead of counting the header lines as one additional tenant.
-- SolrCloud tenant ACL rebuild now groups all active tenant roles per collection, so multiple tenants can intentionally share one collection without first-match permission shadowing.
-- Solr authorization permission cleanup now deletes by numeric Security API indexes and keeps a single fallback `all` permission at the end.
-- `apply`, `create`, `enable`, and `core-add` now rebuild SolrCloud collection permissions from `tenants.env` before endpoint verification.
-- Drift detection and SOT sync now treat inactive tenant users and preserved tenant collections from `tenants.env` as managed runtime state, while ignoring Solr's internal `.system` collection.
+- `scripts/generate-test-tenants.sh` meldet jetzt die echte Tenant-Anzahl statt die Header-Zeilen fälschlich als zusätzlichen Tenant mitzuzählen.
+- Der SolrCloud-Tenant-ACL-Rebuild gruppiert jetzt alle aktiven Tenant-Rollen pro Collection, damit mehrere Tenants absichtlich dieselbe Collection teilen können, ohne dass First-Match die ACLs verschluckt.
+- Das Aufräumen von Solr-Autorisierungsberechtigungen löscht jetzt per numerischem Security-API-Index und behält genau eine Fallback-Permission `all` am Ende.
+- `apply`, `create`, `enable` und `core-add` bauen SolrCloud-Collection-Permissions jetzt vor der Endpunktprüfung aus `tenants.env` neu auf.
+- Drift-Detection und SOT-Sync behandeln inaktive Tenant-User und erhaltene Tenant-Collections aus `tenants.env` jetzt als verwalteten Laufzeit-Zustand und ignorieren die interne `.system`-Collection von Solr.
+
+### Removed
+- Keine.
+
+### Deprecated
+- Keine.
+
+### Breaking Changes
+- Keine.
 
 ## [3.4.7]
 
 ### Fixed
-
-- Removed the dead GitHub Actions CI tenant pre-step and centralized tenant creation in the runtime test harness.
-- `scripts/run-tests.sh` now delegates all logging/env/counter setup to `scripts/test-lib.sh`, eliminating duplicate tee logging and duplicated bootstrap state.
-- Moodle `/admin/system` security test now honors `${SOLR_PORT}` instead of hardcoding `8983`.
-- CI no longer runs timing/load performance assertions on shared runners; local performance tests remain available and degrade to warnings when `CI` is set.
-- SolrCloud tests now assert drift-detect/drift-remediate behavior and verify that fallback permission `all` is the last authorization rule.
-- Moodle document test result parsing now uses a machine-readable `RESULTS:total=...;passed=...;failed=...` summary line.
-- Trivy now remains fail-closed for new CRITICAL findings while documenting accepted upstream Solr bundled Java dependency CVEs in `.trivyignore`.
-- GitLab Docker-in-Docker CI now tolerates runner host bind-mount limitations by using an image-owned configset fallback and a container-local tenant SOT path.
-- CI password-rotation and Moodle log-health checks now assert runtime behavior directly and ignore known Solr ZooKeeper ACL bootstrap warnings.
-- Init bootstrap also uses image-owned config fallbacks and the configured tenant SOT path when GitLab Docker socket runners cannot provide file bind mounts.
-- Test summaries now backfill unlisted raw `[FAIL]` lines from the run log, so a visible failure can no longer be omitted from the failed-test list.
-- The admin `.env` password restart-rotation test now runs only outside SolrCloud; SolrCloud keeps active security in ZooKeeper and is covered by drift/remediation tests instead.
-- Moodle readiness now works for tenant users in both `SOLR_MODE=solrcloud` and `SOLR_MODE=standalone`; tenant read ACLs include Moodle's Solr system-read path while keeping broad admin-only fallback permissions last.
-- Standalone/Core runtime now mirrors the SolrCloud privilege-drop path: the entrypoint fixes volume ownership as root and re-execs as the `solr` user before starting `solr-foreground`, so `SOLR_MODE=standalone` starts reliably instead of failing Solr's root-user guard.
-- Test harness counters are now initialized only by `run-tests.sh`/`test-lib.sh` and are preserved across sourced test modules, so earlier `[FAIL]` results can no longer be masked by later module-level counter resets.
-
-- `scripts/solr-tenant-cmd.sh`: drift detection reads `tenants.env` once before iterating, avoiding same-file read/write pipeline hazards and ShellCheck SC2094/SC2143 findings.
-- `scripts/test-moodle-documents.sh`: SolrCloud precheck no longer creates a Core via Core Admin API. It now detects mode and creates/checks a Collection via Collections API in SolrCloud mode, keeping standalone Core logic only for standalone mode.
-- `scripts/test-moodle-documents.sh`: Solr log baseline is recalculated after setup actions (core/collection ensure) so startup/setup error lines do not pollute the final actionable log healthcheck.
+- Der GitHub-Actions-CI-Tenant-Vorgriff ist entfernt und die Tenant-Erstellung läuft jetzt zentral im Runtime-Test-Harness.
+- `scripts/run-tests.sh` delegiert Logging, Env-Setup und Counter-Setup jetzt vollständig an `scripts/test-lib.sh`; doppeltes Tee-Logging und doppelter Bootstrap-State sind damit weg.
+- Der Sicherheits-Test für `/admin/system` in Moodle respektiert jetzt `${SOLR_PORT}` statt fest `8983` zu verwenden.
+- Die CI führt Timing-/Last-/Performance-Assertions auf Shared Runnern nicht mehr aus; lokale Performance-Tests bleiben verfügbar und fallen bei gesetztem `CI` nur noch als Warnung durch.
+- SolrCloud-Tests prüfen jetzt das Verhalten von `drift-detect`/`drift-remediate` und verifizieren, dass die Fallback-Permission `all` die letzte Autorisierungsregel ist.
+- Das Parsing der Moodle-Dokument-Testresultate nutzt jetzt eine maschinenlesbare Summary-Zeile im Format `RESULTS:total=...;passed=...;failed=...`.
+- Trivy bleibt bei neuen CRITICAL-Funden weiterhin fail-closed, während akzeptierte CVEs aus den gebündelten Solr-Java-Dependencies in `.trivyignore` dokumentiert sind.
+- Die GitLab-Docker-in-Docker-CI toleriert jetzt Runner-Host-Bind-Mount-Einschränkungen über einen image-eigenen Configset-Fallback und einen container-lokalen Tenant-SOT-Pfad.
+- CI für Passwortrotation und Moodle-Log-Health prüft Runtime-Verhalten jetzt direkt und ignoriert bekannte Solr-ZooKeeper-ACL-Bootstrap-Warnungen.
+- Das Init-Bootstrap nutzt bei GitLab-Docker-Socket-Runnern ohne File-Bind-Mounts ebenfalls image-eigene Config-Fallbacks und den konfigurierten Tenant-SOT-Pfad.
+- Test-Summaries ergänzen jetzt fehlende rohe `[FAIL]`-Zeilen aus dem Run-Log, damit ein sichtbarer Fehler nicht mehr aus der Fehlerliste verschwinden kann.
+- Der Admin-`.env`-Passwort-Rotationstest läuft jetzt nur noch außerhalb von SolrCloud; SolrCloud hält aktive Security in ZooKeeper und wird stattdessen über Drift-/Remediation-Tests abgedeckt.
+- Moodle-Readiness funktioniert jetzt für Tenant-User sowohl in `SOLR_MODE=solrcloud` als auch in `SOLR_MODE=standalone`; die tenant-spezifischen Read-ACLs enthalten den Moodle-Read-Pfad und lassen breite Admin-Fallback-Regeln zuletzt stehen.
+- Die Standalone/Core-Runtime bildet den Privilege-Drop-Pfad von SolrCloud jetzt nach: Der Entrypoint korrigiert Volume-Ownership als root und re-execed als `solr`, bevor `solr-foreground` startet, damit `SOLR_MODE=standalone` zuverlässig startet statt an Solrs Root-Guard zu scheitern.
+- Die Zähler des Test-Harness werden jetzt ausschließlich von `run-tests.sh`/`test-lib.sh` initialisiert und über importierte Testmodule hinweg beibehalten, sodass frühe `[FAIL]`-Ergebnisse nicht mehr von späteren Modul-Resets verdeckt werden.
+- `scripts/solr-tenant-cmd.sh`: Die Drift-Detection liest `tenants.env` jetzt einmal vor der Iteration und vermeidet damit Pipeline-Hazards beim Lesen/Schreiben derselben Datei sowie ShellCheck-Funde SC2094/SC2143.
+- `scripts/test-moodle-documents.sh`: Der SolrCloud-Precheck erzeugt jetzt keinen Core mehr über die Core-Admin-API. Er erkennt den Modus und legt bzw. prüft im SolrCloud-Modus eine Collection über die Collections-API an; Standalone bleibt Core-Logik vorbehalten.
+- `scripts/test-moodle-documents.sh`: Die Solr-Log-Basis wird nach Setup-Aktionen (Core/Collection-Absicherung) neu berechnet, damit Startup-/Setup-Fehlerzeilen die abschließende Log-Healthprüfung nicht mehr verschmutzen.
 
 ### Changed
-- GitLab/GitHub CI documentation now matches the current pipelines and no longer documents the removed mode-switch CI job or obsolete unit-only GitLab lane.
-- Unit/static test execution no longer requires a local `.env`, allowing fresh-checkout CI and developer sanity checks to run before runtime secrets are generated.
+- GitLab-/GitHub-CI-Dokumentation passt jetzt wieder zu den aktuellen Pipelines und beschreibt weder den entfernten Mode-Switch-CI-Job noch die alte Unit-only-GitLab-Lane.
+- Die Unit-/Static-Testausführung benötigt jetzt keine lokale `.env` mehr, sodass frische Checkouts und Entwickler-Sanity-Checks vor dem Generieren von Runtime-Secrets laufen können.
 
-## [3.4.6] 
+### Removed
+- Keine.
 
-### Changed
-- Restored and promoted the one-shot init service as `eLeDia-solr-init` as default runtime architecture, including updated docs/diagrams for init responsibilities, multi-instance targeting, and host log flow.
-- Standardized defaults around `eLeDia-config/` and `eLeDia-moodle-tenant` so schema/solrconfig are always bootstrapped from the eLeDia configset path.
-- Clarified and aligned host log handling toward `/var/log/eledia/solr` style layouts (setup/runtime/install logs via host-mounted log roots).
-- SolrCloud test suite now uses unique per-run cloud tenant/collection names to avoid stale-state collisions and make restart-persistence checks deterministic.
+### Deprecated
+- Keine.
 
-### Fixed
-- `solr-tenant-api.sh`: replaced static `/tmp/_solr_resp` and `/tmp/_solr_err` files with `mktemp`-based request-local files to eliminate cross-run permission collisions that caused intermittent `HTTP <no response>` in tenant API operations.
-- SolrCloud integration tests no longer depend on potentially inactive legacy `cloud_tenant` entries in `tenants.env`; this fixes false 401/collection-missing/persistence regressions in long-lived local test environments.
-- Multi-tenant verification in integration tests now checks Solr Security API credentials (runtime source of truth) instead of relying on local `security.json` file inspection.
-- `solr-tenant.sh export` now emits `solr_runtime_source_of_truth` metadata for host_vars so runtime authority (Solr API + ZooKeeper) is explicitly represented in exported inventory data.
-- Added `solr-tenant.sh drift-detect` to detect runtime drift between tenants.env (desired) and runtime Solr API/ZooKeeper state (users/collections).
-- Added `solr-tenant.sh drift-remediate` to reconcile detected drift by reapplying runtime state from source-of-truth (`sync-sot`).
-- Enforced Solr permission ordering so fallback rule `all` is always moved to the end after apply/sync operations; this prevents broad-rule shadowing of tenant-specific ACLs.
-- SolrCloud runtime now auto-creates internal `.system` collection (idempotent) to prevent Schema Designer `Collection not found: .system` errors.
-- Added optional `ZK_MAX_CNXNS` runtime tuning and startup guardrail logging for Schema Designer sample constraints (5MB limit, no markdown).
+### Breaking Changes
+- Keine.
 
 
 ## [3.4.0]
