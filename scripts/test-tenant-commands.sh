@@ -140,6 +140,15 @@ main() {
   if run_tenant core-remove "$TENANT_A" --core "$CORE_A_EXTRA" >/tmp/tenant-command-core-remove.out; then pass 'core-remove command'; else fail 'core-remove command'; fi
   if run_tenant apply >/tmp/tenant-command-apply.out; then pass 'apply command'; else fail 'apply command'; fi
   if run_tenant sync-sot >/tmp/tenant-command-sync-sot.out; then pass 'sync-sot command'; else fail 'sync-sot command'; fi
+  if run_tenant healthcheck >/tmp/tenant-command-healthcheck.out 2>&1; then
+    if grep -Eq 'Bootstrap needed|Healthcheck passed' /tmp/tenant-command-healthcheck.out; then
+      pass 'healthcheck command'
+    else
+      fail 'healthcheck command produced unexpected output'
+    fi
+  else
+    fail 'healthcheck command'
+  fi
   if run_tenant drift-detect >/tmp/tenant-command-drift-detect.out 2>&1; then
     pass 'drift-detect command (no drift)'
   elif grep -q 'Runtime drift detected' /tmp/tenant-command-drift-detect.out; then

@@ -594,6 +594,21 @@ if [ "$SOLR_MODE" != "solrcloud" ] && [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PAS
   fi
 fi
 
+if [ "$SOLR_MODE" != "solrcloud" ]; then
+  _log "  Cleaning stale SolrCloud replica directories from standalone data volume"
+  stale_count=0
+  shopt -s nullglob
+  for stale_dir in "${DATA_DIR}"/*_shard*_replica_* "${DATA_DIR}"/.system_shard*_replica_*; do
+    [ -d "$stale_dir" ] || continue
+    stale_base="$(basename "$stale_dir")"
+    _log "    Removing stale Cloud dir: $stale_base"
+    rm -rf "$stale_dir"
+    stale_count=$((stale_count + 1))
+  done
+  shopt -u nullglob
+  _log "  Stale SolrCloud replica directories removed: $stale_count"
+fi
+
 # ---------------------------------------------------------------------------
 # Step 5: Fix permissions
 # ---------------------------------------------------------------------------

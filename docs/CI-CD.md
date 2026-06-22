@@ -26,8 +26,10 @@ docker compose config --quiet
 Unit-Tests:
 
 ```bash
-./scripts/run-tests.sh --unit-only
+./scripts/run-tests.sh --cloud --no-performance --no-cleanup
 ```
+
+Hinweis: `--mode-switch` bleibt ein lokaler Helfer, wird aber nicht in der GitLab-Pipeline ausgeführt.
 
 Tenant-Tests:
 

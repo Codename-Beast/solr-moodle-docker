@@ -1,7 +1,7 @@
 # Solr für Moodle — Multi-Tenant Docker Stack
 
 ![CI](https://img.shields.io/badge/ci-GitHub%20%2B%20GitLab-brightgreen)
-![Version](https://img.shields.io/badge/version-3.4.9-blue)
+![Version](https://img.shields.io/badge/version-3.4.10-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
@@ -189,7 +189,7 @@ Alle Optionen stehen in `.env.example`. Die wichtigsten Werte:
 
 | Variable | Default | Bedeutung |
 |---|---|---|
-| `STACK_VERSION` | `v3.4.9` | Tag für das Init-Image, passend zum Changelog halten |
+| `STACK_VERSION` | `v3.4.10` | Tag für das Init-Image, passend zum Changelog halten |
 | `INSTANCE_NAME` | `solr` | Präfix für Container, Volume und Network |
 | `SOLR_VERSION` | `9.10.1` | Solr-Version im Runtime-Image |
 | `SOLR_PORT` | `8983` | Solr-Port auf dem Host |
@@ -249,7 +249,7 @@ solr-moodle-docker/
 | Stack-Test mit Tenant-Checks | `./scripts/run-tests.sh --tenant` |
 | Nur Tenant-CLI-Vertrag | `./scripts/run-tests.sh --tenant-commands` |
 | Moodle/Tika-Dokumentindexierung | `./scripts/test-moodle-documents.sh` |
-| Moduswechsel Standalone/SolrCloud | `./scripts/run-tests.sh --mode-switch` |
+| Moduswechsel Standalone/SolrCloud | `./scripts/run-tests.sh --mode-switch` *(lokaler Helfer, nicht Teil der GitLab-Pipeline)* |
 
 Die CI baut Standalone und SolrCloud. Der Tenant-CLI-Pfad hängt an `run-tests.sh --tenant` und läuft damit in der regulären Pipeline mit.
 

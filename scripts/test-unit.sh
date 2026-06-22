@@ -119,6 +119,67 @@ unit_tests() {
         print_fail "solr-tenant.sh does not expose rebuild-permissions and healthcheck"
     fi
 
+    print_test "Healthcheck skips drift on bootstrap-needed state"
+    local healthcheck_bootstrap_dir repo_root
+    healthcheck_bootstrap_dir="$(mktemp -d)"
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    if (
+        set -euo pipefail
+        cd "$repo_root"
+        export SOLR_MODE=solrcloud
+        export SOLR_BASE="http://localhost:8983/solr"
+        export LOG_FILE="${healthcheck_bootstrap_dir}/tenant.log"
+        export SECURITY_JSON="${healthcheck_bootstrap_dir}/security.json"
+        export BOOTSTRAP_STATE_FILE="${healthcheck_bootstrap_dir}/state.env"
+        : > "${LOG_FILE}"
+        source scripts/solr-tenant-api.sh
+        source scripts/solr-tenant-core.sh
+        source scripts/solr-tenant-security.sh
+        source scripts/solr-tenant-cmd.sh
+
+        _load_admin_creds() {
+            ADMIN_USER=admin
+            ADMIN_PASS=secret
+        }
+
+        curl() {
+            case "$*" in
+                *"/admin/info/system"*) printf '200' ;;
+                *"/admin/authentication"*) printf '404' ;;
+                *) printf 'unexpected curl invocation: %s\n' "$*" >&2; return 2 ;;
+            esac
+        }
+
+        drift_called_file="${healthcheck_bootstrap_dir}/drift-called"
+        cmd_drift_detect() {
+            touch "$drift_called_file"
+            printf 'drift detection must not run during bootstrap\n' >&2
+            return 1
+        }
+
+        output_file="${healthcheck_bootstrap_dir}/bootstrap.out"
+        error_file="${healthcheck_bootstrap_dir}/bootstrap.err"
+        set +e
+        cmd_healthcheck >"$output_file" 2>"$error_file"
+        health_rc=$?
+        set -e
+        if [ "$health_rc" -eq 0 ]; then
+            grep -q 'Bootstrap needed' "$output_file"
+            [ ! -e "$drift_called_file" ]
+        else
+            printf 'healthcheck returned non-zero during bootstrap test (%s)\n' "$health_rc" >&2
+            printf '--- stdout ---\n' >&2
+            cat "$output_file" >&2 || true
+            printf '--- stderr ---\n' >&2
+            cat "$error_file" >&2 || true
+            exit 1
+        fi
+    ); then
+        print_pass "Healthcheck reports bootstrap-needed without drift"
+    else
+        print_fail "Healthcheck still treats fresh instances as drift"
+    fi
+
     print_test "docker-compose healthcheck uses tenant-aware command"
     if grep -q '/opt/solr/scripts/solr-tenant.sh healthcheck' docker-compose.yml; then
         print_pass "docker-compose healthcheck delegates to tenant-aware command"

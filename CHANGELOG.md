@@ -5,8 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
-- `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Startup fehlschlägt. Root-cause: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
-- Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Root-cause: `_wait_for_security_reload` lieferte Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
+- `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Start fehlschlägt. Root-cause: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
+- Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Root-cause: `_wait_for_security_reload` meldete Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
 - Tenant-Passwort- und Enable-Flows schreiben `PASS` / `ACTIVE` jetzt vor dem Reload-Wait weg und brechen sauber ab, wenn der Reload nicht kommt. Root-cause: Das Script konnte weiterlaufen, obwohl `tenants.env` und der Live-Solr-Auth-State nicht mehr synchron waren.
 - Core-Namen werden jetzt konsistent validiert, bevor sie in Solr oder die Tenant-Konfiguration geschrieben werden. Root-cause: Die erste Validator-Version war für bestehende branded Namen wie `eLeDia_core_a` zu streng, dadurch wurden gültige Tenants vor dem Start abgelehnt.
 - `cmd_apply` stoppt jetzt bei einem fehlschlagenden Core-Create, statt den Fehler zu schlucken und den Tenant als erfolgreich angewendet zu markieren. Root-cause: Die Schleife ignorierte `_create_core`-Fehler, dadurch blieb `apply` fälschlich auf Erfolg.
@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.
+- Die Testmatrix berücksichtigt den bootstrap-sicheren Healthcheck jetzt explizit, damit frische Volumes nicht mehr als Drift-Fehler behandelt werden.
 
 ## [3.4.9]
 

@@ -41,12 +41,13 @@ CI/CD -> Pipelines -> Run pipeline
 
 ## Erwartete Jobs
 
-| Job | Ergebnis |
-|---|---|
-| lint | Shell/Compose ok |
-| unit | Unit-Tests ok |
-| standalone | Stack läuft im Core-Modus |
-| solrcloud | Stack läuft im SolrCloud-Modus |
+| Job | Wann | Ergebnis |
+|---|---|---|
+| `main-minimal` | `main` | Shell/Compose-Checks |
+| `feature-lint` | `feature/v...` und `release...` | Shell/Compose-Checks |
+| `feature-full-test` | `feature/v...` und `release...` | vollständiger Stack-Test im SolrCloud-Modus |
+
+Es gibt keinen separaten `unit`-Job und keinen eigenen `standalone`-/`solrcloud`-Job mehr; die Pipeline ist nach Branch-Regeln aufgebaut.
 
 ---
 

@@ -22,6 +22,8 @@ if [ -z "${ZK_HOST:-}" ]; then
 fi
 TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
 LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
+SECURITY_JSON="${SECURITY_JSON:-/var/solr/data/security.json}"
+BOOTSTRAP_STATE_FILE="${BOOTSTRAP_STATE_FILE:-/var/solr/data/.eledia-init/state.env}"
 ENV_FILE="${ENV_FILE:-/var/solr/data/.env}"
 DRY_RUN=0
 
@@ -714,7 +716,9 @@ cmd_export() {
 
 # ---------------------------------------------------------------------------
 # Subcommand: healthcheck
-# Validates Solr availability and, in SolrCloud mode, tenant runtime drift.
+# Validates Solr availability and only checks runtime drift once the instance
+# has finished its first bootstrap (security.json exists + auth endpoint online).
+# Fresh volumes are reported as bootstrap-needed instead of drift.
 # ---------------------------------------------------------------------------
 
 # --- cmd_healthcheck ---
@@ -722,9 +726,11 @@ cmd_healthcheck() {
   _load_admin_creds
   _log_action "healthcheck"
 
-  local system_code auth_code drift_out drift_rc
+  local system_code auth_code drift_out drift_rc bootstrap_state bootstrap_reason
+  bootstrap_reason=""
+  bootstrap_state="$(if [ -s "$BOOTSTRAP_STATE_FILE" ]; then printf 'present'; else printf 'missing'; fi)"
 
-  system_code="$(curl -s -o /dev/null -w '%{http_code}' -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASSWORD}" \
+  system_code="$(curl -s -o /dev/null -w '%{http_code}' -u "${ADMIN_USER}:${ADMIN_PASS}" \
     "${SOLR_BASE}/admin/info/system" 2>/dev/null || true)"
   auth_code="$(curl -s -o /dev/null -w '%{http_code}' \
     "${SOLR_BASE}/admin/authentication" 2>/dev/null || true)"
@@ -734,9 +740,17 @@ cmd_healthcheck() {
     return 1
   fi
 
-  if _is_cloud_mode && [ "$auth_code" != "401" ]; then
-    printf 'ERROR: SolrCloud authentication endpoint did not return 401 (HTTP %s)\n' "$auth_code" >&2
-    return 1
+  if [ ! -s "$SECURITY_JSON" ]; then
+    bootstrap_reason="security.json missing or empty"
+  elif [ "$auth_code" != "401" ]; then
+    bootstrap_reason="authentication endpoint not yet active (HTTP ${auth_code})"
+  fi
+
+  if [ -n "$bootstrap_reason" ]; then
+    printf '✔ Bootstrap needed (system=%s auth=%s marker=%s): %s\n' \
+      "$system_code" "$auth_code" "$bootstrap_state" "$bootstrap_reason"
+    _log "INFO" "healthcheck: bootstrap-needed (${bootstrap_reason}, marker=${bootstrap_state})"
+    return 0
   fi
 
   if _is_cloud_mode; then
@@ -996,7 +1010,7 @@ Commands:
   apply                               Re-apply all tenants from tenants.env (idempotent)
   sync-sot                            Enforce .env+tenants.env as SOT and rotate unknown API users
   rebuild-permissions                 Rebuild tenant ACLs from tenants.env and keep all last
-  healthcheck                         Validate Solr availability and tenant drift
+  healthcheck                         Validate Solr availability, bootstrap state, and tenant drift
   drift-detect                        Detect runtime drift vs tenants.env (users/collections)
   drift-remediate                     Reconcile runtime drift via sync-sot
   export                              YAML output for Ansible host_vars
