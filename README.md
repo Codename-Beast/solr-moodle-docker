@@ -204,12 +204,12 @@ Alle Optionen stehen in `.env.example`. Die wichtigsten Werte:
 
 ## 🔐 Sicherheit
 
-Ein paar Regeln sind hier bewusst hart gezogen:
+Ein paar Regeln sind hier hart gezogen:
 
 - Solr bleibt lokal gebunden: `SOLR_BIND=127.0.0.1`.
 - Externe Zugriffe laufen über Apache, Caddy oder einen anderen Reverse Proxy mit TLS.
-- `CHANGE_ME`-Passwörter werden beim Start abgewiesen.
-- Tenant-User bekommen nur die Rechte, die sie für ihre Cores oder Collections brauchen.
+- `CHANGE_ME`-Passwörter werden beim Start abgelehnt.
+- Tenant-User bekommen nur die Rechte, die sie für ihre Cores oder Collections benötigen.
 - In SolrCloud stehen tenant-spezifische Regeln vor generischen Regeln. Die Fallback-Permission `all` bleibt zuletzt.
 
 ---
@@ -241,15 +241,12 @@ solr-moodle-docker/
 
 ## 🧪 Tests
 
-Die wichtigsten Prüfläufe im Projekt sind:
-
-| Zweck | Befehl | Was dabei geprüft wird |
+| Zweck | Befehl | Was wird geprüft? |
 |---|---|---|
 | Einheitstests | `./scripts/run-tests.sh --unit-only` | Shell-Logik, Validierung, Sicherheitsregeln |
-| Stack mit Tenant-Checks | `./scripts/run-tests.sh --tenant` | echter Start, Tenant-Anlage, Login, Rechte, Tika |
-| Nur Tenant-CLI-Vertrag | `./scripts/run-tests.sh --tenant-commands` | `create`, `passwd`, `core-add`, `healthcheck`, `drift-detect` |
-| Moodle/Tika-Indexierung | `./scripts/test-moodle-documents.sh` | Dokumente landen in Solr und lassen sich suchen |
-| Moduswechsel Standalone/SolrCloud | `./scripts/run-tests.sh --mode-switch` | Wechsel zwischen beiden Betriebsarten ohne Datenchaos |
+| Stack mit Tenant-Checks | `./scripts/run-tests.sh --tenant` | Tenant-Anlage, Login, Rechte|
+| Tenant-CLI | `./scripts/run-tests.sh --tenant-commands` | `create`, `passwd`, `core-add`, `healthcheck`, `drift-detect` |
+| Moodle/Indexierung | `./scripts/test-moodle-documents.sh` | Dokumente landen in Solr und lassen sich suchen |
 
 ### Was die Meldungen meist bedeuten
 
@@ -267,10 +264,6 @@ Die CI baut und testet sowohl Standalone als auch SolrCloud. Der Tenant-CLI-Pfad
 | Dokument | Inhalt |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Architektur, Komponenten, Tenant-Lifecycle |
-| [docs/CI-CD.md](docs/CI-CD.md) | GitHub und GitLab CI |
-| [docs/GITLAB-CI-CD-SETUP.md](docs/GITLAB-CI-CD-SETUP.md) | GitLab Runner Setup |
-| [docs/GITLAB-QUICKSTART.md](docs/GITLAB-QUICKSTART.md) | GitLab Schnellstart |
-| [docs/monitoring.md](docs/monitoring.md) | Prometheus und Loki Integration |
 | [proxy_guid.md](proxy_guid.md) | Reverse-Proxy-Guide für Caddy, Apache und Nginx |
 | [CHANGELOG.md](CHANGELOG.md) | Änderungshistorie |
 
@@ -286,4 +279,4 @@ Die CI baut und testet sowohl Standalone als auch SolrCloud. Der Tenant-CLI-Pfad
 
 ---
 
-**eLeDia.de** · BSC Bernd Schreistetter
+**eLeDia.de** · Bernd Schreistetter
