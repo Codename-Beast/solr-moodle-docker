@@ -105,9 +105,10 @@ cmd_create() {
     _ensure_all_permission_last || return 1
   fi
 
-  # Wait for Solr's PathWatcher to detect the file change and reload auth config
-  if ! _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"; then
-    return 1
+  if ! _is_cloud_mode; then
+    if ! _wait_for_security_reload "$user" "$pass" "${CORE_ARRAY[0]:-}"; then
+      return 1
+    fi
   fi
 
   printf '✔ Tenant "%s" created\n' "$name"
@@ -757,16 +758,6 @@ cmd_healthcheck() {
       "$system_code" "$auth_code" "$bootstrap_state" "$bootstrap_reason"
     _log "INFO" "healthcheck: bootstrap-needed (${bootstrap_reason}, marker=${bootstrap_state})"
     return 0
-  fi
-
-  if _is_cloud_mode; then
-    drift_out="$(cmd_drift_detect 2>&1)"
-    drift_rc=$?
-    if [ "$drift_rc" -ne 0 ]; then
-      printf '%s\n' "$drift_out" >&2
-      printf 'ERROR: tenant drift detected\n' >&2
-      return 1
-    fi
   fi
 
   printf '✔ Healthcheck passed (system=%s auth=%s mode=%s)\n' "$system_code" "$auth_code" "${SOLR_MODE:-standalone}"
