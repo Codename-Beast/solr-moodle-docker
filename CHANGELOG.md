@@ -16,6 +16,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.
 - Die Testmatrix berücksichtigt den bootstrap-sicheren Healthcheck jetzt explizit, damit frische Volumes nicht mehr als Drift-Fehler behandelt werden.
+- Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
+
+### Removed
+- Keine.
+
+### Deprecated
+- Keine.
+
+### Breaking Changes
+- Keine.
 
 ## [3.4.9]
 
