@@ -79,10 +79,3 @@ PDF/DOCX/HTML -> /update/extract -> solr_filecontent -> Moodle Suche
 ```
 
 ---
-
-## Nicht im Scope
-
-- Kubernetes oder Helm
-- externer ZooKeeper-Cluster-Manager
-- TLS-Konfiguration im Solr-Container selbst
-- öffentliche Freigabe des Solr-Ports
