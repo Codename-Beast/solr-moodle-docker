@@ -6,9 +6,9 @@
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
 
-Ein Solr-Stack für Moodle Global Search, gebaut für mehrere Moodle-Instanzen auf einem Solr. Jeder Tenant bekommt eigene Zugangsdaten und nur Zugriff auf die eigenen Cores oder Collections. Datei-Inhalte laufen über Tika, der Betrieb geht wahlweise als Standalone oder SolrCloud.
+Ein Solr-Stack für Moodle Global Search. Jeder Tenant bekommt eigene Zugangsdaten und nur Zugriff auf die eigenen Cores oder Collections. Datei-Inhalte laufen über Tika, der BetriebModus von Solr geht wahlweise als Standalone(Cores) oder SolrCloud(Zookeper/Collections).
 
-> Solr ist standardmäßig nur auf `127.0.0.1` gebunden. Externe Zugriffe gehören über einen Reverse Proxy mit TLS davor.
+> Solr ist auf `127.0.0.1` gebunden. Externe Zugriffe müssen über einen Reverse Proxy eingerichtet werden.
 
 ---
 
@@ -18,7 +18,7 @@ Ein Solr-Stack für Moodle Global Search, gebaut für mehrere Moodle-Instanzen a
 |---|---|
 | 🚀 Start | [Voraussetzungen](#-voraussetzungen) · [Schnellstart](#-schnellstart) |
 | 🧱 Aufbau | [Architektur](#-architektur) · [Verzeichnisstruktur](#-verzeichnisstruktur) |
-| ⚙ Betrieb | [Tenant-Verwaltung](#-tenant-verwaltung) · [SolrCloud](#-solrcloud) · [Konfiguration](#-konfiguration) |
+| ⚙ Modis | [Tenant-Verwaltung](#-tenant-verwaltung) · [SolrCloud](#-solrcloud) · [Konfiguration](#-konfiguration) |
 | 🔐 Qualität | [Sicherheit](#-sicherheit) · [Tests](#-tests) |
 | 📚 Doku | [Weitere Dokumentation](#-weitere-dokumentation) · [Kompatibilität](#kompatibilität) |
 
@@ -63,7 +63,7 @@ Vor dem Start müssen die Pflichtpasswörter in `.env` gesetzt sein. Platzhalter
 
 ```bash
 docker compose ps
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh healthcheck
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh healthcheck
 ```
 
 Der Compose-Healthcheck prüft, ob Solr antwortet, ob die Authentifizierung aktiv ist und ob der Bootstrap-Zustand passt. Tenant-Drift wird bewusst separat mit `drift-detect` geprüft.
@@ -79,7 +79,7 @@ Der Stack ist bewusst in Init und Runtime getrennt:
 | Container | Aufgabe |
 |---|---|
 | `eLeDia-solr-init` | legt `security.json`, Configsets und Bootstrap-Metadaten an |
-| `solr` | läuft dauerhaft und stellt Solr für Moodle bereit |
+| `solr` | Runtime Solr Server|
 
 Der Runtime-Container startet erst, wenn der Init-Container sauber durch ist. Dadurch ist die Security-Basis schon vorhanden, bevor Solr für Moodle erreichbar wird.
 
@@ -98,20 +98,20 @@ Jede Moodle-Instanz ist ein eigener Tenant. Praktisch heißt das: eigener Solr-U
 ### Tenant anlegen
 
 ```bash
-docker exec solr-solr \
+docker exec <containername> \
   /opt/solr/scripts/solr-tenant.sh create schule_a --cores moodle_prod
 ```
 
 ### Tenants anzeigen
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh list
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh list
 ```
 
 ### Passwort rotieren
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh passwd schule_a
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh passwd schule_a
 ```
 
 ### Explizites Passwort setzen
@@ -119,33 +119,33 @@ docker exec solr-solr /opt/solr/scripts/solr-tenant.sh passwd schule_a
 Nützlich, wenn Ansible oder ein anderes Deployment-Tool den Wert vorgibt:
 
 ```bash
-docker exec solr-solr \
+docker exec <containername> \
   /opt/solr/scripts/solr-tenant.sh passwd schule_a --password '<neues-passwort>'
 ```
 
 ### Source of Truth anwenden
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh sync-sot
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh sync-sot
 ```
 
 ### Permissions neu aufbauen
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh rebuild-permissions
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh rebuild-permissions
 ```
 
 ### Drift prüfen und beheben
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh drift-detect
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh drift-remediate
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh drift-detect
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh drift-remediate
 ```
 
 ### Hostvars exportieren
 
 ```bash
-docker exec solr-solr /opt/solr/scripts/solr-tenant.sh export
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh export
 ```
 
 Der Export enthält auch `solr_runtime_source_of_truth`. Das ist wichtig, wenn später nachvollziehbar bleiben soll, was wirklich aus der Solr API oder aus ZooKeeper kam.
@@ -210,7 +210,6 @@ Ein paar Regeln sind hier hart gezogen:
 - Externe Zugriffe laufen über Apache, Caddy oder einen anderen Reverse Proxy mit TLS.
 - `CHANGE_ME`-Passwörter werden beim Start abgelehnt.
 - Tenant-User bekommen nur die Rechte, die sie für ihre Cores oder Collections benötigen.
-- In SolrCloud stehen tenant-spezifische Regeln vor generischen Regeln. Die Fallback-Permission `all` bleibt zuletzt.
 
 ---
 
@@ -248,7 +247,7 @@ solr-moodle-docker/
 | Tenant-CLI | `./scripts/run-tests.sh --tenant-commands` | `create`, `passwd`, `core-add`, `healthcheck`, `drift-detect` |
 | Moodle/Indexierung | `./scripts/test-moodle-documents.sh` | Dokumente landen in Solr und lassen sich suchen |
 
-### Was die Meldungen meist bedeuten
+### Was die Meldungen bedeuten
 
 - `Security reload not confirmed after 30s` → Solr hat die neue Security-Datei nicht rechtzeitig übernommen.
 - `Tenant create failed` → Tenant, Core oder Rechte konnten nicht sauber angelegt werden.
@@ -266,16 +265,6 @@ Die CI baut und testet sowohl Standalone als auch SolrCloud. Der Tenant-CLI-Pfad
 | [docs/architecture.md](docs/architecture.md) | Architektur, Komponenten, Tenant-Lifecycle |
 | [proxy_guid.md](proxy_guid.md) | Reverse-Proxy-Guide für Caddy, Apache und Nginx |
 | [CHANGELOG.md](CHANGELOG.md) | Änderungshistorie |
-
----
-
-## Kompatibilität
-
-| Komponente | Version |
-|---|---|
-| Solr | 9.10.1 |
-| Moodle | 4.1 bis 5.x |
-| Docker | 24+ |
 
 ---
 
