@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 - Die Testmatrix berücksichtigt den bootstrap-sicheren Healthcheck jetzt explizit, damit frische Volumes nicht mehr als Drift-Fehler behandelt werden.
 - Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
 
+### Changed
+- Release-Metadaten, Script-Header, `.env.example` und der Init-Image-Fallback zeigen jetzt konsistent auf `v3.4.10`.
+- Der Test-Log-Fallback nutzt jetzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Testläufe nicht blockieren.
+
 ### Removed
 - Keine.
 

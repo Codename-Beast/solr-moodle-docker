@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.9
+# Version: v3.4.10
 #
 # eLeDia Test Library — colors, counters, print helpers
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -47,8 +47,9 @@ if ! echo "${SOLR_HEAP:-2g}" | grep -Eq '^[0-9]+[mMgG]$'; then
 fi
 LOG_ROOT="${LOG_ROOT:-/var/log/solr/instances/${SOLR_CONTAINER}}"
 RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
+FALLBACK_LOG_ROOT="${TMPDIR:-/tmp}/eledia-logs-${UID:-$(id -u 2>/dev/null || echo user)}"
 if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
-    LOG_ROOT="/tmp/eledia-logs"
+    LOG_ROOT="${FALLBACK_LOG_ROOT}"
     RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
     mkdir -p "${LOG_ROOT}" || {
         echo "ERROR: cannot create fallback log dir ${LOG_ROOT}." >&2
@@ -57,7 +58,7 @@ if ! mkdir -p "${LOG_ROOT}" 2>/dev/null; then
     echo "WARN: using fallback LOG_ROOT=${LOG_ROOT} (no write access to /var/log/eledia)" >&2
 fi
 if ! touch "${RUN_LOG_FILE}" 2>/dev/null; then
-    LOG_ROOT="/tmp/eledia-logs"
+    LOG_ROOT="${FALLBACK_LOG_ROOT}"
     RUN_LOG_FILE="${LOG_ROOT}/run-tests.log"
     mkdir -p "${LOG_ROOT}" || true
     touch "${RUN_LOG_FILE}" || {

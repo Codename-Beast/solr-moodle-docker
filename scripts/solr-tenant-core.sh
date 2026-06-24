@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.9
+# Version: v3.4.10
 #
 # eLeDia Solr Tenant Core — core/collection CRUD (standalone + SolrCloud)
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.9
+# Version: v3.4.10
 #
 # eLeDia Unit Tests — file checks, compose config, Dockerfile
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -246,6 +246,16 @@ unit_tests() {
         fi
     else
         print_fail ".env.example not found"
+    fi
+
+    print_test "release metadata points to current stack version"
+    if grep -q '^STACK_VERSION=v3.4.10$' .env.example && \
+       grep -q '\${STACK_VERSION:-v3.4.10}' docker-compose.yml && \
+       grep -q '# Version: v3.4.10' Dockerfile && \
+       grep -q '# Version: v3.4.10' scripts/solr-tenant.sh; then
+        print_pass "Release metadata consistently points to v3.4.10"
+    else
+        print_fail "Release metadata is not consistent with v3.4.10"
     fi
 
     #Docker image availability

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.9
+# Version: v3.4.10
 
 # =========================================
 # Apache Config Generator for Solr Instances

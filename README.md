@@ -66,7 +66,7 @@ docker compose ps
 docker exec solr-solr /opt/solr/scripts/solr-tenant.sh healthcheck
 ```
 
-Der Compose-Healthcheck prüft nicht nur, ob Solr antwortet, sondern in SolrCloud auch, ob der Tenant-Zustand noch zum `tenants.env` passt.
+Der Compose-Healthcheck prüft, ob Solr antwortet, ob die Authentifizierung aktiv ist und ob der Bootstrap-Zustand passt. Tenant-Drift wird bewusst separat mit `drift-detect` geprüft.
 
 ---
 
