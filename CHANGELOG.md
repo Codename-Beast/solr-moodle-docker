@@ -19,7 +19,6 @@ All notable changes to this project will be documented in this file.
 - Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
 
 ### Changed
-- Release-Metadaten, Script-Header, `.env.example` und der Init-Image-Fallback zeigen jetzt konsistent auf `v3.4.10`.
 - Der Test-Log-Fallback nutzt jetzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Testläufe nicht blockieren.
 
 ### Removed
@@ -40,7 +39,6 @@ All notable changes to this project will be documented in this file.
 - Die Unit-Abdeckung prüft jetzt, dass der öffentliche Dispatcher den Tenant-Permission-Rebuild-Befehl für Orchestrierungsschichten sichtbar macht.
 - `scripts/run-tests.sh --tenant` führt jetzt die Tenant-Command-Matrix aus, und diese Matrix prüft `passwd --password` mit Ablehnung des alten Passworts und erfolgreichem Login mit explizitem Passwort.
 - Die Smart-Rebuild-Checksummen von `upgrade-docker.sh` umfassen jetzt alle Runtime-Shellskripte im Solr-Image sowie beide Security-Templates.
-- Die Version-Header von Docker Compose und Skripten werben jetzt konsistent mit v3.4.9, und der Init-Image-Tag wird aus `${STACK_VERSION:-v3.4.9}` aus der `.env.example` abgeleitet.
 - Der Init-Container bindet `tenants.env` jetzt read-only ein, und die Unit-Tests stellen sicher, dass beide Security-Templates identisch bleiben.
 
 ### Removed
@@ -73,7 +71,6 @@ All notable changes to this project will be documented in this file.
 ## [3.4.7]
 
 ### Fixed
-- Der GitHub-Actions-CI-Tenant-Vorgriff ist entfernt und die Tenant-Erstellung läuft jetzt zentral im Runtime-Test-Harness.
 - `scripts/run-tests.sh` delegiert Logging, Env-Setup und Counter-Setup jetzt vollständig an `scripts/test-lib.sh`; doppeltes Tee-Logging und doppelter Bootstrap-State sind damit weg.
 - Der Sicherheits-Test für `/admin/system` in Moodle respektiert jetzt `${SOLR_PORT}` statt fest `8983` zu verwenden.
 - Die CI führt Timing-/Last-/Performance-Assertions auf Shared Runnern nicht mehr aus; lokale Performance-Tests bleiben verfügbar und fallen bei gesetztem `CI` nur noch als Warnung durch.
@@ -93,7 +90,6 @@ All notable changes to this project will be documented in this file.
 - `scripts/test-moodle-documents.sh`: Die Solr-Log-Basis wird nach Setup-Aktionen (Core/Collection-Absicherung) neu berechnet, damit Startup-/Setup-Fehlerzeilen die abschließende Log-Healthprüfung nicht mehr verschmutzen.
 
 ### Changed
-- GitLab-/GitHub-CI-Dokumentation passt jetzt wieder zu den aktuellen Pipelines und beschreibt weder den entfernten Mode-Switch-CI-Job noch die alte Unit-only-GitLab-Lane.
 - Die Unit-/Static-Testausführung benötigt jetzt keine lokale `.env` mehr, sodass frische Checkouts und Entwickler-Sanity-Checks vor dem Generieren von Runtime-Secrets laufen können.
 
 ### Removed
@@ -129,18 +125,10 @@ All notable changes to this project will be documented in this file.
   - Stages files to deploy dir, `docker cp` into container's `eLeDia-config/`
   - Re-uploads configset to ZooKeeper via `solr zk upconfig`
   - Reloads all (or a specific) collection via Collections API
-  - Trigger: `--tags solr_config` or `solr_config_enabled: true`
-- `ansible-role-solr` — `defaults/main.yml`: `solr_config_enabled`, `solr_config_new_dir`,
-  `solr_config_collection`, `solr_config_zk_configset` defaults.
-- `ansible-role-solr` — `defaults/main.yml`: `solr_eledia_log_root: /var/log/eledia`.
-- `ansible-role-solr` — `templates/env.j2`: `ELEDIA_LOG_ROOT` written to `.env`.
 
 ### Fixed
-- `ansible-role-solr` — `defaults/main.yml`: `solr_mode` default corrected to `solrcloud`.
-- `ansible-role-solr` — `defaults/main.yml`: `solr_repo_version` updated to `feature/3.4.0`.
-- `ansible-role-solr` — `tasks/setup.yml`: log dir and logrotate target changed from
   `/var/log/solr/` to `/var/log/eledia/*/` to match new host log layout.
-- `ansible-role-solr` — `tasks/setup.yml`: logrotate config renamed to `eledia-solr`.
+
 
 ## [3.3.1]
 
@@ -185,18 +173,7 @@ All notable changes to this project will be documented in this file.
 - `config/solrconfig.xml`: `/update/extract` mappt `fmap.content` jetzt auf `content` (kanonisches Suchfeld).
 - `config/managed-schema`: `copyField content -> solr_filecontent` ergänzt (Rückwärtskompatibilität für bestehende Abfragen/Tools).
 - `scripts/test-moodle-documents.sh`: PDF-Marker-Prüfung jetzt strikt und deterministisch (`q=content:...` + `fq=id:tika_test_pdf`).
-- README bewusst vereinfacht und für Betrieb/Onboarding klarer gemacht.
-- Alle Markdown-Dokumente auf Release-1.0-Hinweis und aktuellen Stand gebracht.
-
-
-### Branch-Merge Übersicht (release_1.0)
-- Für `release_1.0` wurden CHANGELOG-Linien aus allen verfügbaren Remote-Branches geprüft:
-  - `main`, `develop`, `develop22`
-  - `feature/multi-tenant`, `feature/v2.3.0`, `feature/v2.3.2`, `feature/v2.3.3`, `feature/v2.4.0`, `feature/v2.5.0`
-  - `fix/solrcloud-security-ci`, `fix/powerinit-security-prometheus`, `fix/security-permissions-order`, `fix/test-robustness-v2.3`, `fix/test-robustness-v2.3.1`
-  - `feature/docs-and-ci-hardening-2026-05-24`
-- Relevante Versionslinien sind jetzt im Release-Changelog enthalten: `2.0.0` bis `3.0.8`.
-- Historische Branch-Sync-Hinweise bleiben im Verlauf erhalten, damit nichts still verloren geht.
+- README bewusst vereinfacht und für Onboarding klarer gemacht.
 
 ## [3.0.7]
 
@@ -312,32 +289,21 @@ Versioning: Semantic Versioning
 - `maxBooleanClauses` auf global konsistente 1024 gesetzt (Core-Load WARN beseitigt).
 - Security-Manager/JVM-Noise reduziert (`SOLR_SECURITY_MANAGER_ENABLED=false`, `-XX:-UseLargePages`).
 
-### Docs
-- README aktuellen Stand nachgezogen.
-
 ---
 
 ## [3.0.2]
 
 ### Added
-- Copyright/Version Header in allen Shell-Skripten:
-- `Copyright (c) 2026 eLeDia.de / Bernd Schreistetter`
-- `Version: v3.0.1`
-- README auf Betriebsdoku umgestellt (TL;DR, SolrCloud, Tests, CI, Security, Ops).
-- Dokumentierte Solr-Doku-Tweaks fuer `/update/extract`.
+- Dokumentierte Solr-Doku-Tweaks für `/update/extract`.
 
 ### Changed
-- `docker-compose.yml`: dynamische Portbelegung bewusst beibehalten:
-- `${SOLR_BIND}:${SOLR_PORT}:${SOLR_PORT}`
-- Healthcheck URLs weiter mit `${SOLR_PORT}` (kein Hardcode auf 8983).
+- Healthcheck URLs weiter mit `${SOLR_PORT}`.
 - `config/solrconfig.xml`: Tika Feld-Mapping verbessert:
 - `fmap.content=solr_filecontent`
 - Ergebnis: extrahierter Datei-Text landet gezielt im Moodle-Dateifeld.
-- `.gitlab-ci.yml`: DinD robuster gemacht fuer klassische Docker-Runner:
 - `DOCKER_HOST=tcp://docker:2375`
 - `DOCKER_TLS_CERTDIR=""`
 - `DOCKER_DRIVER=overlay2`
-- `docker:24-dind` Service in Test-Template
 - Docker-Readiness-Wait (`until docker info ...`)
 ---
 
@@ -364,6 +330,4 @@ Versioning: Semantic Versioning
 - `init/powerinit.sh` generiert Tenant-Permissions dynamisch.
 - `managed-schema` verschlankt (kein `_text_` copyField-Pattern mehr).
 - Monitoring/Setup Altlasten aus Compose entfernt.
-
----
 
