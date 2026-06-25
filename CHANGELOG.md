@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.
+- Die Unit-Tests validieren Security-Template-Permissions gegen Solr-vordefinierte Namen und Custom-Permission-Regeln, damit eine ungültige Permission wie `admin` nicht wieder in `security.json` landet.
 - Die Testmatrix berücksichtigt den bootstrap-sicheren Healthcheck jetzt explizit, damit frische Volumes nicht mehr als Drift-Fehler behandelt werden.
 - Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
 

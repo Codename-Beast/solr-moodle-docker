@@ -235,6 +235,47 @@ unit_tests() {
         print_fail "security.json.template files drifted apart"
     fi
 
+    print_test "security templates use Solr-valid permission names"
+    local predefined_permissions=(
+        collection-admin-edit collection-admin-read core-admin-read core-admin-edit
+        zk-read read update config-edit config-read schema-read schema-edit
+        security-edit security-read metrics-read health filestore-read filestore-write
+        package-edit package-read all
+    )
+    local invalid_permissions=0 security_template
+    local name has_path has_method has_params predefined
+    for security_template in security.json.template init/security.json.template; do
+        while IFS=$'\t' read -r name has_path has_method has_params; do
+            [ -n "$name" ] || continue
+            predefined=0
+            for permission_name in "${predefined_permissions[@]}"; do
+                if [ "$name" = "$permission_name" ]; then
+                    predefined=1
+                    break
+                fi
+            done
+
+            if [ "$name" = "admin" ]; then
+                printf 'Invalid permission => Permission with name admin is neither a pre-defined permission nor qualifies as a custom permission (%s)\n' "$security_template" >&2
+                invalid_permissions=1
+            elif [ "$predefined" -eq 1 ]; then
+                if [ "$has_path" = "true" ] || [ "$has_method" = "true" ] || [ "$has_params" = "true" ]; then
+                    printf 'Pre-defined permission %s in %s carries custom-only keys\n' "$name" "$security_template" >&2
+                    invalid_permissions=1
+                fi
+            elif [ "$has_path" != "true" ]; then
+                printf 'Invalid permission => Permission with name %s is neither a pre-defined permission nor qualifies as a custom permission (%s)\n' "$name" "$security_template" >&2
+                invalid_permissions=1
+            fi
+        done < <(jq -r '.authorization.permissions[]? | [.name, has("path"), has("method"), has("params")] | @tsv' "$security_template")
+    done
+
+    if [ "$invalid_permissions" -eq 0 ]; then
+        print_pass "security templates do not contain invalid Solr permission names such as admin"
+    else
+        print_fail "security templates contain invalid Solr permission definitions"
+    fi
+
     # Test 4: Environment variable template
     print_test ".env.example validation"
     if [ -f ".env.example" ]; then
