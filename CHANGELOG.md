@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - Doku- und Example-Befehle nutzen `<containername>` statt einen festen Container-Namen, damit alternative `INSTANCE_NAME`-Setups nicht verwirren.
 - Nginx wurde als zusätzlicher Reverse-Proxy-Weg mit Template, Generator und README ergänzt; die Haupt-README beschreibt Caddy, Apache und Nginx sowie die zwei Upstream-Varianten Host-Port und Docker-Netzwerk.
 - Die README dokumentiert die Moodle-Solr-Einstellungen inklusive der Regel, wann die Moodle-Secure/HTTPS-Option aktiv sein muss.
+- `docker-compose.proxy.yml` automatisiert Caddy- und Nginx-Proxy-Container inklusive external Solr-Netzwerk, dynamischem `${INSTANCE_NAME}-solr:${SOLR_PORT}` Upstream, `SOLR_UPSTREAM` Override sowie Zugriff über `kundendomain.de/solr` und `solr.kundendomain.de`.
 
 ### Changed
 - Der Test-Log-Fallback nutzt jetzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Testläufe nicht blockieren.

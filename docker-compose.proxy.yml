@@ -1,0 +1,84 @@
+# =========================================
+# Optional reverse proxy containers for Solr/Moodle
+# =========================================
+# Usage examples:
+#   PROXY_HOSTNAME=solr.example.com docker compose -f docker-compose.proxy.yml --profile caddy up -d
+#   PROXY_HOSTNAME=solr.example.com docker compose -f docker-compose.proxy.yml --profile nginx up -d
+#
+# The proxy containers join the existing Solr network:
+#   ${INSTANCE_NAME:-solr}-network
+#
+# Default Solr upstream inside Docker:
+#   ${INSTANCE_NAME:-solr}-solr:${SOLR_PORT:-8983}
+# Override when needed:
+#   SOLR_UPSTREAM=my-solr-container:18983
+# =========================================
+
+services:
+  caddy-proxy:
+    image: caddy:2-alpine
+    container_name: ${INSTANCE_NAME:-solr}-caddy-proxy
+    profiles: ["caddy"]
+    restart: unless-stopped
+    ports:
+      - "${PROXY_HTTP_PORT:-80}:80"
+      - "${PROXY_HTTPS_PORT:-443}:443"
+    environment:
+      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
+      SOLR_PORT: ${SOLR_PORT:-8983}
+      PROXY_HOSTNAME: ${PROXY_HOSTNAME:-kundendomain.de}
+      PROXY_SOLR_HOSTNAME: ${PROXY_SOLR_HOSTNAME:-}
+      PROXY_ADMIN_EMAIL: ${PROXY_ADMIN_EMAIL:-admin@example.com}
+      SOLR_UPSTREAM: ${SOLR_UPSTREAM:-}
+    volumes:
+      - ./caddy/Caddyfile.container:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    entrypoint: ["/bin/sh", "-ec"]
+    command: >-
+      export SOLR_UPSTREAM="$${SOLR_UPSTREAM:-$${INSTANCE_NAME:-solr}-solr:$${SOLR_PORT:-8983}}";
+      export PROXY_SOLR_HOSTNAME="$${PROXY_SOLR_HOSTNAME:-solr.$${PROXY_HOSTNAME}}";
+      echo "Caddy Solr upstream: $${SOLR_UPSTREAM}";
+      echo "Caddy hosts: $${PROXY_HOSTNAME}/solr and $${PROXY_SOLR_HOSTNAME}";
+      exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    networks:
+      - solr_network
+
+  nginx-proxy:
+    image: nginx:1.27-alpine
+    container_name: ${INSTANCE_NAME:-solr}-nginx-proxy
+    profiles: ["nginx"]
+    restart: unless-stopped
+    ports:
+      - "${PROXY_HTTP_PORT:-80}:80"
+      - "${PROXY_HTTPS_PORT:-443}:443"
+    environment:
+      INSTANCE_NAME: ${INSTANCE_NAME:-solr}
+      SOLR_PORT: ${SOLR_PORT:-8983}
+      PROXY_HOSTNAME: ${PROXY_HOSTNAME:-kundendomain.de}
+      PROXY_SOLR_HOSTNAME: ${PROXY_SOLR_HOSTNAME:-}
+      SOLR_UPSTREAM: ${SOLR_UPSTREAM:-}
+    volumes:
+      - ./nginx/templates/solr-container.conf.template:/etc/nginx/templates/default.conf.template:ro
+      # Provide certificates for Nginx mode. Caddy mode can manage TLS automatically.
+      - ./nginx/certs:/etc/nginx/certs:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command: >-
+      export SOLR_UPSTREAM="$${SOLR_UPSTREAM:-$${INSTANCE_NAME:-solr}-solr:$${SOLR_PORT:-8983}}";
+      export PROXY_SOLR_HOSTNAME="$${PROXY_SOLR_HOSTNAME:-solr.$${PROXY_HOSTNAME}}";
+      echo "Nginx Solr upstream: $${SOLR_UPSTREAM}";
+      echo "Nginx hosts: $${PROXY_HOSTNAME}/solr and $${PROXY_SOLR_HOSTNAME}";
+      exec /docker-entrypoint.sh nginx -g 'daemon off;'
+    networks:
+      - solr_network
+
+volumes:
+  caddy_data:
+    name: ${INSTANCE_NAME:-solr}_caddy_data
+  caddy_config:
+    name: ${INSTANCE_NAME:-solr}_caddy_config
+
+networks:
+  solr_network:
+    external: true
+    name: ${INSTANCE_NAME:-solr}-network

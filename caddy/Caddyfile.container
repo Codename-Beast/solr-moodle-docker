@@ -1,0 +1,33 @@
+{
+    email {$PROXY_ADMIN_EMAIL}
+}
+
+# Path mode: https://kundendomain.de/solr
+{$PROXY_HOSTNAME} {
+    encode zstd gzip
+
+    handle /solr/* {
+        reverse_proxy {$SOLR_UPSTREAM} {
+            header_up Host {host}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+}
+
+# Subdomain mode: https://solr.kundendomain.de
+{$PROXY_SOLR_HOSTNAME} {
+    encode zstd gzip
+
+    redir / /solr/ 302
+
+    handle /solr/* {
+        reverse_proxy {$SOLR_UPSTREAM} {
+            header_up Host {host}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+}

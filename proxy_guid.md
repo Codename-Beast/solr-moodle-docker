@@ -32,6 +32,19 @@ Die Proxy-Schicht soll:
 | **Apache** | ✅ unterstützt | Wird von der Solr-Ansible-Rolle mit eingerichtet |
 | **Nginx** | ✅ unterstützt | Generator unter `nginx/generate-nginx-config.sh` |
 
+Container-Automation:
+
+```bash
+PROXY_HOSTNAME=kundendomain.de PROXY_SOLR_HOSTNAME=solr.kundendomain.de   docker compose -f docker-compose.proxy.yml --profile caddy up -d
+PROXY_HOSTNAME=kundendomain.de PROXY_SOLR_HOSTNAME=solr.kundendomain.de   docker compose -f docker-compose.proxy.yml --profile nginx up -d
+```
+
+`docker-compose.proxy.yml` hängt Caddy/Nginx automatisch an das externe Solr-Netzwerk `${INSTANCE_NAME:-solr}-network`. Der interne Default-Upstream ist `${INSTANCE_NAME:-solr}-solr:${SOLR_PORT:-8983}`. Die Proxy-Container bedienen beide Zielvarianten: `https://kundendomain.de/solr` und `https://solr.kundendomain.de`. Bei abweichendem Containername oder Port:
+
+```bash
+SOLR_UPSTREAM=my-solr-container:18983 PROXY_HOSTNAME=kundendomain.de   PROXY_SOLR_HOSTNAME=solr.kundendomain.de   docker compose -f docker-compose.proxy.yml --profile caddy up -d
+```
+
 ---
 
 ## 🏗️ Betriebsarten

@@ -97,9 +97,9 @@ Solr bleibt lokal gebunden (`SOLR_BIND=127.0.0.1`). Externe Zugriffe laufen übe
 
 | Proxy | Status | Konfiguration |
 |---|---|---|
-| Caddy | empfohlen, unterstützt | `docker exec <containername> /opt/solr/scripts/solr-tenant.sh caddy-config --domain solr.example.com` |
+| Caddy | empfohlen, unterstützt | `docker compose -f docker-compose.proxy.yml --profile caddy up -d` |
 | Apache | unterstützt | `./apache/generate-apache-config.sh` |
-| Nginx | unterstützt, | `./nginx/generate-nginx-config.sh` |
+| Nginx | unterstützt | `docker compose -f docker-compose.proxy.yml --profile nginx up -d` oder `./nginx/generate-nginx-config.sh` |
 
 ### Proxy-Betriebsvarianten
 
@@ -109,10 +109,20 @@ Variante A: Proxy läuft auf dem Host und leitet an den lokal gebundenen Solr-Po
 https://solr.example.com -> 127.0.0.1:${SOLR_PORT} -> Solr
 ```
 
-Variante B: Proxy läuft im Docker-Netzwerk und leitet an den Compose-Service weiter.
+Variante B: Proxy läuft als Container im Solr-Docker-Netzwerk.
 
 ```text
-https://solr.example.com -> solr:8983 -> Solr
+https://solr.example.com -> ${INSTANCE_NAME}-solr:${SOLR_PORT} -> Solr
+```
+
+Der Container-Proxy sieht Solr nur, weil `docker-compose.proxy.yml` ihn automatisch an das externe Netzwerk `${INSTANCE_NAME:-solr}-network` hängt. Der Default-Upstream ist `${INSTANCE_NAME:-solr}-solr:${SOLR_PORT:-8983}` und kann mit `SOLR_UPSTREAM=<container>:<port>` überschrieben werden.
+
+Caddy/Nginx als Container starten. Danach ist Solr über `https://kundendomain.de/solr` und `https://solr.kundendomain.de` erreichbar:
+
+```bash
+PROXY_HOSTNAME=kundendomain.de PROXY_SOLR_HOSTNAME=solr.kundendomain.de   docker compose -f docker-compose.proxy.yml --profile caddy up -d
+
+PROXY_HOSTNAME=kundendomain.de PROXY_SOLR_HOSTNAME=solr.kundendomain.de   docker compose -f docker-compose.proxy.yml --profile nginx up -d
 ```
 
 Für eine aktive Konfiguration genau eine Upstream-Variante verwenden. Nicht gleichzeitig Host-Port und Docker-Service mischen.

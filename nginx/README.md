@@ -39,6 +39,23 @@ proxy_pass http://<containername>:<solr-port>/solr/;
 
 Wichtig: In einer aktiven Konfiguration genau eine `proxy_pass`-Variante verwenden.
 
+## Nginx als Container starten
+
+```bash
+PROXY_HOSTNAME=kundendomain.de PROXY_SOLR_HOSTNAME=solr.kundendomain.de \
+  docker compose -f docker-compose.proxy.yml --profile nginx up -d
+```
+
+Der Container wird automatisch an `${INSTANCE_NAME:-solr}-network` gehängt und nutzt intern `${INSTANCE_NAME:-solr}-solr:${SOLR_PORT:-8983}`. Er bedient `https://kundendomain.de/solr` und `https://solr.kundendomain.de`. Abweichende Namen/Ports:
+
+```bash
+SOLR_UPSTREAM=my-solr-container:18983 PROXY_HOSTNAME=kundendomain.de \
+  PROXY_SOLR_HOSTNAME=solr.kundendomain.de \
+  docker compose -f docker-compose.proxy.yml --profile nginx up -d
+```
+
+Nginx braucht Zertifikate unter `nginx/certs/fullchain.pem` und `nginx/certs/privkey.pem`. Wenn automatische TLS-Verwaltung gewünscht ist, nimm Caddy.
+
 ## Konfiguration generieren
 
 ```bash

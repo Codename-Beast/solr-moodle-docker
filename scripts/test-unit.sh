@@ -233,6 +233,26 @@ unit_tests() {
         print_fail "PingRequestHandler healthcheck file automation is incomplete"
     fi
 
+    print_test "Proxy container compose joins Solr network"
+    if [ -f docker-compose.proxy.yml ] && \
+       [ -f caddy/Caddyfile.container ] && \
+       [ -f nginx/templates/solr-container.conf.template ] && \
+       grep -q 'profiles: \["caddy"\]' docker-compose.proxy.yml && \
+       grep -q 'profiles: \["nginx"\]' docker-compose.proxy.yml && \
+       grep -q 'external: true' docker-compose.proxy.yml && \
+       grep -q 'name: ${INSTANCE_NAME:-solr}-network' docker-compose.proxy.yml && \
+       grep -q 'SOLR_UPSTREAM' docker-compose.proxy.yml && \
+       grep -q 'PROXY_SOLR_HOSTNAME' docker-compose.proxy.yml && \
+       grep -q 'redir / /solr/' caddy/Caddyfile.container && \
+       grep -q 'reverse_proxy {$SOLR_UPSTREAM}' caddy/Caddyfile.container && \
+       grep -q 'server_name ${PROXY_HOSTNAME}' nginx/templates/solr-container.conf.template && \
+       grep -q 'server_name ${PROXY_SOLR_HOSTNAME}' nginx/templates/solr-container.conf.template && \
+       grep -q 'proxy_pass http://${SOLR_UPSTREAM}/solr/' nginx/templates/solr-container.conf.template; then
+        print_pass "Caddy/Nginx proxy containers use the external Solr network and dynamic upstream"
+    else
+        print_fail "Proxy container compose automation is incomplete"
+    fi
+
     # Container-first delivery: helper scripts must be baked into Solr image
     print_test "Dockerfile.solr embeds runtime helper scripts"
     if grep -q 'COPY --chown=solr:solr scripts/ /opt/solr/scripts/' Dockerfile.solr; then
