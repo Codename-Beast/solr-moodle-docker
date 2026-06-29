@@ -135,11 +135,57 @@ _cloud_auth_api() {
   _solr_api POST "/admin/authentication" "$payload" > /dev/null
 }
 
+# Validate a Security API authorization payload before sending it to Solr.
+# Solr accepts malformed permission names only late during permission loading;
+# reject them here so invalid names such as "admin" never reach runtime state.
+_validate_authz_payload() {
+  local payload="$1" name has_path has_method has_params predefined permission_name
+  name="$(printf '%s' "$payload" | jq -r '."set-permission"?.name // empty' 2>/dev/null || true)"
+  [ -z "$name" ] && return 0
+
+  local predefined_permissions=(
+    collection-admin-edit collection-admin-read core-admin-read core-admin-edit
+    zk-read read update config-edit config-read schema-read schema-edit
+    security-edit security-read metrics-read health filestore-read filestore-write
+    package-edit package-read all
+  )
+
+  predefined=0
+  for permission_name in "${predefined_permissions[@]}"; do
+    if [ "$name" = "$permission_name" ]; then
+      predefined=1
+      break
+    fi
+  done
+
+  has_path="$(printf '%s' "$payload" | jq -r '."set-permission" | has("path")' 2>/dev/null || printf false)"
+  has_method="$(printf '%s' "$payload" | jq -r '."set-permission" | has("method")' 2>/dev/null || printf false)"
+  has_params="$(printf '%s' "$payload" | jq -r '."set-permission" | has("params")' 2>/dev/null || printf false)"
+
+  if [ "$name" = "admin" ]; then
+    _log "ERROR" "Invalid Solr permission name 'admin' in authorization payload; use role 'admin' with permission name 'all' or a custom path-scoped name"
+    return 1
+  fi
+  if [ "$predefined" -eq 1 ]; then
+    if [ "$has_path" = "true" ] || [ "$has_method" = "true" ] || [ "$has_params" = "true" ]; then
+      _log "ERROR" "Pre-defined Solr permission '$name' must not carry custom-only keys (path/method/params)"
+      return 1
+    fi
+    return 0
+  fi
+  if [ "$has_path" != "true" ]; then
+    _log "ERROR" "Custom Solr permission '$name' must define path; refusing invalid authorization payload"
+    return 1
+  fi
+  return 0
+}
+
 # POST to /solr/admin/authorization (roles/permissions management)
 
 # --- _cloud_authz_api ---
 _cloud_authz_api() {
   local payload="$1"
+  _validate_authz_payload "$payload" || return 1
   _solr_api POST "/admin/authorization" "$payload" > /dev/null
 }
 

@@ -307,6 +307,19 @@ unit_tests() {
         print_fail "security.json.template files drifted apart"
     fi
 
+
+
+    print_test "Runtime rejects invalid Solr permission name admin"
+    if grep -q '^_validate_authz_payload()' scripts/solr-tenant-core.sh && \
+       grep -q 'Invalid Solr permission name.*admin' scripts/solr-tenant-core.sh && \
+       grep -q '_validate_authz_payload "\$payload"' scripts/solr-tenant-core.sh && \
+       grep -q '^validate_security_permissions()' init/powerinit.sh && \
+       grep -q 'Generated security.json contains invalid Solr permission definitions' init/powerinit.sh; then
+        print_pass "Runtime guards reject invalid permission name admin before Solr loads it"
+    else
+        print_fail "Runtime guards do not reject invalid permission name admin before Solr loads it"
+    fi
+
     print_test "security templates use Solr-valid permission names"
     local predefined_permissions=(
         collection-admin-edit collection-admin-read core-admin-read core-admin-edit

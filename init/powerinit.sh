@@ -214,6 +214,45 @@ gen_password() {
   openssl rand -base64 36 | tr -d '/+=' | head -c 32
 }
 
+# validate_security_permissions: Fail before writing security.json if any
+# permission would make Solr's RuleBasedAuthorizationPlugin reject startup.
+validate_security_permissions() {
+  local file="$1"
+  local predefined_permissions=(
+    collection-admin-edit collection-admin-read core-admin-read core-admin-edit
+    zk-read read update config-edit config-read schema-read schema-edit
+    security-edit security-read metrics-read health filestore-read filestore-write
+    package-edit package-read all
+  )
+  local name has_path has_method has_params predefined permission_name invalid=0
+
+  while IFS=$'	' read -r name has_path has_method has_params; do
+    [ -n "$name" ] || continue
+    predefined=0
+    for permission_name in "${predefined_permissions[@]}"; do
+      if [ "$name" = "$permission_name" ]; then
+        predefined=1
+        break
+      fi
+    done
+
+    if [ "$name" = "admin" ]; then
+      _log "ERROR: Invalid Solr permission name 'admin' in generated security.json — use role 'admin', not permission name 'admin'"
+      invalid=1
+    elif [ "$predefined" -eq 1 ]; then
+      if [ "$has_path" = "true" ] || [ "$has_method" = "true" ] || [ "$has_params" = "true" ]; then
+        _log "ERROR: Pre-defined Solr permission '$name' carries custom-only keys (path/method/params)"
+        invalid=1
+      fi
+    elif [ "$has_path" != "true" ]; then
+      _log "ERROR: Custom Solr permission '$name' has no path and is invalid"
+      invalid=1
+    fi
+  done < <(jq -r '.authorization.permissions[]? | [.name, has("path"), has("method"), has("params")] | @tsv' "$file")
+
+  [ "$invalid" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # Step 0: Validate required env vars
 # ---------------------------------------------------------------------------
@@ -528,6 +567,12 @@ TMP2="$(mktemp)"
 chmod 600 "$TMP2"
 jq '.authorization.permissions += [{"name":"all","role":"admin"}]' "$TMP_SEC" > "$TMP2"
 mv "$TMP2" "$TMP_SEC"
+
+if ! validate_security_permissions "$TMP_SEC"; then
+  _log "ERROR: Generated security.json contains invalid Solr permission definitions"
+  rm -f "$TMP_SEC"
+  exit 1
+fi
 
 mv "$TMP_SEC" "${DATA_DIR}/security.json"
 chmod 600 "${DATA_DIR}/security.json"
