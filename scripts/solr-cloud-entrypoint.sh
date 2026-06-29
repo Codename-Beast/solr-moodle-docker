@@ -37,6 +37,7 @@ fi
 SECURITY_JSON="${SECURITY_JSON:-/var/solr/data/security.json}"
 SECURITY_TEMPLATE="${SECURITY_TEMPLATE:-/opt/solr/security.json.template}"
 APPLY_MARKER_FILE="${APPLY_MARKER_FILE:-/var/solr/data/.eledia-apply-required}"
+SOLR_PING_HEALTHCHECK_FILE="${SOLR_PING_HEALTHCHECK_FILE:-/var/solr/data/healthcheck/ping-enabled.txt}"
 
 log() {
   printf '[solr-entrypoint] %s\n' "$*"
@@ -200,7 +201,16 @@ ensure_zk_max_cnxns_opt() {
   log "Using embedded ZooKeeper maxCnxns=${max_cnxns}"
 }
 
+ensure_ping_healthcheck_file() {
+  mkdir -p "$(dirname "$SOLR_PING_HEALTHCHECK_FILE")"
+  touch "$SOLR_PING_HEALTHCHECK_FILE"
+  chmod 664 "$SOLR_PING_HEALTHCHECK_FILE" 2>/dev/null || true
+  export SOLR_OPTS="${SOLR_OPTS:-} -Dsolr.ping.healthcheckFile=${SOLR_PING_HEALTHCHECK_FILE}"
+  log "PingRequestHandler healthcheck file enabled: $SOLR_PING_HEALTHCHECK_FILE"
+}
+
 ensure_zk_max_cnxns_opt
+ensure_ping_healthcheck_file
 
 bootstrap_cloud_security() {
   local code

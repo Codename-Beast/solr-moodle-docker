@@ -222,6 +222,17 @@ unit_tests() {
         print_fail "docker-compose healthcheck still uses a raw curl probe"
     fi
 
+    print_test "Solr PingRequestHandler has managed healthcheck file"
+    if grep -q 'class="solr.PingRequestHandler"' eLeDia-config/solrconfig.xml && \
+       grep -q 'solr.ping.healthcheckFile' eLeDia-config/solrconfig.xml && \
+       grep -q 'SOLR_PING_HEALTHCHECK_FILE' scripts/solr-cloud-entrypoint.sh && \
+       grep -q 'SOLR_PING_HEALTHCHECK_FILE' init/powerinit.sh && \
+       grep -q 'SOLR_PING_HEALTHCHECK_FILE' docker-compose.yml; then
+        print_pass "PingRequestHandler supports Moodle ping enable/disable checks"
+    else
+        print_fail "PingRequestHandler healthcheck file automation is incomplete"
+    fi
+
     # Container-first delivery: helper scripts must be baked into Solr image
     print_test "Dockerfile.solr embeds runtime helper scripts"
     if grep -q 'COPY --chown=solr:solr scripts/ /opt/solr/scripts/' Dockerfile.solr; then

@@ -56,6 +56,7 @@ ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 STATE_DIR="${DATA_DIR}/.eledia-init"
 STATE_FILE="${STATE_DIR}/state.env"
 APPLY_MARKER_FILE="${DATA_DIR}/.eledia-apply-required"
+SOLR_PING_HEALTHCHECK_FILE="${SOLR_PING_HEALTHCHECK_FILE:-${DATA_DIR}/healthcheck/ping-enabled.txt}"
 INIT_MODE="install"
 PREV_TENANTS_SHA=""
 PREV_CONFIG_SHA=""
@@ -332,6 +333,16 @@ _load_tenants() {
 
 _load_tenants
 _log "  Found $TENANT_COUNT tenant(s)"
+
+# ---------------------------------------------------------------------------
+# Step 1b: Enable Solr PingRequestHandler healthcheck file
+# ---------------------------------------------------------------------------
+_log "Step 1b: Enabling PingRequestHandler healthcheck file"
+mkdir -p "$(dirname "$SOLR_PING_HEALTHCHECK_FILE")"
+touch "$SOLR_PING_HEALTHCHECK_FILE"
+chmod 664 "$SOLR_PING_HEALTHCHECK_FILE" 2>/dev/null || true
+chown 8983:8983 "$(dirname "$SOLR_PING_HEALTHCHECK_FILE")" "$SOLR_PING_HEALTHCHECK_FILE" 2>/dev/null || true
+_log "  Ping healthcheck file: $SOLR_PING_HEALTHCHECK_FILE"
 
 # ---------------------------------------------------------------------------
 # Step 2: Create configsets (idempotent)

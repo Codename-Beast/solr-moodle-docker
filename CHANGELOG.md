@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Core-Namen werden jetzt konsistent validiert, bevor sie in Solr oder die Tenant-Konfiguration geschrieben werden. Root-cause: Die erste Validator-Version war für bestehende branded Namen wie `eLeDia_core_a` zu streng, dadurch wurden gültige Tenants vor dem Start abgelehnt.
 - `cmd_apply` stoppt jetzt bei einem fehlschlagenden Core-Create, statt den Fehler zu schlucken und den Tenant als erfolgreich angewendet zu markieren. Root-cause: Die Schleife ignorierte `_create_core`-Fehler, dadurch blieb `apply` fälschlich auf Erfolg.
 - Der Compose-Healthcheck nutzt jetzt den tenant-aware `solr-tenant.sh healthcheck` statt nur Solr-Liveness zu prüfen und behandelt SolrCloud-Drift nicht mehr als Startup-Fehler, sondern nur Bootstrap/Auth-Status. Root-cause: Der alte Check konnte grün melden, obwohl Tenant-Drift oder defekte ACLs noch vorhanden waren, und drift-gesicherte Runtime-Zustände wurden sonst fälschlich als Fehler markiert.
+- Der Solr `PingRequestHandler` ist jetzt mit einem verwalteten `healthcheckFile` konfiguriert, damit Moodle `/admin/ping?action=enable` ohne `Ping request handler is not configured with a healthcheck file` nutzen kann.
 
 ### Added
 - Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.

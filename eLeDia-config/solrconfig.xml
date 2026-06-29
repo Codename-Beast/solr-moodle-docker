@@ -151,6 +151,8 @@
 
   <!-- Admin Handlers -->
   <requestHandler name="/admin/ping" class="solr.PingRequestHandler">
+    <!-- Moodle may call /admin/ping?action=enable; Solr requires healthcheckFile. -->
+    <str name="healthcheckFile">${solr.ping.healthcheckFile:/var/solr/data/healthcheck/ping-enabled.txt}</str>
     <lst name="invariants">
       <str name="q">solrpingquery</str>
     </lst>
