@@ -7,7 +7,8 @@
 #   {{SOLR_PORT}}     - Local Solr port, e.g. 8983
 #
 # Variante A: Proxy auf dem Host -> proxy_pass http://127.0.0.1:{{SOLR_PORT}};
-# Variante B: Proxy im Docker-Netzwerk -> proxy_pass http://solr:8983;
+# Variante B: Proxy im Docker-Netzwerk -> proxy_pass http://{{INSTANCE_NAME}}-solr:{{SOLR_PORT}};
+#              oder http://solr:{{SOLR_PORT}} nur bei explizitem Docker-Netzwerk-Alias.
 
 server {
     listen 80;
@@ -50,7 +51,7 @@ server {
         proxy_pass http://127.0.0.1:{{SOLR_PORT}};
 
         # Variante B: Proxy läuft im Docker-Netzwerk.
-        # proxy_pass http://solr:8983;
+        # proxy_pass http://{{INSTANCE_NAME}}-solr:{{SOLR_PORT}};
     }
 
     # Optional: restrict Solr Admin UI.

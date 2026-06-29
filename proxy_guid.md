@@ -49,6 +49,49 @@ Die Proxy-Schicht soll:
 - Collections und tenant-aware Pfade bleiben unverändert
 - Wichtig: Header und Pfad-Regeln dürfen nicht „korrigiert“ werden, sonst brechen Auth/ACLs oder Collection-Routing
 
+
+---
+
+## 🔌 Upstream wählen
+
+Der externe Zugriff auf Solr/Moodle sollte über HTTPS laufen. TLS endet am Reverse Proxy.
+Der interne Upstream vom Proxy zu Solr darf normales HTTP bleiben.
+
+Welche Backend-Adresse richtig ist, hängt davon ab, wo der Proxy läuft:
+
+| Proxy läuft ... | Solr-Upstream | Wann verwenden |
+|---|---|---|
+| direkt auf dem Host | `http://127.0.0.1:${SOLR_PORT}/solr/` | Standard, wenn Nginx/Apache/Caddy auf dem Docker-Host läuft |
+| als Container im selben Docker-Netzwerk | `http://<containername>:<solr-port>/solr/` | wenn der Proxy-Container am `solr-network` hängt |
+| als Container mit Alias | `http://solr:<solr-port>/solr/` | nur wenn der Alias `solr` explizit im Docker-Netzwerk existiert |
+
+`SOLR_BIND=127.0.0.1` schützt nur den Host-Port. Ein Proxy-Container kann diesen
+Host-Loopback nicht direkt nutzen; er braucht dann den Docker-DNS-Namen oder einen
+Netzwerk-Alias. In diesem Compose-Stack ist der Solr-Containername standardmäßig
+`${INSTANCE_NAME:-solr}-solr`, also z. B. `solr-solr` oder `prod-solr`.
+
+Ein Proxy-Container sieht Solr nur, wenn er am selben Docker-Netzwerk hängt:
+
+```bash
+docker network connect solr-network nginx-proxy
+```
+
+Oder in einer eigenen Compose-Datei:
+
+```yaml
+services:
+  nginx:
+    networks:
+      - solr_network
+
+networks:
+  solr_network:
+    external: true
+    name: solr-network
+```
+
+Bei anderem `INSTANCE_NAME` heißt das Netzwerk entsprechend `${INSTANCE_NAME}-network`.
+
 ---
 
 ## 🧩 Caddy
@@ -66,7 +109,7 @@ solr.example.org {
   encode zstd gzip
 
   @solr path /solr/*
-  reverse_proxy @solr solr:8983 {
+  reverse_proxy @solr 127.0.0.1:8983 {
     header_up Host {host}
     header_up X-Forwarded-Host {host}
     header_up X-Forwarded-Proto {scheme}
@@ -85,7 +128,7 @@ solr.example.org {
 
 ### Hinweise
 
-- Für Solr immer die echten Upstream-Ports verwenden
+- Für Solr immer die passende Upstream-Adresse verwenden: Host-Proxy `127.0.0.1:${SOLR_PORT}`, Container-Proxy Docker-DNS/Netzwerk-Alias plus interner Solr-Port.
 - Keine Pfad-Rewrites einbauen, wenn der Backend-Pfad bereits korrekt ist
 - Wenn mehrere Services auf einer Domain liegen, sauber per Path-Matcher trennen
 
@@ -112,8 +155,8 @@ solr.example.org {
   RequestHeader set X-Forwarded-Proto "https"
   RequestHeader set X-Forwarded-Host "%{Host}i"
 
-  ProxyPass        /solr/  http://solr:8983/solr/
-  ProxyPassReverse /solr/  http://solr:8983/solr/
+  ProxyPass        /solr/  http://127.0.0.1:8983/solr/
+  ProxyPassReverse /solr/  http://127.0.0.1:8983/solr/
 
   ProxyPass        /moodle/ http://moodle:80/moodle/
   ProxyPassReverse /moodle/ http://moodle:80/moodle/
@@ -123,6 +166,7 @@ solr.example.org {
 ### Hinweise
 
 - `ProxyPreserveHost On` ist hier wichtig
+- Wenn Apache als Container läuft, `127.0.0.1` durch den Docker-DNS-Namen ersetzen, z. B. `${INSTANCE_NAME}-solr`, oder einen expliziten Alias wie `solr`.
 - `X-Forwarded-Proto` muss korrekt gesetzt sein, sonst geraten Redirects und Session-Cookies durcheinander
 - In SolrCloud darf der Proxy nicht „intelligent“ umschreiben – einfach weiterleiten
 
@@ -145,7 +189,7 @@ server {
   ssl_certificate_key /etc/ssl/private/privkey.pem;
 
   location /solr/ {
-    proxy_pass http://solr:8983/solr/;
+    proxy_pass http://127.0.0.1:8983/solr/;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -165,6 +209,7 @@ server {
 ### Hinweise
 
 - `proxy_pass` mit Trailing Slash sauber halten
+- Wenn Nginx als Container läuft, `127.0.0.1` durch den Docker-DNS-Namen ersetzen, z. B. `${INSTANCE_NAME}-solr`, oder einen expliziten Alias wie `solr`.
 - gleiche Header-Regeln wie bei Caddy/Apache verwenden
 - wenn die Ansible-Rolle eingesetzt wird, ist Nginx hier nur Doku, kein Ziel der Automatisierung
 
@@ -209,4 +254,4 @@ Wenn du einen robusten und schnellen Weg willst:
 ## 📝 Merksatz
 
 **Caddy funktioniert bereits.**
-Caddy, Apache und Nginx sind als Proxy-Wege beschrieben; pro Installation genau eine Upstream-Variante aktivieren.
+Nach außen HTTPS, intern HTTP zum Solr-Upstream. Pro Installation genau eine Upstream-Variante aktivieren: Host-Port oder Docker-Netzwerk mit passendem Containername und Port.
