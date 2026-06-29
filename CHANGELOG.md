@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [3.4.10] - 2026-06-22
 
 ### Fixed
+- `solr-tenant-api.sh` und `solr-backup.sh` lesen Admin-Credentials jetzt gezielt aus `.env`, statt die komplette Datei zu sourcen/exportieren. Root-cause: `set -a; . .env` konnte ungewollte Variablen wie `PATH` in Tenant-/Backup-Prozesse übernehmen.
+- `_solr_api` schreibt Response- und Curl-Fehlerdateien jetzt in ein privates temporäres Verzeichnis und räumt es über `RETURN`-Trap sowie explizite Cleanup-Pfade auf. Root-cause: Direkte `/tmp/solr-api-*` Dateien waren unnötig breit sichtbar und konnten bei Abbruch liegen bleiben.
+- `scripts/test-integration.sh` setzt `tenants.env` nicht mehr world-writable, sondern nutzt `chown 8983:8983` mit `chmod 660`.
+- `scripts/test-moodle-documents.sh` sourcet `.env` nur noch einmal, damit Runtime-Konfig und Credentials nicht doppelt mit Seiteneffekten geladen werden.
+- `init/powerinit.sh` loggt die Standalone-Core-Vorerzeugung nur noch im Standalone-Modus. Root-cause: SolrCloud-Starts meldeten vorher direkt nach dem Skip fälschlich trotzdem „Pre-creating core directories“.
+- `solr-cloud-entrypoint.sh` nutzt jetzt `runuser` statt `gosu` für den Privilege-Drop, und `Dockerfile.solr` entfernt die zusätzliche `gosu`-Abhängigkeit.
+- `solr-tenant.sh` bricht auf Bash-Versionen vor 4 jetzt früh mit einer klaren Fehlermeldung ab, statt später bei assoziativen Arrays unsauber zu scheitern.
 - `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Start fehlschlägt. Root-cause: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
 - Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Root-cause: `_wait_for_security_reload` meldete Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
 - SolrCloud-Tenant-Flows warten nicht mehr auf einen lokalen Security-Reload, weil der Auth-State in ZooKeeper persistiert wird. Root-cause: Der vorherige Wait-Check hat ZK-persistierte Änderungen als fehlenden Reload fehlinterpretiert und `create`/`enable`/`passwd`/`core-add` abgebrochen.

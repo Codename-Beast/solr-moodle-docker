@@ -1,5 +1,14 @@
 # Solr für Moodle — Multi-Tenant Docker Stack
 
+
+### Warnung zur Tenant-Isolation im Standalone-Modus
+
+In `SOLR_MODE=standalone` authentifiziert Solr direkte Tenant-Zugriffe, bietet
+aber keine zuverlässig getrennte Core-URL-Isolation für mehrere Tenants.
+Nutze bei Standalone-Installationen die generierte Caddy- oder Apache-Proxy-
+Konfiguration, wenn Tenants per Core-URL isoliert werden müssen. Standalone
+braucht Caddy oder einen anderen Proxy für Tenant-Isolation. Für direkte
+Solr-seitige Collection-Isolation bleibt SolrCloud der empfohlene Modus.
 ![CI](https://img.shields.io/badge/ci-GitHub%20%2B%20GitLab-brightgreen)
 ![Version](https://img.shields.io/badge/version-3.4.10-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)

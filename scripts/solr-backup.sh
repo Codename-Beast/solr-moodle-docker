@@ -26,23 +26,36 @@ _log() {
   printf '[%s] [BACKUP] %s\n' "$ts" "$*" | tee -a "$LOG_FILE"
 }
 
-# _load_admin_creds: Source admin credentials from /var/solr/data/.env or /.env.
+# _read_env_key: Read one simple KEY=value assignment from an env file.
+# Avoids sourcing .env so unrelated variables or shell code cannot affect backup.
+_read_env_key() {
+  local env_file="$1" key="$2" value
+  [ -f "$env_file" ] || return 1
+  value="$(grep -E "^${key}=" "$env_file" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r')"
+  [ -n "$value" ] || return 1
+  case "$value" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+  esac
+  printf '%s' "$value"
+}
+
+# _load_admin_creds: Load only admin credentials from /var/solr/data/.env or /.env.
 # Sets ADMIN_USER and ADMIN_PASS from SOLR_ADMIN_USER / SOLR_ADMIN_PASSWORD.
 # Args: none
 # Returns: nothing; exits with code 1 if SOLR_ADMIN_PASSWORD is not set
 _load_admin_creds() {
-  local env_file="/var/solr/data/.env"
+  local env_file="/var/solr/data/.env" loaded_user="" loaded_pass=""
   if [ -f "$env_file" ]; then
-    set -a
-    # shellcheck source=/dev/null
-    . "$env_file"
-    set +a
+    loaded_user="$(_read_env_key "$env_file" "SOLR_ADMIN_USER" || true)"
+    loaded_pass="$(_read_env_key "$env_file" "SOLR_ADMIN_PASSWORD" || true)"
   fi
-  if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] && [ -f "/.env" ]; then
-    set -a; . "/.env"; set +a
+  if [ -z "$loaded_pass" ] && [ -f "/.env" ]; then
+    loaded_user="${loaded_user:-$(_read_env_key "/.env" "SOLR_ADMIN_USER" || true)}"
+    loaded_pass="$(_read_env_key "/.env" "SOLR_ADMIN_PASSWORD" || true)"
   fi
-  ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
-  ADMIN_PASS="${SOLR_ADMIN_PASSWORD:-}"
+  ADMIN_USER="${SOLR_ADMIN_USER:-${loaded_user:-admin}}"
+  ADMIN_PASS="${SOLR_ADMIN_PASSWORD:-${loaded_pass:-}}"
   if [ -z "$ADMIN_PASS" ]; then
     _log "ERROR: SOLR_ADMIN_PASSWORD not set"
     exit 1

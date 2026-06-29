@@ -544,8 +544,9 @@ _log "  security.json written ($(jq '.authorization.permissions | length' "${DAT
 SOLR_MODE="${SOLR_MODE:-}"
 if [ "$SOLR_MODE" = "solrcloud" ]; then
   _log "Step 4: SolrCloud mode — skipping core directory pre-creation (Collections API handles this)"
+else
+  _log "Step 4: Pre-creating core directories"
 fi
-_log "Step 4: Pre-creating core directories"
 
 if [ "$SOLR_MODE" != "solrcloud" ]; then
 for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do

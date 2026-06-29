@@ -33,9 +33,12 @@ KEEP_DOCUMENTS=false
 WAIT_TIME=0
 SOLR_HOST="127.0.0.1"
 
-# Load runtime config from .env before deriving defaults
+# Load runtime config and credentials from .env once before deriving defaults.
 if [ -f ".env" ]; then
     source .env
+else
+  echo -e "${RED}ERROR: .env not found. Run setup first: ./setup.sh${NC}"
+  exit 1
 fi
 SOLR_PORT="${SOLR_PORT:-8983}"
 SOLR_CORE="${SOLR_CORE_NAME:-eLeDia_core}"
@@ -74,14 +77,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
-# Load credentials from .env
-if [ -f ".env" ]; then
-  source .env
-else
-  echo -e "${RED}ERROR: .env not found. Run setup first: ./setup.sh${NC}"
-  exit 1
-fi
 
 # Helper functions
 print_header() {

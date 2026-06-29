@@ -77,28 +77,39 @@ _log_action() {
 # Args: none
 # Returns: nothing; exits with code 1 if SOLR_ADMIN_PASSWORD cannot be resolved
 
+# _read_env_key: Read one simple KEY=value assignment from an env file.
+# This intentionally avoids sourcing .env so unrelated variables such as PATH or
+# shell code cannot affect the tenant management process.
+_read_env_key() {
+  local env_file="$1" key="$2" value
+  [ -f "$env_file" ] || return 1
+  value="$(grep -E "^${key}=" "$env_file" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r')"
+  [ -n "$value" ] || return 1
+  case "$value" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+  esac
+  printf '%s' "$value"
+}
+
 # --- _load_admin_creds ---
 _load_admin_creds() {
-  local env_file="${ENV_FILE:-/var/solr/data/.env}"
+  local env_file="${ENV_FILE:-/var/solr/data/.env}" loaded_user="" loaded_pass=""
 
   # Prefer the compose-mounted /.env as source-of-truth for current credentials.
   if [ -f "/.env" ]; then
-    set -a
-    # shellcheck disable=SC1091
-    . "/.env"
-    set +a
+    loaded_user="$(_read_env_key "/.env" "SOLR_ADMIN_USER" || true)"
+    loaded_pass="$(_read_env_key "/.env" "SOLR_ADMIN_PASSWORD" || true)"
   fi
 
   # Backward compatibility fallback: legacy env file inside data dir.
-  if [ -z "${SOLR_ADMIN_PASSWORD:-}" ] && [ -f "$env_file" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "$env_file"
-    set +a
+  if [ -z "$loaded_pass" ] && [ -f "$env_file" ]; then
+    loaded_user="${loaded_user:-$(_read_env_key "$env_file" "SOLR_ADMIN_USER" || true)}"
+    loaded_pass="$(_read_env_key "$env_file" "SOLR_ADMIN_PASSWORD" || true)"
   fi
 
-  ADMIN_USER="${SOLR_ADMIN_USER:-admin}"
-  ADMIN_PASS="${SOLR_ADMIN_PASSWORD:-}"
+  ADMIN_USER="${SOLR_ADMIN_USER:-${loaded_user:-admin}}"
+  ADMIN_PASS="${SOLR_ADMIN_PASSWORD:-${loaded_pass:-}}"
   if [ -z "$ADMIN_PASS" ]; then
     _log "ERROR" "SOLR_ADMIN_PASSWORD not set. Set it in .env or export it."
     exit 1
@@ -116,10 +127,15 @@ _solr_api() {
   local method="${1:-GET}"
   local path="$2"
   local data="${3:-}"
-  local http_code tmp_resp tmp_err
+  local http_code api_tmp_dir tmp_resp tmp_err
 
-  tmp_resp="$(mktemp /tmp/solr-api-resp.XXXXXX)"
-  tmp_err="$(mktemp /tmp/solr-api-err.XXXXXX)"
+  api_tmp_dir="$(mktemp -d /tmp/solr-api.XXXXXX)"
+  tmp_resp="${api_tmp_dir}/response"
+  tmp_err="${api_tmp_dir}/curl-error"
+  : > "$tmp_resp"
+  : > "$tmp_err"
+  chmod 700 "$api_tmp_dir" 2>/dev/null || true
+  trap 'rm -rf "$api_tmp_dir" 2>/dev/null || true' RETURN
 
   # Do NOT use -f: it causes curl to exit with code 22 on HTTP>=400, which
   # propagates through $() and triggers set -e before we can log the error.
@@ -141,12 +157,14 @@ _solr_api() {
     _log "ERROR" "Solr API $method $path returned HTTP ${http_code:-<no response>}"
     _log "ERROR" "Response body: $(head -5 "$tmp_resp" 2>/dev/null || true)"
     _log "ERROR" "Curl error: $(cat "$tmp_err" 2>/dev/null || true)"
-    rm -f "$tmp_resp" "$tmp_err" 2>/dev/null || true
+    rm -rf "$api_tmp_dir" 2>/dev/null || true
+    trap - RETURN
     return 1
   fi
 
   cat "$tmp_resp" 2>/dev/null || true
-  rm -f "$tmp_resp" "$tmp_err" 2>/dev/null || true
+  rm -rf "$api_tmp_dir" 2>/dev/null || true
+  trap - RETURN
 }
 
 # _gen_password: Generate a random 32-character alphanumeric password.

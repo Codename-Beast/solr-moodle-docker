@@ -23,7 +23,8 @@ integration_tests() {
 
     # Ensure tenants file is writable for solr user in containerized tests.
     touch tenants.env
-    chmod 666 tenants.env
+    chown 8983:8983 tenants.env 2>/dev/null || true
+    chmod 660 tenants.env
 
     local health_status
     health_status=$(docker inspect --format='{{.State.Health.Status}}' "$SOLR_CONTAINER" 2>/dev/null || echo "missing")

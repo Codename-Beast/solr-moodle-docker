@@ -11,6 +11,11 @@
 
 set -euo pipefail
 
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+  printf 'ERROR: solr-tenant.sh requires Bash 4 or newer (found: %s).\n' "${BASH_VERSION:-unknown}" >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source modules in dependency order

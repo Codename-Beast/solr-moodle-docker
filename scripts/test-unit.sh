@@ -228,8 +228,66 @@ unit_tests() {
         print_fail "upgrade-docker checksum does not cover runtime scripts"
     fi
 
+
+
+    print_test "Solr API temporary files use a private cleanup directory"
+    if grep -q 'mktemp -d /tmp/solr-api.XXXXXX' scripts/solr-tenant-api.sh && \
+       grep -q 'trap.*rm -rf.*api_tmp_dir' scripts/solr-tenant-api.sh && \
+       ! grep -q 'mktemp /tmp/solr-api-resp' scripts/solr-tenant-api.sh; then
+        print_pass "Solr API responses are isolated in a private temp directory"
+    else
+        print_fail "Solr API still writes response/error temp files directly in /tmp"
+    fi
+
+    print_test "Admin credential loader imports only whitelisted .env keys"
+    if grep -q '^_read_env_key()' scripts/solr-tenant-api.sh && \
+       grep -q '_read_env_key "/.env" "SOLR_ADMIN_PASSWORD"' scripts/solr-tenant-api.sh && \
+       ! awk '/^_load_admin_creds\(\) \{/,/^\}/' scripts/solr-tenant-api.sh | grep -q 'set -a'; then
+        print_pass "Admin credential loader avoids exporting arbitrary .env variables"
+    else
+        print_fail "Admin credential loader still sources/exports arbitrary .env variables"
+    fi
+
+
+
+    print_test "Backup credential loader imports only whitelisted .env keys"
+    if grep -q '^_read_env_key()' scripts/solr-backup.sh && \
+       grep -q '_read_env_key "/.env" "SOLR_ADMIN_PASSWORD"' scripts/solr-backup.sh && \
+       ! awk '/^_load_admin_creds\(\) \{/,/^\}/' scripts/solr-backup.sh | grep -q 'set -a'; then
+        print_pass "Backup credential loader avoids exporting arbitrary .env variables"
+    else
+        print_fail "Backup credential loader still sources/exports arbitrary .env variables"
+    fi
+
+    print_test "Runtime entrypoint uses Debian runuser instead of gosu"
+    if grep -q 'exec runuser -u solr -- "$0" "$@"' scripts/solr-cloud-entrypoint.sh && \
+       grep -q 'util-linux' Dockerfile.solr && \
+       ! grep -q 'gosu' Dockerfile.solr scripts/solr-cloud-entrypoint.sh; then
+        print_pass "Runtime drops privileges via runuser without gosu"
+    else
+        print_fail "Runtime still depends on gosu for privilege drop"
+    fi
+
+    print_test "Tenant test file permissions are not world-writable"
+    if grep -q 'chmod 660 tenants.env' scripts/test-integration.sh && \
+       ! grep -q 'chmod 666 tenants.env' scripts/test-integration.sh; then
+        print_pass "Tenant integration test uses group-writable permissions only"
+    else
+        print_fail "Tenant integration test still makes tenants.env world-writable"
+    fi
+
+    print_test "Tenant dispatcher enforces Bash 4+"
+    if grep -q 'BASH_VERSINFO' scripts/solr-tenant.sh && \
+       grep -q 'Bash 4' scripts/solr-tenant.sh; then
+        print_pass "solr-tenant.sh fails early on unsupported Bash versions"
+    else
+        print_fail "solr-tenant.sh has no Bash 4+ guard"
+    fi
+
     print_test "security templates stay in sync"
-    if cmp -s security.json.template init/security.json.template; then
+    if [ ! -f security.json.template ] || [ ! -f init/security.json.template ]; then
+        print_fail "security.json.template file missing (root or init copy)"
+    elif cmp -s security.json.template init/security.json.template; then
         print_pass "root and init security.json.template are identical"
     else
         print_fail "security.json.template files drifted apart"
@@ -274,6 +332,34 @@ unit_tests() {
         print_pass "security templates do not contain invalid Solr permission names such as admin"
     else
         print_fail "security templates contain invalid Solr permission definitions"
+    fi
+
+
+
+    print_test "powerinit logs standalone core pre-creation only in standalone mode"
+    if awk '/Step 4: SolrCloud mode/,/Step 5: Fixing permissions/' init/powerinit.sh | \
+       grep -q 'else' && \
+       awk '/Step 4: SolrCloud mode/,/Step 5: Fixing permissions/' init/powerinit.sh | \
+       grep -q 'Step 4: Pre-creating core directories'; then
+        print_pass "powerinit Step 4 logging is mode-specific"
+    else
+        print_fail "powerinit still logs standalone pre-creation while in SolrCloud mode"
+    fi
+
+    print_test "Moodle document test sources .env only once"
+    if [ "$(grep -c 'source .env' scripts/test-moodle-documents.sh)" -eq 1 ]; then
+        print_pass "test-moodle-documents.sh sources .env once"
+    else
+        print_fail "test-moodle-documents.sh still sources .env multiple times"
+    fi
+
+    print_test "Standalone direct Solr mode is documented as requiring proxy isolation"
+    if grep -qi 'Standalone' README.md && \
+       grep -qi 'Caddy' README.md && \
+       grep -qi 'Tenant-Isolation\|Tenant isolation\|tenant isolation' README.md; then
+        print_pass "Standalone isolation limitation is documented"
+    else
+        print_fail "Standalone direct Solr isolation limitation is not documented"
     fi
 
     # Test 4: Environment variable template

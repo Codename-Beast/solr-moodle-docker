@@ -227,7 +227,7 @@ bootstrap_cloud_security() {
 # ── SolrCloud mode ────────────────────────────────────────────────────────────
 if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
   # Step 0: If running as root — fix volume permissions, generate security.json,
-  # then re-exec as solr user via gosu (Debian/Ubuntu package gosu 1.14).
+  # then re-exec as solr user via runuser from util-linux.
   # Docker named volumes are created owned by root; dropping to solr ensures
   # ZooKeeper can write to /var/solr/data.
   if [ "$(id -u)" = "0" ]; then
@@ -240,7 +240,7 @@ if [ "${SOLR_MODE:-}" = "solrcloud" ]; then
       chown solr:solr "$SECURITY_JSON"
     fi
 
-    exec gosu solr "$0" "$@"
+    exec runuser -u solr -- "$0" "$@"
   fi
 
   # Running as solr user from here on.
@@ -332,7 +332,7 @@ else
     log "Running as root — fixing /var/solr ownership and dropping to solr user"
     mkdir -p /var/solr/data /var/solr/logs
     chown -R solr:solr /var/solr
-    exec gosu solr "$0" "$@"
+    exec runuser -u solr -- "$0" "$@"
   fi
 
   log "Starting standalone Solr on port ${SOLR_PORT}"

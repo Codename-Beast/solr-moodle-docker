@@ -18,8 +18,7 @@ COPY --chown=solr:solr eLeDia-config/ /opt/solr/eledia-config-image/
 COPY --chown=solr:solr security.json.template /opt/solr/security.json.template
 USER root
 RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends jq openssl gosu \
-    && gosu --version \
+    && apt-get install -y --no-install-recommends jq openssl util-linux \
     && groupadd -f docker \
     && usermod -aG docker solr \
     && chmod 0755 /opt/solr/docker/scripts/solr-cloud-entrypoint.sh \
