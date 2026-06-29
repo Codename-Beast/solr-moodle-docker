@@ -151,13 +151,21 @@ docker exec <containername> /opt/solr/scripts/solr-tenant.sh drift-detect
 docker exec <containername> /opt/solr/scripts/solr-tenant.sh drift-remediate
 ```
 
-### Hostvars exportieren
+### Runtime-Wahrheit aus Solr API/ZooKeeper holen
+
+```bash
+docker exec <containername> /opt/solr/scripts/solr-tenant.sh runtime-truth
+```
+
+`runtime-truth` liest den laufenden Zustand direkt aus der Solr Security API (`/admin/authentication`, `/admin/authorization`) und in SolrCloud zusätzlich aus der Collections API/ZooKeeper. Das ist die Runtime-Wahrheit, wenn geprüft werden soll, welche Tenant-User, Rollen und Collections wirklich aktiv sind.
+
+### Hostvars aus tenants.env exportieren
 
 ```bash
 docker exec <containername> /opt/solr/scripts/solr-tenant.sh export
 ```
 
-Der Export enthält auch `solr_runtime_source_of_truth`. Das ist wichtig, wenn später nachvollziehbar bleiben soll, was wirklich aus der Solr API oder aus ZooKeeper kam.
+Der Export enthält auch `solr_runtime_source_of_truth`. Er ist für Ansible/host_vars gedacht. Für den Live-Zustand der laufenden Solr-Instanz nutze `runtime-truth`.
 
 ---
 

@@ -76,6 +76,17 @@ unit_tests() {
     # apply must rebuild tenant permissions before moving the fallback all rule to the end.
 
 
+    print_test "Runtime truth command reads live Solr APIs"
+    if grep -q 'runtime-truth).*cmd_runtime_truth' scripts/solr-tenant.sh && \
+       grep -q '^cmd_runtime_truth()' scripts/solr-tenant-cmd.sh && \
+       grep -q '/admin/authentication' scripts/solr-tenant-cmd.sh && \
+       grep -q '/admin/authorization' scripts/solr-tenant-cmd.sh && \
+       grep -q 'admin/collections?action=LIST' scripts/solr-tenant-cmd.sh; then
+        print_pass "runtime-truth exports live API/ZooKeeper runtime state"
+    else
+        print_fail "runtime-truth command missing or not backed by live Solr APIs"
+    fi
+
     print_test "SolrCloud passwd restores tenant role and permissions"
     if awk '/^cmd_passwd\(\) \{/,/^\}/' scripts/solr-tenant-cmd.sh | \
        grep -q '_write_user_role' && \

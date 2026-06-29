@@ -44,6 +44,7 @@ case "$cmd" in
   drift-detect)   cmd_drift_detect ;;
   drift-remediate) cmd_drift_remediate ;;
   export)         cmd_export ;;
+  runtime-truth)  cmd_runtime_truth ;;
   caddy-config) cmd_caddy_config "$@" ;;
   usage|help|-h|--help) usage ;;
   "")           usage; exit 1 ;;

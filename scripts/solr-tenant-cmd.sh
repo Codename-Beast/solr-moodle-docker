@@ -726,6 +726,106 @@ cmd_export() {
   done < "$TENANTS_ENV"
 }
 
+
+# ---------------------------------------------------------------------------
+# Subcommand: runtime-truth (live Solr API / ZooKeeper state)
+# ---------------------------------------------------------------------------
+
+# --- cmd_runtime_truth ---
+cmd_runtime_truth() {
+  _load_admin_creds
+  _log_action "runtime-truth"
+
+  local auth_json authz_json collections_json mode
+  mode="${SOLR_MODE:-standalone}"
+
+  auth_json="$(_solr_api GET "/admin/authentication" 2>/dev/null || true)"
+  authz_json="$(_solr_api GET "/admin/authorization" 2>/dev/null || true)"
+
+  if [ -z "$auth_json" ] || [ -z "$authz_json" ]; then
+    printf 'ERROR: could not read Solr Security API runtime state\n' >&2
+    return 1
+  fi
+
+  if _is_cloud_mode; then
+    collections_json="$(_solr_api GET "/admin/collections?action=LIST&wt=json" 2>/dev/null || true)"
+  else
+    collections_json='{"collections":[]}'
+  fi
+
+  printf '# Runtime truth from live Solr APIs\n'
+  printf '# authentication=/admin/authentication authorization=/admin/authorization\n'
+  if _is_cloud_mode; then
+    printf '# collections=/admin/collections?action=LIST&wt=json ZooKeeper=%s\n' "$ZK_HOST"
+  else
+    printf '# standalone note: tenant-to-core URL isolation lives in tenants.env/proxy, not Solr collections\n'
+  fi
+  printf 'solr_runtime_source_of_truth:\n'
+  printf '  authority: "live-solr-api"\n'
+  printf '  mode: "%s"\n' "$mode"
+  printf '  zookeeper: "%s"\n' "$([ "$mode" = "solrcloud" ] && printf '%s' "$ZK_HOST" || printf 'not-used')"
+  printf '  tenants:\n'
+
+  local users user roles_json tenant_role tenant_name collections active_marker
+  users="$(printf '%s' "$auth_json" | jq -r '.authentication.credentials | keys[]?' 2>/dev/null | sort -u)"
+
+  while IFS= read -r user; do
+    [ -z "$user" ] && continue
+
+    roles_json="$(printf '%s' "$authz_json" | jq -c --arg u "$user" '.authorization["user-role"][$u] // [] | if type == "array" then . else [.] end' 2>/dev/null || printf '[]')"
+    tenant_role="$(printf '%s' "$roles_json" | jq -r '.[]? | select(startswith("tenant-"))' 2>/dev/null | head -1)"
+
+    case "$user" in
+      "${SOLR_ADMIN_USER:-admin}"|"${SOLR_SUPPORT_USER:-support}"|"${SOLR_MOODLE_USER:-moodle}")
+        continue
+        ;;
+    esac
+
+    if [ -n "$tenant_role" ]; then
+      tenant_name="${tenant_role#tenant-}"
+    elif printf '%s' "$user" | grep -q '^solr_'; then
+      tenant_name="${user#solr_}"
+      tenant_role="tenant"
+    else
+      tenant_name="unmanaged_${user}"
+    fi
+
+    active_marker="runtime-present"
+    if [ -f "$TENANTS_ENV" ] && grep -q "^TENANT_${tenant_name}_ACTIVE=false" "$TENANTS_ENV" 2>/dev/null; then
+      active_marker="runtime-present-desired-inactive"
+    fi
+
+    collections=""
+    if _is_cloud_mode && [ -n "$tenant_role" ] && [ "$tenant_role" != "tenant" ]; then
+      collections="$(printf '%s' "$authz_json" | jq -r --arg role "$tenant_role" '
+        .authorization.permissions[]?
+        | select((.role // []) | tostring | contains($role))
+        | (.collection // [])[]?
+      ' 2>/dev/null | sort -u | paste -sd, -)"
+    fi
+
+    printf '    - name: "%s"\n' "$tenant_name"
+    printf '      user: "%s"\n' "$user"
+    printf '      role: "%s"\n' "${tenant_role:-unmanaged-runtime-user}"
+    printf '      state: "%s"\n' "$active_marker"
+    if [ -n "$collections" ]; then
+      printf '      collections:\n'
+      printf '%s\n' "$collections" | tr ',' '\n' | while IFS= read -r c; do
+        [ -n "$c" ] && printf '        - "%s"\n' "$c"
+      done
+    else
+      printf '      collections: []\n'
+    fi
+  done <<< "$users"
+
+  if _is_cloud_mode; then
+    printf '  runtime_collections:\n'
+    printf '%s' "$collections_json" | jq -r '.collections[]?' 2>/dev/null | sed '/^\.system$/d' | sort -u | while IFS= read -r c; do
+      [ -n "$c" ] && printf '    - "%s"\n' "$c"
+    done
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Subcommand: healthcheck
 # Validates Solr availability and only checks runtime drift once the instance
@@ -1016,6 +1116,7 @@ Commands:
   drift-detect                        Detect runtime drift vs tenants.env (users/collections)
   drift-remediate                     Reconcile runtime drift via sync-sot
   export                              YAML output for Ansible host_vars
+  runtime-truth                       YAML from live Solr API/ZooKeeper runtime state
   caddy-config --domain <d>           Generate Caddyfile for URL-level tenant isolation
 
 Global options:
@@ -1032,6 +1133,7 @@ Examples:
   solr-tenant.sh delete schule_b
   solr-tenant.sh apply
   solr-tenant.sh export
+  solr-tenant.sh runtime-truth
   solr-tenant.sh caddy-config --domain solr.example.com
 
 Logs: /var/log/solr/tenant.log

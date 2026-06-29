@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - Die Unit-Tests validieren Security-Template-Permissions gegen Solr-vordefinierte Namen und Custom-Permission-Regeln, damit eine ungültige Permission wie `admin` nicht wieder in `security.json` landet.
 - Die Testmatrix berücksichtigt den bootstrap-sicheren Healthcheck jetzt explizit, damit frische Volumes nicht mehr als Drift-Fehler behandelt werden.
 - Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
+- `solr-tenant.sh runtime-truth` gibt die Runtime-Wahrheit aus der Live-Solr-API aus: Security API für User/Rollen/Permissions und in SolrCloud zusätzlich Collections API/ZooKeeper-State.
+- Die Architektur-SVGs für Runtime und Installation wurden größer, übersichtlicher und mit Legenden, CLI-Beispielen, Standalone/SolrCloud-Hinweisen sowie Runtime-Guardrails erweitert.
 
 ### Changed
 - Der Test-Log-Fallback nutzt jetzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Testläufe nicht blockieren.
