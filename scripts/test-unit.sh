@@ -64,6 +64,20 @@ unit_tests() {
     fi
 
     # apply must rebuild tenant permissions before moving the fallback all rule to the end.
+
+
+    print_test "SolrCloud passwd restores tenant role and permissions"
+    if awk '/^cmd_passwd\(\) \{/,/^\}/' scripts/solr-tenant-cmd.sh | \
+       grep -q '_write_user_role' && \
+       awk '/^cmd_passwd\(\) \{/,/^\}/' scripts/solr-tenant-cmd.sh | \
+       grep -q '_rebuild_tenant_permissions' && \
+       awk '/^cmd_passwd\(\) \{/,/^\}/' scripts/solr-tenant-cmd.sh | \
+       grep -q '_ensure_all_permission_last'; then
+        print_pass "passwd reapplies tenant role and SolrCloud permissions after credential changes"
+    else
+        print_fail "passwd does not restore SolrCloud tenant role/permissions after credential changes"
+    fi
+
     print_test "SolrCloud apply rebuilds tenant permissions"
     if awk '/^cmd_apply\(\) \{/,/^cmd_sync_sot\(\) \{/' scripts/solr-tenant-cmd.sh | \
        grep -q '_rebuild_tenant_permissions' && \

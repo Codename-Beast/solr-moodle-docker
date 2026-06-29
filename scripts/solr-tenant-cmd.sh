@@ -264,10 +264,11 @@ cmd_passwd() {
   _load_admin_creds
   _log_action "passwd $name"
 
-  local user cores
+  local user cores role
   user="$(_get_tenant_field "$name" "USER")"
   user="${user:-solr_${name}}"
   cores="$(_get_tenant_field "$name" "CORES")"
+  role="$(_get_tenant_role "$name")"
 
   _validate_core_list "$cores"
 
@@ -284,7 +285,11 @@ cmd_passwd() {
     _set_tenant_field "$name" "PASS" "$new_pass"
   fi
 
-  if ! _is_cloud_mode; then
+  if _is_cloud_mode; then
+    _write_user_role "$user" "$role" || return 1
+    _rebuild_tenant_permissions || return 1
+    _ensure_all_permission_last || return 1
+  else
     if ! _wait_for_security_reload "$user" "$new_pass" "$first_core"; then
       return 1
     fi
