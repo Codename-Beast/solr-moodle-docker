@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="600" viewBox="0 0 1040 600" role="img" aria-label="Runtime: Moodle, Proxy, Solr und Tenant-Isolation">
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="720" viewBox="0 0 1240 720" role="img" aria-label="Runtime: Moodle, Proxy, Solr, Tenant-Isolation und Guardrails">
   <defs>
     <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
       <path d="M32 0H0V32" fill="none" stroke="#262626" stroke-width="0.6"/>
@@ -7,51 +7,93 @@
       <path d="M0,0 L0,6 L9,3 z" fill="#f97316"/>
     </marker>
     <style>
-      .bg{fill:#0a0a0a} .title{font:700 22px Arial,sans-serif;fill:#fdba74} .sub{font:400 12px Arial,sans-serif;fill:#a8a29e}
-      .box{fill:#171717;stroke:#f97316;stroke-width:1.6;rx:12} .box2{fill:#111827;stroke:#fb923c;stroke-width:1.4;rx:12}
-      .store{fill:#0e0e0e;stroke:#c2410c;stroke-width:1.5} .muted{fill:#1a1a1a;stroke:#78716c;stroke-width:1.2;stroke-dasharray:5 4;rx:10}
-      .label{font:700 14px Arial,sans-serif;fill:#fed7aa} .small{font:400 11px Arial,sans-serif;fill:#d6d3d1} .tiny{font:400 10px Arial,sans-serif;fill:#a8a29e}
-      .arrow{stroke:#f97316;stroke-width:2;fill:none;marker-end:url(#arr)} .dash{stroke:#fb923c;stroke-width:1.7;fill:none;stroke-dasharray:6 5;marker-end:url(#arr)}
-      .group{fill:none;stroke:#7c2d12;stroke-width:1.4;stroke-dasharray:8 6;rx:16}
+      .bg{fill:#0a0a0a}.title{font:700 22px Arial,sans-serif;fill:#fdba74}.sub{font:400 12px Arial,sans-serif;fill:#a8a29e}
+      .box{fill:#171717;stroke:#f97316;stroke-width:1.6;rx:12}.box2{fill:#111827;stroke:#fb923c;stroke-width:1.4;rx:12}
+      .guard{fill:#1f1111;stroke:#fb7185;stroke-width:1.6;rx:12}.store{fill:#0e0e0e;stroke:#c2410c;stroke-width:1.5}
+      .muted{fill:#1a1a1a;stroke:#78716c;stroke-width:1.2;stroke-dasharray:5 4;rx:10}.group{fill:none;stroke:#7c2d12;stroke-width:1.4;stroke-dasharray:8 6;rx:16}
+      .label{font:700 14px Arial,sans-serif;fill:#fed7aa}.guardlabel{font:700 14px Arial,sans-serif;fill:#fecdd3}.small{font:400 11px Arial,sans-serif;fill:#d6d3d1}.tiny{font:400 10px Arial,sans-serif;fill:#a8a29e}
+      .ok{font:700 11px Arial,sans-serif;fill:#86efac}.warn{font:700 11px Arial,sans-serif;fill:#fb7185}.arrow{stroke:#f97316;stroke-width:2;fill:none;marker-end:url(#arr)}.dash{stroke:#fb923c;stroke-width:1.7;fill:none;stroke-dasharray:6 5;marker-end:url(#arr)}.guardline{stroke:#fb7185;stroke-width:1.8;fill:none;stroke-dasharray:6 5;marker-end:url(#arr)}
     </style>
   </defs>
-  <rect class="bg" width="1040" height="600"/><rect width="1040" height="600" fill="url(#grid)" opacity="0.55"/>
+  <rect class="bg" width="1240" height="720"/><rect width="1240" height="720" fill="url(#grid)" opacity="0.55"/>
   <text x="28" y="38" class="title">Runtime: Moodle, Proxy, Solr und Tenant-Isolation</text>
-  <text x="28" y="58" class="sub">Normale Requests, Tenant-Rechte und Runtime Source of Truth</text>
-  <rect x="34" y="110" width="180" height="100" class="box2"/>
-  <text x="58" y="144" class="label">Moodle</text>
-  <text x="58" y="172" class="small">Global Search</text>
-  <text x="58" y="192" class="small">Basic Auth</text>
-  <rect x="280" y="110" width="190" height="100" class="muted"/>
-  <text x="304" y="144" class="label">Proxy</text>
-  <text x="304" y="172" class="small">HTTPS / TLS</text>
-  <text x="304" y="192" class="small">Header weiterreichen</text>
-  <rect x="540" y="80" width="240" height="160" class="box"/>
-  <text x="564" y="114" class="label">Solr</text>
-  <text x="564" y="142" class="small">AuthN/AuthZ</text>
-  <text x="564" y="162" class="small">Cores oder Collections</text>
-  <text x="564" y="182" class="small">/select /update /schema</text>
-  <text x="564" y="202" class="small">/update/extract für Tika</text>
-  <rect x="835" y="90" width="160" height="130" class="box2"/>
-  <text x="859" y="124" class="label">Tenant</text>
-  <text x="859" y="152" class="small">eigener User</text>
-  <text x="859" y="172" class="small">eigene Rechte</text>
-  <text x="859" y="192" class="small">eigene Daten</text>
-  <rect x="540" y="320" width="240" height="125" class="box"/>
-  <text x="564" y="354" class="label">solr-tenant.sh</text>
-  <text x="564" y="382" class="small">sync-sot</text>
-  <text x="564" y="402" class="small">rebuild-permissions</text>
-  <text x="564" y="422" class="small">drift-detect / export</text>
-  <rect x="835" y="315" width="160" height="80" class="store" rx="8"/><ellipse cx="915" cy="315" rx="80" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
-  <text x="868" y="348" class="label">tenants.env</text><text x="862" y="372" class="tiny">Tenant-SOT</text>
-  <rect x="835" y="440" width="160" height="80" class="store" rx="8"/><ellipse cx="915" cy="440" rx="80" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
-  <text x="878" y="473" class="label">ZooKeeper</text><text x="862" y="497" class="tiny">SolrCloud Runtime</text>
-  <line x1="214" y1="160" x2="280" y2="160" class="arrow"/><line x1="470" y1="160" x2="540" y2="160" class="arrow"/><line x1="780" y1="155" x2="835" y2="155" class="arrow"/>
-  <path d="M660 240 V320" class="dash"/><line x1="780" y1="360" x2="835" y2="350" class="dash"/><line x1="780" y1="410" x2="835" y2="474" class="dash"/>
-  <rect x="34" y="320" width="435" height="135" class="group"/>
-  <text x="58" y="350" class="label">Security-Regel</text>
-  <text x="58" y="378" class="small">tenant-spezifische Regeln stehen vor generischen Regeln.</text>
-  <text x="58" y="402" class="small">Die Fallback-Permission all bleibt am Ende.</text>
-  <text x="58" y="426" class="small">Damit wird kein Tenant von einer generischen Regel überdeckt.</text>
-  <text x="890" y="582" class="tiny">© 2026 eLeDia GmbH</text>
+  <text x="28" y="58" class="sub">Normale Requests, Tenant-Rechte, Runtime Source of Truth und harte Security-Guardrails</text>
+
+  <rect x="34" y="105" width="175" height="105" class="box2"/>
+  <text x="58" y="138" class="label">Moodle</text>
+  <text x="58" y="166" class="small">Global Search</text>
+  <text x="58" y="186" class="small">Basic Auth</text>
+
+  <rect x="270" y="105" width="190" height="105" class="muted"/>
+  <text x="294" y="138" class="label">Proxy</text>
+  <text x="294" y="166" class="small">HTTPS / TLS</text>
+  <text x="294" y="186" class="small">Tenant-Isolation</text>
+
+  <rect x="525" y="80" width="230" height="165" class="box"/>
+  <text x="549" y="114" class="label">Solr</text>
+  <text x="549" y="142" class="small">AuthN/AuthZ</text>
+  <text x="549" y="162" class="small">Cores oder Collections</text>
+  <text x="549" y="182" class="small">/select /update /schema</text>
+  <text x="549" y="202" class="small">/update/extract für Tika</text>
+  <text x="549" y="222" class="tiny">Security API + security.json / ZooKeeper</text>
+
+  <rect x="815" y="95" width="165" height="125" class="box2"/>
+  <text x="839" y="128" class="label">Tenant</text>
+  <text x="839" y="156" class="small">eigener User</text>
+  <text x="839" y="176" class="small">eigene Rolle</text>
+  <text x="839" y="196" class="small">eigene Daten</text>
+
+  <rect x="525" y="330" width="230" height="135" class="box"/>
+  <text x="549" y="364" class="label">solr-tenant.sh</text>
+  <text x="549" y="392" class="small">create / enable / passwd</text>
+  <text x="549" y="412" class="small">sync-sot</text>
+  <text x="549" y="432" class="small">rebuild-permissions</text>
+  <text x="549" y="452" class="small">drift-detect / export</text>
+
+  <rect x="815" y="330" width="165" height="85" class="store" rx="8"/><ellipse cx="897" cy="330" rx="82" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="850" y="362" class="label">tenants.env</text><text x="842" y="386" class="tiny">Tenant-SOT, chmod 660</text>
+  <rect x="815" y="475" width="165" height="85" class="store" rx="8"/><ellipse cx="897" cy="475" rx="82" ry="10" fill="#141414" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="860" y="507" class="label">ZooKeeper</text><text x="840" y="531" class="tiny">SolrCloud security.json</text>
+
+  <rect x="1015" y="78" width="190" height="505" class="guard"/>
+  <text x="1038" y="112" class="guardlabel">Guardrails</text>
+  <text x="1038" y="146" class="ok">✓ AuthZ JSON valide</text>
+  <text x="1038" y="171" class="ok">✓ name=admin verboten</text>
+  <text x="1038" y="196" class="ok">✓ predefined ≠ custom</text>
+  <text x="1038" y="221" class="ok">✓ delete-permission nur Index</text>
+  <text x="1038" y="246" class="ok">✓ custom braucht path</text>
+  <text x="1038" y="271" class="ok">✓ all bleibt zuletzt</text>
+  <text x="1038" y="296" class="ok">✓ passwd rebuildet Rollen</text>
+  <text x="1038" y="321" class="ok">✓ .env nur whitelist Keys</text>
+  <text x="1038" y="346" class="ok">✓ private API temp dirs</text>
+  <text x="1038" y="371" class="ok">✓ Bash 4+ Pflicht</text>
+  <text x="1038" y="396" class="ok">✓ tenants.env nicht 666</text>
+  <text x="1038" y="421" class="warn">✕ kaputte Security API Payloads</text>
+  <text x="1038" y="446" class="warn">✕ RuleBasedAuth admin-Fehler</text>
+  <text x="1038" y="471" class="warn">✕ 403 nach Passwortrotation</text>
+  <text x="1038" y="496" class="warn">✕ Secret-Dateien world-writable</text>
+
+  <line x1="209" y1="158" x2="270" y2="158" class="arrow"/>
+  <line x1="460" y1="158" x2="525" y2="158" class="arrow"/>
+  <line x1="755" y1="158" x2="815" y2="158" class="arrow"/>
+  <path d="M640 245 V330" class="dash"/>
+  <line x1="755" y1="385" x2="815" y2="370" class="dash"/>
+  <line x1="755" y1="430" x2="815" y2="515" class="dash"/>
+  <path d="M755 390 C870 390 910 250 1015 250" class="guardline"/>
+  <path d="M755 165 C880 165 910 140 1015 140" class="guardline"/>
+
+  <rect x="34" y="330" width="435" height="180" class="group"/>
+  <text x="58" y="360" class="label">Security-Regel</text>
+  <text x="58" y="388" class="small">Tenant-spezifische Regeln stehen vor generischen Regeln.</text>
+  <text x="58" y="412" class="small">Die Fallback-Permission all bleibt am Ende.</text>
+  <text x="58" y="436" class="small">admin ist Rolle, nie Permission-Name.</text>
+  <text x="58" y="460" class="small">Standalone braucht Proxy für harte Tenant-Isolation.</text>
+  <text x="58" y="484" class="small">SolrCloud nutzt Collections API und collection-scoped ACLs.</text>
+
+  <rect x="34" y="555" width="946" height="82" class="muted"/>
+  <text x="58" y="585" class="label">Fehler werden früh gestoppt</text>
+  <text x="58" y="611" class="small">Ungültige Security-Payloads scheitern vor dem Solr API Call oder vor dem Schreiben von security.json.</text>
+  <text x="58" y="631" class="small">Dadurch startet Solr nicht mehr mit kaputten Permissions wie name=admin.</text>
+
+  <text x="1090" y="695" class="tiny">© 2026 eLeDia GmbH</text>
 </svg>
