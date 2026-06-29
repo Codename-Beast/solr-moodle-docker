@@ -1,80 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1120" viewBox="0 0 1800 1120" role="img" aria-label="Runtime Architektur: Moodle, Proxy, Solr, Tenant Management, Runtime Truth und Guardrails">
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="920" viewBox="0 0 1500 920" role="img" aria-label="Runtime Architektur des eLeDia Solr Moodle Stacks">
   <defs>
     <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#262626" stroke-width="0.7"/></pattern>
     <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#f97316"/></marker>
     <marker id="arrBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#38bdf8"/></marker>
-    <marker id="arrRose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#fb7185"/></marker>
     <style>
-      .bg{fill:#0a0a0a}.title{font:700 28px Arial,sans-serif;fill:#fdba74}.sub{font:400 14px Arial,sans-serif;fill:#a8a29e}.section{font:700 17px Arial,sans-serif;fill:#fed7aa}.label{font:700 15px Arial,sans-serif;fill:#fed7aa}.small{font:400 12px Arial,sans-serif;fill:#e7e5e4}.tiny{font:400 10.5px Arial,sans-serif;fill:#a8a29e}.code{font:400 12px 'Courier New',monospace;fill:#e5e7eb}.codehi{font:700 12px 'Courier New',monospace;fill:#fdba74}.ok{font:700 12px Arial,sans-serif;fill:#86efac}.warn{font:700 12px Arial,sans-serif;fill:#fb7185}.note{font:700 12px Arial,sans-serif;fill:#38bdf8}
-      .box{fill:#171717;stroke:#f97316;stroke-width:1.8;rx:14}.box2{fill:#111827;stroke:#fb923c;stroke-width:1.6;rx:14}.mgmt{fill:#0f172a;stroke:#38bdf8;stroke-width:1.7;rx:14}.guard{fill:#1f1111;stroke:#fb7185;stroke-width:1.7;rx:14}.store{fill:#0e0e0e;stroke:#c2410c;stroke-width:1.6}.muted{fill:#1a1a1a;stroke:#78716c;stroke-width:1.3;stroke-dasharray:6 5;rx:12}.panel{fill:#101010;stroke:#7c2d12;stroke-width:1.4;stroke-dasharray:8 6;rx:18}.legend{fill:#0f0f0f;stroke:#44403c;stroke-width:1.2;rx:12}
-      .arrow{stroke:#f97316;stroke-width:2.2;fill:none;marker-end:url(#arr)}.dash{stroke:#fb923c;stroke-width:1.8;fill:none;stroke-dasharray:7 6;marker-end:url(#arr)}.blue{stroke:#38bdf8;stroke-width:2;fill:none;marker-end:url(#arrBlue)}.rose{stroke:#fb7185;stroke-width:2;fill:none;stroke-dasharray:7 6;marker-end:url(#arrRose)}
+      .bg{fill:#0a0a0a}.title{font:700 28px Arial,sans-serif;fill:#fdba74}.sub{font:400 14px Arial,sans-serif;fill:#a8a29e}.section{font:700 17px Arial,sans-serif;fill:#fed7aa}.label{font:700 15px Arial,sans-serif;fill:#fed7aa}.small{font:400 12px Arial,sans-serif;fill:#e7e5e4}.tiny{font:400 10.5px Arial,sans-serif;fill:#a8a29e}.code{font:400 12px 'Courier New',monospace;fill:#e5e7eb}.codehi{font:700 12px 'Courier New',monospace;fill:#fdba74}.ok{font:700 12px Arial,sans-serif;fill:#86efac}.warn{font:700 12px Arial,sans-serif;fill:#fb7185}
+      .box{fill:#171717;stroke:#f97316;stroke-width:1.8;rx:14}.cfg{fill:#111827;stroke:#fb923c;stroke-width:1.6;rx:14}.cli{fill:#0f172a;stroke:#38bdf8;stroke-width:1.7;rx:14}.guard{fill:#1f1111;stroke:#fb7185;stroke-width:1.7;rx:14}.store{fill:#0e0e0e;stroke:#c2410c;stroke-width:1.6}.muted{fill:#1a1a1a;stroke:#78716c;stroke-width:1.3;stroke-dasharray:6 5;rx:12}.panel{fill:#101010;stroke:#7c2d12;stroke-width:1.4;stroke-dasharray:8 6;rx:18}.legend{fill:#0f0f0f;stroke:#44403c;stroke-width:1.2;rx:12}
+      .arrow{stroke:#f97316;stroke-width:2.2;fill:none;marker-end:url(#arr)}.blue{stroke:#38bdf8;stroke-width:2;fill:none;marker-end:url(#arrBlue)}
     </style>
   </defs>
-  <rect class="bg" width="1800" height="1120"/><rect width="1800" height="1120" fill="url(#grid)" opacity="0.55"/>
-  <text x="36" y="46" class="title">Runtime Architektur — Moodle, Solr und Tenant-Management</text>
-  <text x="36" y="72" class="sub">Management für Standalone und SolrCloud. Runtime-State kommt aus API und ZooKeeper.</text>
+  <rect class="bg" width="1500" height="920"/><rect width="1500" height="920" fill="url(#grid)" opacity="0.55"/>
+  <text x="36" y="46" class="title">Runtime Architektur</text>
+  <text x="36" y="72" class="sub">Moodle spricht Solr über Proxy oder internes Netzwerk an. Tenants werden über Solr Security und Collections isoliert.</text>
 
-  <rect x="36" y="110" width="410" height="245" class="panel"/>
-  <text x="60" y="142" class="section">1. Request-Pfad</text>
-  <rect x="66" y="175" width="145" height="78" class="box2"/><text x="88" y="207" class="label">Moodle</text><text x="88" y="229" class="small">Global Search</text>
-  <rect x="270" y="175" width="145" height="78" class="muted"/><text x="292" y="202" class="label">Proxy</text><text x="292" y="224" class="small">Caddy</text><text x="292" y="242" class="small">Apache/Nginx</text>
-  <text x="66" y="294" class="small">Standalone: Proxy erzwingt Isolation.</text>
-  <text x="66" y="318" class="small">SolrCloud: Collection-ACLs isolieren direkt in Solr.</text>
+  <rect x="36" y="110" width="1428" height="230" class="panel"/>
+  <text x="60" y="142" class="section">Request-Pfad</text>
+  <rect x="70" y="178" width="160" height="86" class="cfg"/><text x="94" y="212" class="label">Moodle</text><text x="94" y="236" class="small">Global Search</text>
+  <rect x="300" y="168" width="250" height="108" class="muted"/><text x="324" y="200" class="label">Reverse Proxy</text><text x="324" y="226" class="small">Caddy / Nginx / Apache</text><text x="324" y="250" class="code">kundendomain.de/solr</text><text x="324" y="270" class="code">solr.kundendomain.de → /solr/</text>
+  <rect x="620" y="178" width="190" height="86" class="box"/><text x="644" y="212" class="label">Solr API</text><text x="644" y="236" class="small">/select /update</text><text x="644" y="256" class="small">/schema /admin</text>
+  <rect x="880" y="178" width="190" height="86" class="store" rx="10"/><ellipse cx="975" cy="178" rx="95" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="923" y="212" class="label">Indexdaten</text><text x="915" y="236" class="small">Cores / Collections</text>
+  <rect x="1140" y="178" width="230" height="86" class="store" rx="10"/><ellipse cx="1255" cy="178" rx="115" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="1182" y="212" class="label">Security Runtime</text><text x="1180" y="236" class="small">User, Rollen, ACLs</text>
+  <path d="M230 221H295" class="arrow"/><path d="M550 221H615" class="arrow"/><path d="M810 221H875" class="arrow"/><path d="M1070 221H1135" class="arrow"/>
 
-  <rect x="500" y="110" width="445" height="245" class="panel"/>
-  <text x="524" y="142" class="section">2. Solr Runtime</text>
-  <rect x="535" y="176" width="170" height="95" class="box"/><text x="558" y="207" class="label">Solr API</text><text x="558" y="230" class="small">/select /update</text><text x="558" y="250" class="small">/schema /admin</text>
-  <rect x="750" y="176" width="160" height="95" class="store" rx="10"/><ellipse cx="830" cy="176" rx="80" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="783" y="209" class="label">Indexdaten</text><text x="780" y="232" class="small">Cores/Collections</text>
-  <text x="535" y="310" class="small">AuthN/AuthZ: Security API. SolrCloud persistiert in ZooKeeper.</text>
+  <rect x="36" y="385" width="445" height="250" class="cli"/>
+  <text x="60" y="420" class="section">Tenant-Management</text>
+  <text x="70" y="458" class="code">solr-tenant.sh create</text>
+  <text x="70" y="488" class="code">solr-tenant.sh passwd</text>
+  <text x="70" y="518" class="code">solr-tenant.sh core-add</text>
+  <text x="70" y="548" class="code">solr-tenant.sh sync-sot</text>
+  <text x="70" y="578" class="small">Ein CLI-Pfad für Standalone und SolrCloud.</text>
 
-  <rect x="995" y="110" width="360" height="245" class="panel"/>
-  <text x="1019" y="142" class="section">3. Runtime-State</text>
-  <rect x="1028" y="176" width="145" height="86" class="store" rx="10"/><ellipse cx="1100" cy="176" rx="72" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="1057" y="208" class="label">Security API</text><text x="1046" y="232" class="small">User + Rollen</text>
-  <rect x="1195" y="176" width="125" height="86" class="store" rx="10"/><ellipse cx="1257" cy="176" rx="62" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="1224" y="208" class="label">ZooKeeper</text><text x="1218" y="232" class="small">Cloud-Truth</text>
-  <text x="1028" y="304" class="small">Live-API ist maßgebliche Runtime-Quelle.</text>
-  <text x="1028" y="328" class="codehi">solr-tenant.sh runtime-truth</text>
+  <rect x="528" y="385" width="445" height="250" class="cli"/>
+  <text x="552" y="420" class="section">Wahrheitsquellen</text>
+  <text x="562" y="458" class="codehi">tenants.env</text><text x="562" y="480" class="small">gewünschter Zustand</text>
+  <text x="562" y="518" class="codehi">runtime-truth</text><text x="562" y="540" class="small">Solr API + ZooKeeper</text>
+  <text x="562" y="578" class="codehi">drift-detect</text><text x="562" y="600" class="small">vergleicht SOT und Runtime</text>
 
-  <rect x="1405" y="110" width="355" height="245" class="legend"/>
-  <text x="1429" y="142" class="section">Legende</text>
-  <rect x="1430" y="170" width="24" height="15" class="box"/><text x="1466" y="183" class="small">Solr Runtime / Service</text>
-  <rect x="1430" y="204" width="24" height="15" class="mgmt"/><text x="1466" y="217" class="small">Management-Skript / CLI</text>
-  <rect x="1430" y="238" width="24" height="15" class="store"/><text x="1466" y="251" class="small">Persistenter Runtime-State</text>
-  <line x1="1430" y1="278" x2="1458" y2="278" class="arrow"/><text x="1466" y="282" class="small">Request / Datenfluss</text>
-  <line x1="1430" y1="312" x2="1458" y2="312" class="rose"/><text x="1466" y="316" class="small">Guardrail / Validierung</text>
+  <rect x="1020" y="385" width="444" height="250" class="guard"/>
+  <text x="1044" y="420" class="section">Runtime-Guardrails</text>
+  <text x="1054" y="458" class="ok">✓ Ping-Healthcheck-Datei verwaltet</text>
+  <text x="1054" y="488" class="ok">✓ Tenant-Regeln vor Fallback all</text>
+  <text x="1054" y="518" class="ok">✓ passwd baut Rollen/ACLs neu</text>
+  <text x="1054" y="548" class="ok">✓ Drift kann erkannt und repariert werden</text>
+  <text x="1054" y="578" class="warn">✕ ungültige Permission-Payloads blockiert</text>
 
-  <rect x="36" y="395" width="560" height="315" class="mgmt"/>
-  <text x="60" y="430" class="section">Tenant-Management</text>
-  <text x="70" y="466" class="codehi">Tenant anlegen</text><text x="70" y="488" class="code">solr-tenant.sh create schule_a --cores eLeDia_core_a</text>
-  <text x="70" y="526" class="codehi">Core hinzufügen</text><text x="70" y="548" class="code">solr-tenant.sh core-add schule_a --core eLeDia_core_b</text>
-  <text x="70" y="586" class="codehi">Passwort rotieren oder setzen</text><text x="70" y="608" class="code">solr-tenant.sh passwd schule_a --password '...'</text>
-  <text x="70" y="646" class="small">Gleiche CLI für Standalone und SolrCloud.</text>
-  <text x="70" y="672" class="small">Standalone: Proxy-Isolation. SolrCloud: Collection ACLs.</text>
+  <rect x="36" y="680" width="690" height="150" class="panel"/>
+  <text x="60" y="714" class="section">Standalone</text>
+  <text x="70" y="752" class="ok">✓ einzelne Solr Runtime mit Cores</text>
+  <text x="70" y="780" class="ok">✓ Security API schützt User und Rollen</text>
+  <text x="70" y="808" class="warn">✕ Core-Isolation braucht Proxy-Regeln</text>
 
-  <rect x="635" y="395" width="555" height="315" class="mgmt"/>
-  <text x="659" y="430" class="section">SOT, Drift und Runtime-Wahrheit</text>
-  <text x="669" y="466" class="codehi">Desired State anwenden</text><text x="669" y="488" class="code">solr-tenant.sh apply</text>
-  <text x="669" y="526" class="codehi">SOT gegen Runtime erzwingen</text><text x="669" y="548" class="code">solr-tenant.sh sync-sot</text>
-  <text x="669" y="586" class="codehi">Live-State aus API/ZooKeeper</text><text x="669" y="608" class="code">solr-tenant.sh runtime-truth</text>
-  <text x="669" y="646" class="codehi">Drift prüfen / beheben</text><text x="669" y="668" class="code">solr-tenant.sh drift-detect</text><text x="669" y="690" class="code">solr-tenant.sh drift-remediate</text>
+  <rect x="774" y="680" width="690" height="150" class="panel"/>
+  <text x="798" y="714" class="section">SolrCloud</text>
+  <text x="808" y="752" class="ok">✓ Collections statt Cores</text>
+  <text x="808" y="780" class="ok">✓ ZooKeeper hält Security- und Cluster-State</text>
+  <text x="808" y="808" class="ok">✓ Collection-ACLs isolieren direkt in Solr</text>
 
-  <rect x="1228" y="395" width="532" height="315" class="guard"/>
-  <text x="1252" y="430" class="section">Runtime-Guardrails</text>
-  <text x="1262" y="466" class="ok">✓ ZooKeeper + Collections API erreichbar</text>
-  <text x="1262" y="492" class="ok">✓ tenants.env wird via sync-sot gespiegelt</text>
-  <text x="1262" y="518" class="ok">✓ runtime-truth liest User/Rollen/Collections</text>
-  <text x="1262" y="544" class="ok">✓ drift-detect vergleicht SOT gegen Runtime</text>
-  <text x="1262" y="570" class="ok">✓ Tenant-Regeln vor Fallback all</text>
-  <text x="1262" y="596" class="warn">✕ unbekannte API-User werden rotiert</text>
-  <text x="1262" y="622" class="warn">✕ ungültige AuthZ-Payloads blockiert</text>
-  <text x="1262" y="648" class="warn">✕ passwd triggert Rollen/ACL-Rebuild</text>
-
-
-  <rect x="36" y="755" width="1724" height="250" class="panel"/>
-  <text x="60" y="790" class="section">Wahrheitsquellen und Zuständigkeiten</text>
-  <rect x="70" y="820" width="390" height="135" class="box2"/><text x="92" y="852" class="label">tenants.env</text><text x="92" y="879" class="small">gewünschter Tenant-Sollzustand</text><text x="92" y="903" class="small">User, Passwort, Cores, ACTIVE</text><text x="92" y="927" class="code">solr-tenant.sh apply</text>
-  <rect x="500" y="820" width="390" height="135" class="store" rx="12"/><ellipse cx="695" cy="820" rx="195" ry="12" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="522" y="852" class="label">Solr Security API</text><text x="522" y="879" class="small">User, Rollen, Permissions</text><text x="522" y="903" class="code">/admin/authentication</text><text x="522" y="927" class="code">/admin/authorization</text>
-  <rect x="930" y="820" width="390" height="135" class="store" rx="12"/><ellipse cx="1125" cy="820" rx="195" ry="12" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="952" y="852" class="label">ZooKeeper / Collections API</text><text x="952" y="879" class="small">SolrCloud-Collections</text><text x="952" y="903" class="code">/admin/collections?action=LIST</text><text x="952" y="927" class="code">ZK_HOST=localhost:9983</text>
-  <rect x="1360" y="820" width="360" height="135" class="mgmt"/><text x="1382" y="852" class="label">Export für Betrieb</text><text x="1382" y="879" class="small">Hostvars aus tenants.env</text><text x="1382" y="903" class="code">solr-tenant.sh export</text><text x="1382" y="927" class="small">Live-State: runtime-truth</text>
-
-  <text x="1510" y="1086" class="tiny">© 2026 eLeDia GmbH</text>
+  <text x="1260" y="886" class="tiny">© 2026 eLeDia GmbH</text>
 </svg>

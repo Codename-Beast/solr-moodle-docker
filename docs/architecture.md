@@ -1,81 +1,71 @@
-# 🧱 Architektur — solr-moodle-docker
+# Architektur — solr-moodle-docker
 
-Diese Datei beschreibt den Docker-Stack hinter Moodle Global Search. Kurz gehalten, damit man im Betrieb schnell sieht, welche Komponente wofür zuständig ist.
+Kurzüberblick über Bootstrap, Runtime und Tenant-Management.
 
-![Architektur — Installation und Bootstrap](architecture-install.svg)
-![Architektur — Runtime](architecture-runtime.svg)
+![Installation und Bootstrap](architecture-install.svg)
 
----
-
-## Inhalt
-
-| Bereich | Inhalt |
-|---|---|
-| 🧩 Komponenten | Init-Container, Solr Runtime, Tenant-CLI |
-| 🔁 Ablauf | Start, Bootstrap, Runtime |
-| 🔐 Security | AuthN/AuthZ, Tenant-Rechte, Fallback-Regel |
-| ☁ SolrCloud | Collections, ZooKeeper, Runtime-SOT |
-| 🧪 Tests | Tika, Tenant-Isolation, Drift |
+![Runtime Architektur](architecture-runtime.svg)
 
 ---
 
-## 🧩 Komponenten
+## Komponenten
 
 | Komponente | Aufgabe |
 |---|---|
-| `docker-compose.yml` | Stack-Definition, Volumes, Ports, Healthchecks |
-| `eLeDia-solr-init` | schreibt Security-Basis und Configsets vor dem Runtime-Start |
-| `solr` | Solr Runtime für Cores oder Collections |
-| `init/powerinit.sh` | Bootstrap-Logik für `security.json` und Configsets |
-| `scripts/solr-tenant.sh` | Tenant-CLI für create, passwd, sync, export und Drift-Checks |
-| `eLeDia-config/` | Moodle-Schema und `/update/extract` für Tika |
+| `docker-compose.yml` | Stack, Volumes, Ports, Healthchecks |
+| `eLeDia-solr-init` | Bootstrap: Security-Basis, Configsets, Marker |
+| `solr` | Runtime für Cores oder Collections |
+| `scripts/solr-tenant.sh` | Tenant-CLI für create, passwd, sync, export und Drift |
+| `eLeDia-config/` | Moodle-Schema, `/update/extract`, Ping-Handler |
+| `docker-compose.proxy.yml` | optionale Caddy-/Nginx-Proxy-Container |
 
 ---
 
-## 🔁 Startablauf
+## Startablauf
 
 ```text
 docker compose up -d
   -> eLeDia-solr-init
-  -> security.json + Configsets
+  -> security.json + Configsets + Ping-Healthcheck-Datei
   -> solr Runtime
   -> Tenant-CLI / Moodle / Proxy
 ```
 
-Der Runtime-Container startet erst nach erfolgreichem Init. Das reduziert Race Conditions beim ersten Start und bei Updates.
+Der Runtime-Container startet erst nach erfolgreichem Init. Kaputte Security- oder Pflichtpasswort-Zustände stoppen früh.
 
 ---
 
-## 🔐 Security und Tenant-Rechte
+## Runtime
 
-- Solr bindet lokal auf `127.0.0.1:${SOLR_PORT}`.
-- Externe Zugriffe laufen über Apache, Caddy oder einen anderen Reverse Proxy.
+```text
+Moodle -> Reverse Proxy -> Solr API -> Core/Collection
+```
+
+| Modus | Objekt | Isolation | Persistenz |
+|---|---|---|---|
+| Standalone | Core | Security + Proxy-Regeln | Docker Volume |
+| SolrCloud | Collection | Security API + Collection-ACLs | Docker Volume + ZooKeeper |
+
+SolrCloud ist der Default. Die Tenant-Befehle bleiben in beiden Modi gleich.
+
+---
+
+## Tenant-Rechte
+
 - Jeder Tenant bekommt einen eigenen Solr-User.
-- Tenant-Rechte werden aus `tenants.env` und Runtime-Daten aufgebaut.
-- Die Fallback-Permission `all` bleibt zuletzt, damit tenant-spezifische Regeln nicht überdeckt werden.
+- Rechte werden aus `tenants.env` und Runtime-Daten aufgebaut.
+- Tenant-Regeln stehen vor der breiten Fallback-Permission `all`.
+- `runtime-truth` liest den Live-Zustand aus Solr API und ZooKeeper.
+- `drift-detect` vergleicht Sollzustand und Runtime.
 
 ---
 
-## ☁ SolrCloud
+## Tika und Moodle-Dokumente
 
-Im SolrCloud-Modus nutzt Moodle Collections statt Cores. Die Tenant-Befehle bleiben gleich.
-
-| Punkt | Standalone | SolrCloud |
-|---|---|---|
-| Objekt | Core | Collection |
-| Isolation | Security + Proxy | Collections + Security API |
-| Persistenz | Volume | Volume + ZooKeeper |
-
-Die Runtime Source of Truth liegt in Solr bzw. ZooKeeper. Das ist auch die Grundlage für Drift-Erkennung und Export.
-
----
-
-## 🧪 Tika und Dokumenttests
-
-Moodle nutzt `/update/extract`, um Dateiinhalte zu indexieren. Die Tests prüfen deshalb nicht nur einen technischen Marker, sondern auch eine normale Inhaltsabfrage.
+Moodle nutzt `/update/extract`, um Dateiinhalte zu indexieren.
 
 ```text
 PDF/DOCX/HTML -> /update/extract -> solr_filecontent -> Moodle Suche
 ```
 
----
+Die Tests prüfen deshalb echte Inhaltsabfragen, nicht nur Container-Liveness.

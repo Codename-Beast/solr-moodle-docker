@@ -1,32 +1,24 @@
-# Merge Request
+# Merge-Text
 
 ## Titel
-**Fix/Doku: Solr-Moodle-Stack stabilisiert und auf aktuellen Stand gebracht**
 
-## Beschreibung
-Dieses Update bringt den Solr-Moodle-Docker-Stack auf den aktuellen Stand und fasst die wichtigsten Verbesserungen zusammen.
+Solr-Moodle-Stack 3.4.10: Tenant-Management, Proxy-Betrieb und CI stabilisiert
 
-### Was geändert wurde
-- Startup- und Tenant-Flows stabilisiert
-- Fehlerbehandlung bei Security-Reload, Core-Anlage und Tenant-Management verschärft
-- Healthcheck-Verhalten überarbeitet
-- Testabdeckung erweitert und angepasst
-- Neue `proxy_guid.md` ergänzt
+## Kurzfassung
 
-### Inhaltlich wichtig
-- Der Stack verhält sich jetzt klarer bei Fehlern im Tenant- oder Security-Setup
-- Die Tests decken Standalone und SolrCloud sauber ab
+Dieses Update macht den Stack robuster für produktive Moodle-Solr-Setups:
 
-### Verifikation
-Lokal getestet, CI ist grün.
+- Tenant-CLI und Security-Flows sind härter validiert.
+- Standalone und SolrCloud werden in CI real getestet.
+- Moodle-Ping funktioniert mit verwaltetem Solr-Healthcheck-File.
+- Caddy und Nginx können als Proxy-Container im Solr-Netzwerk laufen.
+- Die Doku ist kompakter und auf konkrete Betriebswege ausgerichtet.
 
-**Lokal**
-- Shell-Syntax geprüft
-- Testskripte ausgeführt
-- Docker-/Stack Prüfungen bestanden
+## Verifikation
 
-**CI**
-- Lint erfolgreich
-- Security Scan erfolgreich
-- Standalone Core Tests erfolgreich
-- SolrCloud Tests erfolgreich
+- Lokal: Shell-Syntax, Compose-Render, Proxy-Config-Validation und Unit-Tests.
+- GitHub Actions: Lint, Security Scan, Standalone Core Tests und SolrCloud Tests für den Healthcheck-Fix grün.
+
+## Hinweis
+
+Bei weiteren Docs-Änderungen zuerst `git pull --ff-only origin feature/3.4.10` ausführen, damit GitHub-Änderungen nicht überschrieben werden.

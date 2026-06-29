@@ -1,6 +1,6 @@
-# ⚙ GitLab CI/CD Setup
+# GitLab CI/CD Setup
 
-Diese Notizen sind für Runner gedacht, die den Docker-Stack wirklich starten. Reine Shell-Runner reichen dafür nicht.
+Notizen für Runner, die den Docker-Stack wirklich starten. Reine Shell-Runner reichen dafür nicht.
 
 ---
 
@@ -10,8 +10,8 @@ Diese Notizen sind für Runner gedacht, die den Docker-Stack wirklich starten. R
 |---|---|
 | Executor | shell oder docker mit Docker-Zugriff |
 | Docker | Engine + Compose V2 |
-| Tags | passend zur `.gitlab-ci.yml` setzen |
-| Volumes | genug Platz für Solr-Images und Testdaten |
+| Tags | passend zur `.gitlab-ci.yml` |
+| Storage | genug Platz für Solr-Images und Testdaten |
 
 ---
 
@@ -48,8 +48,6 @@ Die Pipeline startet beim Push oder manuell über die GitLab-Oberfläche.
 ---
 
 ## Logs
-
-Bei fehlgeschlagenen Stack-Tests sind diese Ausgaben wichtig:
 
 ```bash
 docker compose ps

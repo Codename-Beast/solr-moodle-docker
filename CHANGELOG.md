@@ -5,43 +5,37 @@ All notable changes to this project will be documented in this file.
 ## [3.4.10] - 2026-06-22
 
 ### Fixed
-- `powerinit.sh` und `_cloud_authz_api` validieren Solr-Permissions jetzt vor dem Schreiben bzw. API-Call und blockieren ungültige Permission-Namen wie `admin`. Root-cause: Solr lädt `admin` nur als Rolle, nicht als Permission-Name; ein solcher Eintrag führt beim RuleBasedAuthorizationPlugin zu `Permission with name admin is neither a pre-defined permission nor qualifies as a custom permission`.
-- `_cloud_authz_api` lehnt zusätzlich ungültiges JSON und nicht-numerische `delete-permission`-Payloads ab, damit Solr Security API-Fehler nicht erst als eingebettete Runtime-Fehler sichtbar werden.
-- `solr-tenant.sh passwd --password` erzwingt in SolrCloud nach der Credential-Rotation erneut Tenant-Rolle und Permission-Rebuild. Root-cause: Das Passwort wurde gesetzt, aber der Zugriff konnte danach mit HTTP 403 statt 200 enden, wenn der Live-Security-State die Tenant-Rolle/ACL nicht sauber nachgezogen hatte.
-- `solr-tenant-api.sh` und `solr-backup.sh` lesen Admin-Credentials jetzt gezielt aus `.env`, statt die komplette Datei zu sourcen/exportieren. Root-cause: `set -a; . .env` konnte ungewollte Variablen wie `PATH` in Tenant-/Backup-Prozesse übernehmen.
-- `_solr_api` schreibt Response- und Curl-Fehlerdateien jetzt in ein privates temporäres Verzeichnis und räumt es über `RETURN`-Trap sowie explizite Cleanup-Pfade auf. Root-cause: Direkte `/tmp/solr-api-*` Dateien waren unnötig breit sichtbar und konnten bei Abbruch liegen bleiben.
-- `scripts/test-integration.sh` setzt `tenants.env` nicht mehr world-writable, sondern nutzt `chown 8983:8983` mit `chmod 660`.
-- `scripts/test-moodle-documents.sh` sourcet `.env` nur noch einmal, damit Runtime-Konfig und Credentials nicht doppelt mit Seiteneffekten geladen werden.
-- `init/powerinit.sh` loggt die Standalone-Core-Vorerzeugung nur noch im Standalone-Modus. Root-cause: SolrCloud-Starts meldeten vorher direkt nach dem Skip fälschlich trotzdem „Pre-creating core directories“.
-- `solr-cloud-entrypoint.sh` nutzt jetzt `runuser` statt `gosu` für den Privilege-Drop, und `Dockerfile.solr` entfernt die zusätzliche `gosu`-Abhängigkeit.
-- `solr-tenant.sh` bricht auf Bash-Versionen vor 4 jetzt früh mit einer klaren Fehlermeldung ab, statt später bei assoziativen Arrays unsauber zu scheitern.
-- `solr-cloud-entrypoint.sh` bricht jetzt hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Start fehlschlägt. Root-cause: Der Entrypoint hat vorher nur gewarnt und mit halb initialisiertem Tenant-/Security-State weitergestartet.
-- Security-Reload-Waits schlagen jetzt fehl, statt bei Timeout stillschweigend weiterzulaufen. Root-cause: `_wait_for_security_reload` meldete Erfolg, obwohl Solr den neuen Auth-State nie übernommen hatte.
-- SolrCloud-Tenant-Flows warten nicht mehr auf einen lokalen Security-Reload, weil der Auth-State in ZooKeeper persistiert wird. Root-cause: Der vorherige Wait-Check hat ZK-persistierte Änderungen als fehlenden Reload fehlinterpretiert und `create`/`enable`/`passwd`/`core-add` abgebrochen.
-- Tenant-Passwort- und Enable-Flows schreiben `PASS` / `ACTIVE` jetzt vor dem Reload-Wait weg und brechen sauber ab, wenn der Reload nicht kommt. Root-cause: Das Script konnte weiterlaufen, obwohl `tenants.env` und der Live-Solr-Auth-State nicht mehr synchron waren.
-- Core-Namen werden jetzt konsistent validiert, bevor sie in Solr oder die Tenant-Konfiguration geschrieben werden. Root-cause: Die erste Validator-Version war für bestehende branded Namen wie `eLeDia_core_a` zu streng, dadurch wurden gültige Tenants vor dem Start abgelehnt.
-- `cmd_apply` stoppt jetzt bei einem fehlschlagenden Core-Create, statt den Fehler zu schlucken und den Tenant als erfolgreich angewendet zu markieren. Root-cause: Die Schleife ignorierte `_create_core`-Fehler, dadurch blieb `apply` fälschlich auf Erfolg.
-- Der Compose-Healthcheck nutzt jetzt den tenant-aware `solr-tenant.sh healthcheck` statt nur Solr-Liveness zu prüfen und behandelt SolrCloud-Drift nicht mehr als Startup-Fehler, sondern nur Bootstrap/Auth-Status. Root-cause: Der alte Check konnte grün melden, obwohl Tenant-Drift oder defekte ACLs noch vorhanden waren, und drift-gesicherte Runtime-Zustände wurden sonst fälschlich als Fehler markiert.
-- Der Solr `PingRequestHandler` ist jetzt mit einem verwalteten `healthcheckFile` konfiguriert, damit Moodle `/admin/ping?action=enable` ohne `Ping request handler is not configured with a healthcheck file` nutzen kann.
+- Solr `PingRequestHandler` nutzt jetzt ein verwaltetes `healthcheckFile`, damit Moodle `/admin/ping?action=enable` ohne Fehler nutzen kann. Root cause: der Handler war vorhanden, aber nicht mit einer Healthcheck-Datei konfiguriert.
+- Der Compose-Healthcheck nutzt jetzt `solr-tenant.sh healthcheck` und prüft Solr, Auth und Bootstrap-Zustand statt nur Liveness. Drift wird bewusst separat über `drift-detect` bewertet.
+- Der Runtime-Entrypoint bricht hart ab, wenn `solr-tenant.sh apply` oder `sync-sot` beim Start fehlschlagen. Root cause: vorher konnte Solr mit halb initialisiertem Tenant-/Security-State weiterlaufen.
+- Security-Reload-Waits schlagen bei Timeout fehl. In SolrCloud werden lokale Reload-Waits übersprungen, weil der Auth-State in ZooKeeper persistiert wird.
+- Tenant-Flows für `create`, `enable`, `passwd`, `core-add` und `apply` validieren Core-Namen, schreiben Statusänderungen konsistenter und brechen bei Core-/ACL-Fehlern sauber ab.
+- `passwd --password` baut in SolrCloud Tenant-Rollen und Permissions nach der Passwortrotation neu auf, damit neue Credentials nicht in HTTP-403-Zuständen hängen bleiben.
+- Solr-Permissions werden vor dem Schreiben bzw. Security-API-Call validiert. Ungültige Namen wie `admin`, kaputtes JSON und nicht-numerische `delete-permission`-Payloads werden früh abgelehnt.
+- Admin-/Backup-Skripte lesen nur noch whitelisted Credentials aus `.env`, statt die komplette Datei zu sourcen/exportieren.
+- `_solr_api` nutzt private temporäre Verzeichnisse und räumt Response-/Curl-Dateien zuverlässig auf.
+- `tenants.env` wird in Tests nicht mehr world-writable gesetzt, sondern mit `chown 8983:8983` und `chmod 660` verwendet.
+- `test-moodle-documents.sh` sourcet `.env` nur noch einmal und vermeidet doppelte Seiteneffekte.
+- `powerinit.sh` loggt Standalone-Core-Vorerzeugung nur noch im Standalone-Modus.
+- `solr-cloud-entrypoint.sh` nutzt Debian-`runuser` statt `gosu`; die zusätzliche `gosu`-Abhängigkeit wurde entfernt.
+- `solr-tenant.sh` bricht auf Bash-Versionen vor 4 früh mit klarer Fehlermeldung ab.
 
 ### Added
-- Neue Unit-Abdeckung prüft den Hard-Fail-Startup-Pfad, die Core-Name-Validierung und das Timeout-Verhalten beim Security-Reload.
-- Die Unit-Tests validieren Security-Template-Permissions gegen Solr-vordefinierte Namen und Custom-Permission-Regeln, damit eine ungültige Permission wie `admin` nicht wieder in `security.json` landet.
-- Die Testmatrix berücksichtigt den bootstrap-sicheren Healthcheck jetzt explizit, damit frische Volumes nicht mehr als Drift-Fehler behandelt werden.
-- Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
-- `solr-tenant.sh runtime-truth` gibt die Runtime-Wahrheit aus der Live-Solr-API aus: Security API für User/Rollen/Permissions und in SolrCloud zusätzlich Collections API/ZooKeeper-State.
-- Die Architektur-SVGs für Runtime und Installation wurden größer, übersichtlicher und mit Legenden, CLI-Beispielen, Standalone/SolrCloud-Hinweisen sowie Runtime-Guardrails erweitert.
-- `setup.sh` wurde übersichtlicher gemacht: klarere Schritt-Ausgabe, Preflight-Checks, robuster Container-Healthcheck, konsistente `tenants.env`-Rechte und präzisere Abschlussbefehle.
-- Doku- und Example-Befehle nutzen `<containername>` statt einen festen Container-Namen, damit alternative `INSTANCE_NAME`-Setups nicht verwirren.
-- Nginx wurde als zusätzlicher Reverse-Proxy-Weg mit Template, Generator und README ergänzt; die Haupt-README beschreibt Caddy, Apache und Nginx sowie die zwei Upstream-Varianten Host-Port und Docker-Netzwerk.
-- Die README dokumentiert die Moodle-Solr-Einstellungen inklusive der Regel, wann die Moodle-Secure/HTTPS-Option aktiv sein muss.
-- `docker-compose.proxy.yml` automatisiert Caddy- und Nginx-Proxy-Container inklusive external Solr-Netzwerk, dynamischem `${INSTANCE_NAME}-solr:${SOLR_PORT}` Upstream, `SOLR_UPSTREAM` Override sowie Zugriff über `kundendomain.de/solr` und `solr.kundendomain.de`.
+- `docker-compose.proxy.yml` automatisiert Caddy- und Nginx-Proxy-Container. Beide hängen am externen `${INSTANCE_NAME:-solr}-network`, nutzen `${INSTANCE_NAME:-solr}-solr:${SOLR_PORT:-8983}` als Default-Upstream und unterstützen `SOLR_UPSTREAM` als Override.
+- Proxy-Container bedienen beide Zielvarianten: `https://kundendomain.de/solr` und `https://solr.kundendomain.de` mit Redirect nach `/solr/`.
+- Nginx wurde als unterstützter Reverse-Proxy-Weg mit Generator, Container-Template und README ergänzt.
+- `solr-tenant.sh runtime-truth` liest die Runtime-Wahrheit aus Solr Security API und in SolrCloud zusätzlich aus Collections API/ZooKeeper.
+- Unit-Tests decken Startup-Hard-Fails, Core-Name-Validierung, Security-Reload-Timeouts, Permission-Validierung, Ping-Healthcheck-Automation und Proxy-Container-Compose ab.
+- Architektur-SVGs und Betriebsdokumentation beschreiben Bootstrap, Runtime, Proxy-Betrieb, SolrCloud und Tenant-Guardrails kompakter.
 
 ### Changed
-- Der Test-Log-Fallback nutzt jetzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Testläufe nicht blockieren.
+- `setup.sh` gibt klarere Schritte aus, prüft Preflight-Zustände, wartet robuster auf Container-Health und setzt konsistente `tenants.env`-Rechte.
+- README, Proxy-Guide, Apache-/Nginx-Docs, CI-Doku, Monitoring und Merge-Text wurden gekürzt und auf konkrete Betriebswege ausgerichtet.
+- Doku- und Example-Befehle nutzen `<containername>` bzw. `${INSTANCE_NAME}` statt feste Container-Namen.
+- Der Test-Log-Fallback nutzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Tests nicht blockieren.
 
 ### Removed
-- Keine.
+- Die Runtime-Image-Abhängigkeit auf `gosu` wurde entfernt.
 
 ### Deprecated
 - Keine.
@@ -212,7 +206,7 @@ All notable changes to this project will be documented in this file.
 - bekannte, nicht-funktionale Startup-/PDFBox-Font-WARNs werden als non-actionable gefiltert.
 - neue harte Pruefung auf `URI is too large` bleibt separat aktiv.
 
-## [3.0.6] 
+## [3.0.6]
 
 ### Changed
 - `scripts/test-moodle-documents.sh` fachlich verfeinert, damit die Query-Checks Moodle-Solr-Engine-Logik realistisch abbilden (Moodle 4.1 bis 5.2 Zielbild):

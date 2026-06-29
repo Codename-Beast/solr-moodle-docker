@@ -1,25 +1,12 @@
-# 🌐 Apache Reverse Proxy Templates
+# Apache Reverse Proxy für Solr
 
-Die Apache-Templates sind für Setups gedacht, bei denen Solr nicht direkt erreichbar sein soll. Apache nimmt HTTPS an und leitet intern auf den lokalen Solr-Port weiter.
-
----
-
-## Grundidee
+Apache ist für klassische Host-Setups gedacht: HTTPS endet auf Apache, intern geht es auf den lokal gebundenen Solr-Port.
 
 ```text
-Moodle / Browser -> HTTPS -> Apache -> 127.0.0.1:${SOLR_PORT}
+Browser / Moodle -> HTTPS -> Apache -> 127.0.0.1:${SOLR_PORT}/solr/
 ```
 
-Solr selbst bleibt lokal gebunden.
-
----
-
-## Dateien
-
-| Datei | Zweck |
-|---|---|
-| `generate-apache-config.sh` | erzeugt Apache-Konfigurationen aus `.env` |
-| Template-Dateien | Proxy-Regeln für `/solr` und Tenant-Zugriffe |
+Solr bleibt lokal gebunden.
 
 ---
 
@@ -29,13 +16,15 @@ Solr selbst bleibt lokal gebunden.
 ./apache/generate-apache-config.sh
 ```
 
-Danach die erzeugte Konfiguration prüfen und in Apache aktivieren.
+Danach die erzeugte Datei prüfen, in Apache aktivieren und Apache neu laden.
 
 ---
 
-## Wichtige Punkte
+## Regeln
 
-- TLS gehört auf den Proxy.
-- Solr soll nicht auf `0.0.0.0` lauschen.
-- Basic Auth Header müssen sauber weitergereicht werden.
-- Bei Tenant-Subdomains müssen die Hostnamen zum Moodle-/Proxy-Konzept passen.
+- TLS endet am Proxy.
+- `ProxyPreserveHost On` setzen.
+- `X-Forwarded-Proto https` setzen.
+- Basic Auth Header weiterreichen.
+- Solr nicht auf `0.0.0.0` öffnen.
+- Wenn Apache als Container läuft, statt `127.0.0.1` den Docker-DNS-Namen nutzen.
