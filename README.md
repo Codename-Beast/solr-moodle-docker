@@ -245,8 +245,6 @@ ZK_MAX_CNXNS=60
 
 Ein paar Dinge, die im Betrieb relevant sind:
 
-- Die interne Collection `.system` wird beim Start angelegt, falls sie fehlt.
-- `SOLR_PORT` bleibt dynamisch. Mehrere Instanzen können parallel laufen.
 - Moodle nutzt in SolrCloud Collections statt Cores. Die Tenant-Befehle bleiben gleich.
 
 Nach einem Moduswechsel:
@@ -267,24 +265,20 @@ Alle Optionen stehen in `.env.example`. Die wichtigsten Werte:
 | `INSTANCE_NAME` | `solr` | Präfix für Container, Volume und Network |
 | `SOLR_VERSION` | `9.10.1` | Solr-Version im Runtime-Image |
 | `SOLR_PORT` | `8983` | Solr-Port auf dem Host |
-| `SOLR_BIND` | `127.0.0.1` | Bind-Adresse. Nicht auf `0.0.0.0` setzen. |
+| `SOLR_BIND` | `127.0.0.1` | Bind-Adresse. Sollte nicht auf `0.0.0.0` gesetzt werden. |
 | `SOLR_HEAP` | `2g` | JVM Heap |
 | `SOLR_MODE` | `solrcloud` | `solrcloud` oder `standalone` |
 | `ELEDIA_LOG_ROOT` | `/var/log/eledia/solr` | Host-Root für Init-, Setup- und Runtime-Logs |
-| `INIT_TARGETS` | `solr-a,solr-b,solr-c` | Metadaten für globalisierte Init-Läufe |
-| `SOLR_ADMIN_PASSWORD` | leer | Pflichtwert |
-| `SOLR_SUPPORT_PASSWORD` | leer | Pflichtwert |
+| `SOLR_ADMIN_PASSWORD` | leer |
+| `SOLR_SUPPORT_PASSWORD` | leer |
 | `TENANTS_ENV` | `/opt/solr/tenants.env` | Tenant-Source-of-Truth im Container |
 
 ---
 
 ## 🔐 Sicherheit
 
-Ein paar Regeln sind hier hart gezogen:
-
 - Solr bleibt lokal gebunden: `SOLR_BIND=127.0.0.1`.
 - Externe Zugriffe laufen über Caddy, Apache, Nginx oder einen anderen Reverse Proxy mit TLS.
-- `CHANGE_ME`-Passwörter werden beim Start abgelehnt.
 - Tenant-User bekommen nur die Rechte, die sie für ihre Cores oder Collections benötigen.
 
 ---
@@ -334,15 +328,6 @@ Die CI baut und testet sowohl Standalone als auch SolrCloud. Der Tenant-CLI-Pfad
 
 ---
 
-### Warnung zur Tenant-Isolation im Standalone-Modus
-
-In `SOLR_MODE=standalone` authentifiziert Solr direkte Tenant-Zugriffe, bietet
-aber keine zuverlässig getrennte Core-URL-Isolation für mehrere Tenants.
-Nutze bei Standalone-Installationen die generierte Caddy- oder Apache-Proxy-
-Konfiguration, wenn Tenants per Core-URL isoliert werden müssen. Standalone
-braucht Caddy oder einen anderen Proxy für Tenant-Isolation. Für direkte
-Solr-seitige Collection-Isolation bleibt SolrCloud der empfohlene Modus.
----
 ## 📚 Weitere Dokumentation
 
 | Dokument | Inhalt |
