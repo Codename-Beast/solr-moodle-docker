@@ -12,7 +12,7 @@
   </defs>
   <rect class="bg" width="1700" height="1080"/><rect width="1700" height="1080" fill="url(#grid)" opacity="0.55"/>
   <text x="36" y="46" class="title">Installation und Bootstrap — vom Setup zur verwalteten Solr Runtime</text>
-  <text x="36" y="72" class="sub">Init baut Security und Configsets. Danach verwaltet solr-tenant.sh Tenants, Cores/Collections und Drift in Standalone und SolrCloud.</text>
+  <text x="36" y="72" class="sub">Init baut Security und Configsets. Danach verwaltet solr-tenant.sh Tenants, Cores und Drift.</text>
 
   <rect x="36" y="110" width="1180" height="250" class="panel"/>
   <text x="60" y="142" class="section">Installationsfluss</text>
@@ -21,8 +21,7 @@
   <rect x="560" y="180" width="210" height="98" class="box"/><text x="584" y="214" class="label">3. eLeDia-solr-init</text><text x="584" y="238" class="small">security.json</text><text x="584" y="258" class="small">Configsets + Marker</text>
   <rect x="825" y="180" width="170" height="98" class="box"/><text x="849" y="214" class="label">4. Solr</text><text x="849" y="238" class="small">Solr 9.10.1</text><text x="849" y="258" class="small">AuthN/AuthZ aktiv</text>
   <rect x="1048" y="180" width="130" height="98" class="store" rx="10"/><ellipse cx="1113" cy="180" rx="65" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="1079" y="214" class="label">Runtime</text><text x="1071" y="238" class="small">Index + API</text>
-  <line x1="260" y1="229" x2="315" y2="229" class="arrow"/><line x1="505" y1="229" x2="560" y2="229" class="arrow"/><line x1="770" y1="229" x2="825" y2="229" class="arrow"/><line x1="995" y1="229" x2="1048" y2="229" class="arrow"/>
-  <text x="70" y="324" class="small">Fehler im Init stoppen den Stack früh: keine leere Security, keine CHANGE_ME-Passwörter, keine invaliden Permissions.</text>
+  <text x="70" y="324" class="small">Init stoppt früh bei leerer Security, CHANGE_ME-Secrets oder invaliden Permissions.</text>
 
   <rect x="1260" y="110" width="400" height="250" class="legend"/>
   <text x="1284" y="142" class="section">Legende</text>
@@ -36,21 +35,22 @@
   <text x="60" y="435" class="section">Setup-Befehle</text>
   <text x="70" y="472" class="codehi">Interaktiv empfohlen</text><text x="70" y="494" class="code">./setup.sh</text>
   <text x="70" y="532" class="codehi">Manuell</text><text x="70" y="554" class="code">cp .env.example .env</text><text x="70" y="576" class="code">$EDITOR .env</text><text x="70" y="598" class="code">docker compose up -d --build</text>
-  <text x="70" y="636" class="codehi">Health</text><text x="70" y="658" class="code">docker exec solr /opt/solr/scripts/solr-tenant.sh healthcheck</text>
+  <text x="70" y="636" class="codehi">Health</text><text x="70" y="658" class="code">docker exec &lt;containername&gt; solr-tenant.sh healthcheck</text>
 
   <rect x="590" y="400" width="515" height="300" class="mgmt"/>
   <text x="614" y="435" class="section">Tenant- und Core-Befehle</text>
   <text x="624" y="472" class="codehi">Tenant + Core/Collection anlegen</text><text x="624" y="494" class="code">solr-tenant.sh create schule_a --cores eLeDia_core_a</text>
   <text x="624" y="532" class="codehi">Weiteren Core hinzufügen</text><text x="624" y="554" class="code">solr-tenant.sh core-add schule_a --core eLeDia_core_b</text>
   <text x="624" y="592" class="codehi">Passwort ändern</text><text x="624" y="614" class="code">solr-tenant.sh passwd schule_a --password '...'</text>
-  <text x="624" y="652" class="small">Befehle laufen identisch in Standalone und SolrCloud; intern werden Core Admin API oder Collections API genutzt.</text>
+  <text x="624" y="652" class="small">Gleiche Befehle in Standalone und SolrCloud.</text>
+  <text x="624" y="676" class="small">Intern: Core Admin API oder Collections API.</text>
 
   <rect x="1145" y="400" width="515" height="300" class="mgmt"/>
   <text x="1169" y="435" class="section">SOT, Drift, Runtime-Wahrheit</text>
   <text x="1179" y="472" class="codehi">Desired State anwenden</text><text x="1179" y="494" class="code">solr-tenant.sh apply</text>
-  <text x="1179" y="532" class="codehi">Runtime gegen tenants.env/.env synchronisieren</text><text x="1179" y="554" class="code">solr-tenant.sh sync-sot</text>
-  <text x="1179" y="592" class="codehi">Tenant-Wahrheit aus Live-API holen</text><text x="1179" y="614" class="code">solr-tenant.sh runtime-truth</text>
-  <text x="1179" y="652" class="codehi">Hostvars aus tenants.env exportieren</text><text x="1179" y="674" class="code">solr-tenant.sh export</text>
+  <text x="1179" y="532" class="codehi">SOT gegen Runtime synchronisieren</text><text x="1179" y="554" class="code">solr-tenant.sh sync-sot</text>
+  <text x="1179" y="592" class="codehi">Live-State aus API holen</text><text x="1179" y="614" class="code">solr-tenant.sh runtime-truth</text>
+  <text x="1179" y="652" class="codehi">Hostvars exportieren</text><text x="1179" y="674" class="code">solr-tenant.sh export</text>
 
   <rect x="36" y="740" width="520" height="220" class="panel"/>
   <text x="60" y="775" class="section">Standalone-Modus</text>
@@ -59,27 +59,23 @@
   <text x="70" y="864" class="ok">✓ Tenant-CLI funktioniert gleich</text>
   <text x="70" y="890" class="warn">✕ harte URL/Core-Isolation braucht Proxy</text>
   <text x="70" y="916" class="small">Caddy/Apache-Konfig generieren:</text>
-  <text x="70" y="940" class="code">solr-tenant.sh caddy-config --domain solr.example.com</text>
+  <text x="70" y="940" class="code">solr-tenant.sh caddy-config --domain example.com</text>
 
   <rect x="590" y="740" width="520" height="220" class="panel"/>
   <text x="614" y="775" class="section">SolrCloud-Modus</text>
   <text x="624" y="812" class="ok">✓ Collections API statt Core Admin API</text>
-  <text x="624" y="838" class="ok">✓ ZooKeeper hält security.json Runtime-State</text>
+  <text x="624" y="838" class="ok">✓ ZooKeeper hält Security-State</text>
   <text x="624" y="864" class="ok">✓ Collection-scoped Permissions</text>
-  <text x="624" y="890" class="ok">✓ runtime-truth liest Collections aus API/ZK</text>
+  <text x="624" y="890" class="ok">✓ runtime-truth liest API/ZK</text>
   <text x="624" y="916" class="code">SOLR_MODE=solrcloud</text>
   <text x="624" y="940" class="code">ZK_HOST=localhost:9983</text>
 
   <rect x="1145" y="740" width="515" height="220" class="guard"/>
   <text x="1169" y="775" class="section">Bootstrap-Guardrails</text>
-  <text x="1179" y="812" class="ok">✓ Pflichtpasswörter gesetzt, kein CHANGE_ME</text>
-  <text x="1179" y="838" class="ok">✓ security.json JSON-valid und Permission-valid</text>
-  <text x="1179" y="864" class="ok">✓ admin nur Rolle, nie Permission-Name</text>
-  <text x="1179" y="890" class="ok">✓ tenants.env nicht world-writable</text>
-  <text x="1179" y="916" class="ok">✓ AuthZ-Payloads vor Solr API validiert</text>
-  <text x="1179" y="942" class="warn">✕ kaputte Security startet nicht weiter</text>
+  <text x="1179" y="812" class="ok">✓ Pflichtpasswörter gesetzt</text>
+  <text x="1179" y="838" class="ok">✓ security.json validiert</text>
+  <text x="1179" y="864" class="ok">✓ AuthZ-Payloads validiert</text>
+  <text x="1179" y="890" class="warn">✕ kaputte Security startet nicht weiter</text>
 
-  <path d="M845 700 C845 725 845 725 845 740" class="blue"/>
-  <path d="M1402 700 C1402 725 1402 725 1402 740" class="rose"/>
   <text x="1430" y="1046" class="tiny">© 2026 eLeDia GmbH</text>
 </svg>

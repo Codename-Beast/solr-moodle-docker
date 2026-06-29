@@ -11,31 +11,27 @@
     </style>
   </defs>
   <rect class="bg" width="1800" height="1120"/><rect width="1800" height="1120" fill="url(#grid)" opacity="0.55"/>
-  <text x="36" y="46" class="title">Runtime Architektur — Moodle, Solr, Tenant-Management und Runtime-Wahrheit</text>
-  <text x="36" y="72" class="sub">Die Management-Skripte funktionieren in Standalone und SolrCloud. SolrCloud nutzt zusätzlich ZooKeeper und Collections API.</text>
+  <text x="36" y="46" class="title">Runtime Architektur — Moodle, Solr und Tenant-Management</text>
+  <text x="36" y="72" class="sub">Management für Standalone und SolrCloud. Runtime-State kommt aus API und ZooKeeper.</text>
 
   <rect x="36" y="110" width="410" height="245" class="panel"/>
   <text x="60" y="142" class="section">1. Request-Pfad</text>
   <rect x="66" y="175" width="145" height="78" class="box2"/><text x="88" y="207" class="label">Moodle</text><text x="88" y="229" class="small">Global Search</text>
-  <rect x="270" y="175" width="145" height="78" class="muted"/><text x="292" y="207" class="label">Proxy</text><text x="292" y="229" class="small">TLS + Routing</text>
-  <line x1="211" y1="214" x2="270" y2="214" class="arrow"/>
-  <text x="66" y="294" class="small">Standalone: Proxy erzwingt URL/Core-Isolation.</text>
-  <text x="66" y="318" class="small">SolrCloud: Collection-ACLs erzwingen Isolation direkt in Solr.</text>
+  <rect x="270" y="175" width="145" height="78" class="muted"/><text x="292" y="202" class="label">Proxy</text><text x="292" y="224" class="small">Caddy</text><text x="292" y="242" class="small">Apache/Nginx</text>
+  <text x="66" y="294" class="small">Standalone: Proxy erzwingt Isolation.</text>
+  <text x="66" y="318" class="small">SolrCloud: Collection-ACLs isolieren direkt in Solr.</text>
 
   <rect x="500" y="110" width="445" height="245" class="panel"/>
   <text x="524" y="142" class="section">2. Solr Runtime</text>
   <rect x="535" y="176" width="170" height="95" class="box"/><text x="558" y="207" class="label">Solr API</text><text x="558" y="230" class="small">/select /update</text><text x="558" y="250" class="small">/schema /admin</text>
   <rect x="750" y="176" width="160" height="95" class="store" rx="10"/><ellipse cx="830" cy="176" rx="80" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="783" y="209" class="label">Indexdaten</text><text x="780" y="232" class="small">Cores/Collections</text>
-  <line x1="415" y1="214" x2="535" y2="214" class="arrow"/>
-  <line x1="705" y1="223" x2="750" y2="223" class="dash"/>
-  <text x="535" y="310" class="small">AuthN/AuthZ kommt aus Security API; SolrCloud persistiert Security-State in ZooKeeper.</text>
+  <text x="535" y="310" class="small">AuthN/AuthZ: Security API. SolrCloud persistiert in ZooKeeper.</text>
 
   <rect x="995" y="110" width="360" height="245" class="panel"/>
   <text x="1019" y="142" class="section">3. Runtime-State</text>
   <rect x="1028" y="176" width="145" height="86" class="store" rx="10"/><ellipse cx="1100" cy="176" rx="72" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="1057" y="208" class="label">Security API</text><text x="1046" y="232" class="small">User + Rollen</text>
   <rect x="1195" y="176" width="125" height="86" class="store" rx="10"/><ellipse cx="1257" cy="176" rx="62" ry="11" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="1224" y="208" class="label">ZooKeeper</text><text x="1218" y="232" class="small">Cloud-Truth</text>
-  <path d="M1173 219 C1186 219 1188 219 1195 219" class="blue"/>
-  <text x="1028" y="304" class="small">Runtime-Wahrheit: API lesen, nicht raten.</text>
+  <text x="1028" y="304" class="small">Live-API ist maßgebliche Runtime-Quelle.</text>
   <text x="1028" y="328" class="codehi">solr-tenant.sh runtime-truth</text>
 
   <rect x="1405" y="110" width="355" height="245" class="legend"/>
@@ -47,42 +43,38 @@
   <line x1="1430" y1="312" x2="1458" y2="312" class="rose"/><text x="1466" y="316" class="small">Guardrail / Validierung</text>
 
   <rect x="36" y="395" width="560" height="315" class="mgmt"/>
-  <text x="60" y="430" class="section">Tenant- und Core-Management</text>
-  <text x="70" y="466" class="codehi">Tenant anlegen</text><text x="70" y="488" class="code">docker exec solr /opt/solr/scripts/solr-tenant.sh create schule_a --cores eLeDia_core_a</text>
-  <text x="70" y="526" class="codehi">Core/Collection hinzufügen</text><text x="70" y="548" class="code">docker exec solr /opt/solr/scripts/solr-tenant.sh core-add schule_a --core eLeDia_core_b</text>
-  <text x="70" y="586" class="codehi">Passwort rotieren oder setzen</text><text x="70" y="608" class="code">docker exec solr /opt/solr/scripts/solr-tenant.sh passwd schule_a --password '...'</text>
-  <text x="70" y="646" class="small">Gleiche CLI für Standalone und SolrCloud; der Modus kommt aus SOLR_MODE.</text>
-  <text x="70" y="672" class="small">Standalone: gemeinsame Tenant-Rolle + Proxy-Isolation. SolrCloud: tenant-&lt;name&gt; Rolle + Collection ACLs.</text>
+  <text x="60" y="430" class="section">Tenant-Management</text>
+  <text x="70" y="466" class="codehi">Tenant anlegen</text><text x="70" y="488" class="code">solr-tenant.sh create schule_a --cores eLeDia_core_a</text>
+  <text x="70" y="526" class="codehi">Core hinzufügen</text><text x="70" y="548" class="code">solr-tenant.sh core-add schule_a --core eLeDia_core_b</text>
+  <text x="70" y="586" class="codehi">Passwort rotieren oder setzen</text><text x="70" y="608" class="code">solr-tenant.sh passwd schule_a --password '...'</text>
+  <text x="70" y="646" class="small">Gleiche CLI für Standalone und SolrCloud.</text>
+  <text x="70" y="672" class="small">Standalone: Proxy-Isolation. SolrCloud: Collection ACLs.</text>
 
   <rect x="635" y="395" width="555" height="315" class="mgmt"/>
   <text x="659" y="430" class="section">SOT, Drift und Runtime-Wahrheit</text>
   <text x="669" y="466" class="codehi">Desired State anwenden</text><text x="669" y="488" class="code">solr-tenant.sh apply</text>
-  <text x="669" y="526" class="codehi">tenants.env + .env gegen Runtime erzwingen</text><text x="669" y="548" class="code">solr-tenant.sh sync-sot</text>
-  <text x="669" y="586" class="codehi">Runtime-Wahrheit aus API/ZooKeeper holen</text><text x="669" y="608" class="code">solr-tenant.sh runtime-truth</text>
-  <text x="669" y="646" class="codehi">Drift prüfen / beheben</text><text x="669" y="668" class="code">solr-tenant.sh drift-detect  &amp;&amp;  solr-tenant.sh drift-remediate</text>
+  <text x="669" y="526" class="codehi">SOT gegen Runtime erzwingen</text><text x="669" y="548" class="code">solr-tenant.sh sync-sot</text>
+  <text x="669" y="586" class="codehi">Live-State aus API/ZooKeeper</text><text x="669" y="608" class="code">solr-tenant.sh runtime-truth</text>
+  <text x="669" y="646" class="codehi">Drift prüfen / beheben</text><text x="669" y="668" class="code">solr-tenant.sh drift-detect</text><text x="669" y="690" class="code">solr-tenant.sh drift-remediate</text>
 
   <rect x="1228" y="395" width="532" height="315" class="guard"/>
   <text x="1252" y="430" class="section">Runtime-Guardrails</text>
-  <text x="1262" y="466" class="ok">✓ ZooKeeper erreichbar: Collections API + /security.json aktiv</text>
-  <text x="1262" y="492" class="ok">✓ tenants.env wird via apply/sync-sot in die Runtime gespiegelt</text>
-  <text x="1262" y="518" class="ok">✓ runtime-truth liest User/Rollen/Collections aus der API</text>
-  <text x="1262" y="544" class="ok">✓ drift-detect vergleicht tenants.env gegen Runtime-State</text>
-  <text x="1262" y="570" class="ok">✓ all-Permission bleibt zuletzt, Tenant-Regeln zuerst</text>
-  <text x="1262" y="596" class="ok">✓ admin ist Rolle, nie Permission-Name</text>
-  <text x="1262" y="622" class="warn">✕ unknown API users werden bei sync-sot rotiert</text>
-  <text x="1262" y="648" class="warn">✕ ungültige AuthZ-Payloads werden vor Solr geblockt</text>
-  <text x="1262" y="674" class="warn">✕ 403 nach passwd wird durch Rollen/ACL-Rebuild verhindert</text>
+  <text x="1262" y="466" class="ok">✓ ZooKeeper + Collections API erreichbar</text>
+  <text x="1262" y="492" class="ok">✓ tenants.env wird via sync-sot gespiegelt</text>
+  <text x="1262" y="518" class="ok">✓ runtime-truth liest User/Rollen/Collections</text>
+  <text x="1262" y="544" class="ok">✓ drift-detect vergleicht SOT gegen Runtime</text>
+  <text x="1262" y="570" class="ok">✓ Tenant-Regeln vor Fallback all</text>
+  <text x="1262" y="596" class="warn">✕ unbekannte API-User werden rotiert</text>
+  <text x="1262" y="622" class="warn">✕ ungültige AuthZ-Payloads blockiert</text>
+  <text x="1262" y="648" class="warn">✕ passwd triggert Rollen/ACL-Rebuild</text>
 
-  <path d="M705 610 C760 610 785 610 835 610" class="blue"/>
-  <path d="M910 395 C940 330 1000 275 1095 262" class="blue"/>
-  <path d="M1180 610 C1210 610 1220 610 1228 610" class="rose"/>
 
   <rect x="36" y="755" width="1724" height="250" class="panel"/>
-  <text x="60" y="790" class="section">Was ist welche Wahrheit?</text>
+  <text x="60" y="790" class="section">Wahrheitsquellen und Zuständigkeiten</text>
   <rect x="70" y="820" width="390" height="135" class="box2"/><text x="92" y="852" class="label">tenants.env</text><text x="92" y="879" class="small">gewünschter Tenant-Sollzustand</text><text x="92" y="903" class="small">User, Passwort, Cores, ACTIVE</text><text x="92" y="927" class="code">solr-tenant.sh apply</text>
-  <rect x="500" y="820" width="390" height="135" class="store" rx="12"/><ellipse cx="695" cy="820" rx="195" ry="12" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="522" y="852" class="label">Solr Security API</text><text x="522" y="879" class="small">Runtime-Wahrheit für User/Rollen/Permissions</text><text x="522" y="903" class="code">/admin/authentication</text><text x="522" y="927" class="code">/admin/authorization</text>
-  <rect x="930" y="820" width="390" height="135" class="store" rx="12"/><ellipse cx="1125" cy="820" rx="195" ry="12" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="952" y="852" class="label">ZooKeeper / Collections API</text><text x="952" y="879" class="small">SolrCloud-Wahrheit für Collections</text><text x="952" y="903" class="code">/admin/collections?action=LIST</text><text x="952" y="927" class="code">ZK_HOST=localhost:9983</text>
-  <rect x="1360" y="820" width="360" height="135" class="mgmt"/><text x="1382" y="852" class="label">Export für Betrieb</text><text x="1382" y="879" class="small">Hostvars aus tenants.env</text><text x="1382" y="903" class="code">solr-tenant.sh export</text><text x="1382" y="927" class="small">Runtime lesen: runtime-truth</text>
+  <rect x="500" y="820" width="390" height="135" class="store" rx="12"/><ellipse cx="695" cy="820" rx="195" ry="12" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="522" y="852" class="label">Solr Security API</text><text x="522" y="879" class="small">User, Rollen, Permissions</text><text x="522" y="903" class="code">/admin/authentication</text><text x="522" y="927" class="code">/admin/authorization</text>
+  <rect x="930" y="820" width="390" height="135" class="store" rx="12"/><ellipse cx="1125" cy="820" rx="195" ry="12" fill="#141414" stroke="#c2410c" stroke-width="1.6"/><text x="952" y="852" class="label">ZooKeeper / Collections API</text><text x="952" y="879" class="small">SolrCloud-Collections</text><text x="952" y="903" class="code">/admin/collections?action=LIST</text><text x="952" y="927" class="code">ZK_HOST=localhost:9983</text>
+  <rect x="1360" y="820" width="360" height="135" class="mgmt"/><text x="1382" y="852" class="label">Export für Betrieb</text><text x="1382" y="879" class="small">Hostvars aus tenants.env</text><text x="1382" y="903" class="code">solr-tenant.sh export</text><text x="1382" y="927" class="small">Live-State: runtime-truth</text>
 
   <text x="1510" y="1086" class="tiny">© 2026 eLeDia GmbH</text>
 </svg>

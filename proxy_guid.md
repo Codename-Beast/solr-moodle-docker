@@ -4,8 +4,7 @@ Kurzguide für Reverse-Proxy-Setups vor dem Solr/Moodle-Stack.
 
 > ✅ **Caddy ist hier bereits verifiziert.**
 > 
-> Die Solr-Ansible-Rolle richtet aktuell nur **Apache** und **Caddy** ein.
-> **Nginx** ist hier als Referenz dokumentiert, aber nicht durch die Rolle provisioniert.
+> Caddy, Apache und Nginx sind dokumentiert. Apache und Nginx haben Generatoren; Caddy kann über `solr-tenant.sh caddy-config` erzeugt werden.
 
 ---
 
@@ -31,7 +30,7 @@ Die Proxy-Schicht soll:
 |---|---:|---|
 | **Caddy** | ✅ empfohlen | Funktioniert bereits, einfache Konfiguration, gute Defaults |
 | **Apache** | ✅ unterstützt | Wird von der Solr-Ansible-Rolle mit eingerichtet |
-| **Nginx** | 🟡 manuell | Als Referenz unten, aber nicht durch die Rolle gesetzt |
+| **Nginx** | ✅ unterstützt | Generator unter `nginx/generate-nginx-config.sh` |
 
 ---
 
@@ -133,7 +132,7 @@ solr.example.org {
 
 ### Status
 
-Nginx ist als Vorlage sinnvoll, wird aber aktuell **nicht** von der Ansible-Rolle provisioniert.
+Nginx wird über `nginx/generate-nginx-config.sh` als Datei generiert. Die erzeugte Datei enthält zwei klare Upstream-Varianten: Host-Port oder Docker-Netzwerk.
 
 ### Beispiel
 
@@ -203,11 +202,11 @@ Wenn du einen robusten und schnellen Weg willst:
 
 1. **Caddy** nehmen, wenn du maximale Einfachheit willst
 2. **Apache**, wenn du die Ansible-Rolle direkt nutzen willst
-3. **Nginx** nur dann, wenn du es bewusst manuell pflegen willst
+3. **Nginx**, wenn Nginx der bevorzugte Standard auf dem Zielsystem ist
 
 ---
 
 ## 📝 Merksatz
 
 **Caddy funktioniert bereits.**
-Die Solr-Ansible-Rolle automatisiert aktuell nur **Apache** und **Caddy** – **Nginx** bleibt eine manuelle Referenz.
+Caddy, Apache und Nginx sind als Proxy-Wege beschrieben; pro Installation genau eine Upstream-Variante aktivieren.

@@ -26,7 +26,7 @@ Ein Solr-Stack für Moodle Global Search. Jeder Tenant bekommt eigene Zugangsdat
 | Bereich | Links |
 |---|---|
 | 🚀 Start | [Voraussetzungen](#-voraussetzungen) · [Schnellstart](#-schnellstart) |
-| 🧱 Aufbau | [Architektur](#-architektur) · [Verzeichnisstruktur](#-verzeichnisstruktur) |
+| 🧱 Aufbau | [Architektur](#-architektur) · [Reverse Proxy](#-reverse-proxy) · [Moodle einstellen](#-moodle-einstellen) · [Verzeichnisstruktur](#-verzeichnisstruktur) |
 | ⚙ Modis | [Tenant-Verwaltung](#-tenant-verwaltung) · [SolrCloud](#-solrcloud) · [Konfiguration](#-konfiguration) |
 | 🔐 Qualität | [Sicherheit](#-sicherheit) · [Tests](#-tests) |
 | 📚 Doku | [Weitere Dokumentation](#-weitere-dokumentation) · [Kompatibilität](#kompatibilität) |
@@ -97,6 +97,74 @@ Moodle -> Reverse Proxy -> 127.0.0.1:${SOLR_PORT} -> Solr Core/Collection
 ```
 
 Details zu ZooKeeper, Security API und Persistenz: [docs/architecture-runtime.svg](docs/architecture-runtime.svg)
+
+---
+
+## 🌐 Reverse Proxy
+
+Solr bleibt lokal gebunden (`SOLR_BIND=127.0.0.1`). Externe Zugriffe laufen über einen Reverse Proxy mit TLS.
+
+| Proxy | Status | Konfiguration |
+|---|---|---|
+| Caddy | empfohlen, bereits unterstützt | `docker exec <containername> /opt/solr/scripts/solr-tenant.sh caddy-config --domain solr.example.com` |
+| Apache | unterstützt, Generator vorhanden | `./apache/generate-apache-config.sh` |
+| Nginx | unterstützt, Generator vorhanden | `./nginx/generate-nginx-config.sh` |
+
+### Proxy-Betriebsvarianten
+
+Variante A: Proxy läuft auf dem Host und leitet an den lokal gebundenen Solr-Port weiter.
+
+```text
+https://solr.example.com -> 127.0.0.1:${SOLR_PORT} -> Solr
+```
+
+Variante B: Proxy läuft im Docker-Netzwerk und leitet an den Compose-Service weiter.
+
+```text
+https://solr.example.com -> solr:8983 -> Solr
+```
+
+Für eine aktive Konfiguration genau eine Upstream-Variante verwenden. Nicht gleichzeitig Host-Port und Docker-Service mischen.
+
+Wichtige Regeln:
+
+- TLS endet am Proxy.
+- `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto` und `X-Forwarded-For` müssen korrekt gesetzt werden.
+- Basic-Auth muss zum Solr-Backend weitergereicht werden.
+- Keine unnötigen Pfad-Rewrites einbauen.
+- Standalone-Tenant-Isolation braucht Proxy-Regeln; SolrCloud nutzt zusätzlich Collection-ACLs.
+
+---
+
+## 🎓 Moodle einstellen
+
+In Moodle unter `Website-Administration -> Plugins -> Suche -> Solr` bzw. `Global Search`:
+
+| Moodle-Feld | Wert |
+|---|---|
+| Hostname | öffentlicher Proxy-Hostname, z.B. `solr.example.com`, oder interner Host bei direktem internen Zugriff |
+| Port | `443` bei HTTPS über Proxy, sonst der interne Solr-Port |
+| Index name / Core / Collection | Core oder Collection des Tenants |
+| Username | Tenant-User aus `tenants.env`, z.B. `solr_schule_a` |
+| Password | Tenant-Passwort aus `tenants.env` |
+| Secure / HTTPS | nur aktivieren, wenn Moodle Solr über `https://` erreicht |
+
+### Wann Secure/HTTPS in Moodle aktivieren?
+
+Aktivieren, wenn Moodle den Solr-Endpunkt über den TLS-Proxy anspricht:
+
+```text
+Moodle -> https://solr.example.com:443/solr/... -> Proxy -> Solr
+```
+
+Nicht aktivieren, wenn Moodle intern direkt per HTTP mit Solr spricht:
+
+```text
+Moodle -> http://127.0.0.1:8983/solr/...
+Moodle -> http://solr:8983/solr/...
+```
+
+Merksatz: Die Moodle-Secure-Einstellung beschreibt die Verbindung von Moodle zum sichtbaren Solr-Endpunkt. Wenn diese URL `https://` ist, Secure aktivieren. Wenn sie `http://` ist, Secure aus lassen.
 
 ---
 
@@ -224,7 +292,7 @@ Alle Optionen stehen in `.env.example`. Die wichtigsten Werte:
 Ein paar Regeln sind hier hart gezogen:
 
 - Solr bleibt lokal gebunden: `SOLR_BIND=127.0.0.1`.
-- Externe Zugriffe laufen über Apache, Caddy oder einen anderen Reverse Proxy mit TLS.
+- Externe Zugriffe laufen über Caddy, Apache, Nginx oder einen anderen Reverse Proxy mit TLS.
 - `CHANGE_ME`-Passwörter werden beim Start abgelehnt.
 - Tenant-User bekommen nur die Rechte, die sie für ihre Cores oder Collections benötigen.
 

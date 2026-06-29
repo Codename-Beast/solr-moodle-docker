@@ -30,6 +30,10 @@ All notable changes to this project will be documented in this file.
 - Reverse-Proxy- und Architektur-Diagramme wurden in der Doku ergänzt.
 - `solr-tenant.sh runtime-truth` gibt die Runtime-Wahrheit aus der Live-Solr-API aus: Security API für User/Rollen/Permissions und in SolrCloud zusätzlich Collections API/ZooKeeper-State.
 - Die Architektur-SVGs für Runtime und Installation wurden größer, übersichtlicher und mit Legenden, CLI-Beispielen, Standalone/SolrCloud-Hinweisen sowie Runtime-Guardrails erweitert.
+- `setup.sh` wurde übersichtlicher gemacht: klarere Schritt-Ausgabe, Preflight-Checks, robuster Container-Healthcheck, konsistente `tenants.env`-Rechte und präzisere Abschlussbefehle.
+- Doku- und Example-Befehle nutzen `<containername>` statt einen festen Container-Namen, damit alternative `INSTANCE_NAME`-Setups nicht verwirren.
+- Nginx wurde als zusätzlicher Reverse-Proxy-Weg mit Template, Generator und README ergänzt; die Haupt-README beschreibt Caddy, Apache und Nginx sowie die zwei Upstream-Varianten Host-Port und Docker-Netzwerk.
+- Die README dokumentiert die Moodle-Solr-Einstellungen inklusive der Regel, wann die Moodle-Secure/HTTPS-Option aktiv sein muss.
 
 ### Changed
 - Der Test-Log-Fallback nutzt jetzt ein UID-spezifisches Verzeichnis unter `/tmp`, damit alte nicht beschreibbare Fallback-Logs lokale Testläufe nicht blockieren.

@@ -23,8 +23,28 @@ LOG_FILE="${LOG_DIR}/solr-${INSTANCE_NAME}.log"
 _log() {
   local ts
   ts="$(date '+%Y-%m-%d %H:%M:%S')"
-  printf '[%s] %s\n' "$ts" "$* "
-  printf '[%s] %s\n' "$ts" "$* " >> "$LOG_FILE" 2>/dev/null || true
+  printf '[%s] %s\n' "$ts" "$*"
+  printf '[%s] %s\n' "$ts" "$*" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+_print_header() {
+  printf '\n'
+  printf '╔════════════════════════════════════════════════════════════╗\n'
+  printf '║  eLeDia Solr Multi-Tenant Setup                           ║\n'
+  printf '╚════════════════════════════════════════════════════════════╝\n'
+}
+
+_print_step() {
+  local nr="$1" title="$2"
+  printf '\n▶ Step %s: %s\n' "$nr" "$title"
+  _log "Step ${nr}: ${title}"
+}
+
+_require_command() {
+  local cmd="$1" hint="$2"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    _die "Required command missing: ${cmd}. ${hint}"
+  fi
 }
 
 # _die: Log an error message and exit with code 1.
@@ -73,6 +93,14 @@ if [ ! -f "docker-compose.yml" ]; then
   exit 1
 fi
 
+_print_header
+_require_command docker "Install Docker Engine with Compose v2."
+_require_command openssl "OpenSSL is required to generate secure passwords."
+if ! docker compose version >/dev/null 2>&1; then
+  printf 'ERROR: docker compose v2 is required.\n' >&2
+  exit 1
+fi
+
 # Setup log file early (before _log works)
 mkdir -p "$LOG_DIR" 2>/dev/null || {
   printf 'WARNING: Cannot create %s — continuing without file log\n' "$LOG_DIR" >&2
@@ -85,7 +113,7 @@ _log "=== setup.sh started ==="
 # ---------------------------------------------------------------------------
 # Step 1: .env setup
 # ---------------------------------------------------------------------------
-_log "Step 1: Environment configuration"
+_print_step "1" "Environment configuration"
 
 FIRST_INSTALL=0
 if [ ! -f ".env" ]; then
@@ -164,23 +192,23 @@ fi
 # ---------------------------------------------------------------------------
 # Step 2: tenants.env
 # ---------------------------------------------------------------------------
-_log "Step 2: tenants.env"
+_print_step "2" "Tenant source file"
 
 if [ ! -f "tenants.env" ]; then
   touch "tenants.env"
   chown 8983:8983 "tenants.env" 2>/dev/null || true
-  chmod 644 "tenants.env"
-  _log "  Created empty tenants.env"
+  chmod 660 "tenants.env"
+  _log "  Created empty tenants.env (mode 660)"
 else
   chown 8983:8983 "tenants.env" 2>/dev/null || true
-  chmod 644 "tenants.env"
-  _log "  tenants.env already exists — preserving"
+  chmod 660 "tenants.env"
+  _log "  tenants.env already exists — preserving content, enforcing mode 660"
 fi
 
 # ---------------------------------------------------------------------------
 # Step 3: Logging
 # ---------------------------------------------------------------------------
-_log "Step 3: Log directory"
+_print_step "3" "Log directory"
 
 mkdir -p "$LOG_DIR"
 # Solr container UID 8983 can write native logs; docker group can read them on host.
@@ -205,9 +233,11 @@ fi
 # ---------------------------------------------------------------------------
 # Step 4: Logrotate
 # ---------------------------------------------------------------------------
-_log "Step 4: Logrotate"
+_print_step "4" "Logrotate"
 
 LOGROTATE_FILE="/etc/logrotate.d/solr-eledia"
+LOGROTATE_GROUP="root"
+getent group docker >/dev/null 2>&1 && LOGROTATE_GROUP="docker"
 if [ -w "/etc/logrotate.d" ] || [ "$(id -u)" = "0" ]; then
   cat > "$LOGROTATE_FILE" <<EOF
 ${LOG_ROOT}/solr-*.log {
@@ -217,10 +247,10 @@ ${LOG_ROOT}/solr-*.log {
     missingok
     notifempty
     copytruncate
-    create 640 root docker
+    create 640 root ${LOGROTATE_GROUP}
 }
 EOF
-  _log "  Logrotate config written to $LOGROTATE_FILE"
+  _log "  Logrotate config written to $LOGROTATE_FILE (group=${LOGROTATE_GROUP})"
 else
   _log "  WARNING: Cannot write to /etc/logrotate.d (run as root for logrotate setup)"
 fi
@@ -228,37 +258,37 @@ fi
 # ---------------------------------------------------------------------------
 # Step 5: Build init image
 # ---------------------------------------------------------------------------
-_log "Step 5: Building eLeDia-solr-init image"
+_print_step "5" "Build init image"
 
 if ! docker compose build eLeDia-solr-init 2>&1 | tee -a "$LOG_FILE"; then
-  _die "docker compose build failed"
+  _die "docker compose build eLeDia-solr-init failed"
 fi
 
 # ---------------------------------------------------------------------------
 # Step 6: Start stack
 # ---------------------------------------------------------------------------
-_log "Step 6: Starting Solr"
+_print_step "6" "Start Solr"
 
 docker compose up -d 2>&1 | tee -a "$LOG_FILE"
 
-# Wait for healthy (max 120s)
-_log "  Waiting for Solr to become healthy (max 120s)..."
+# Wait for healthy (max 180s)
+CONTAINER_NAME="${INSTANCE_NAME}-solr"
+_log "  Waiting for ${CONTAINER_NAME} to become healthy (max 180s)..."
 ELAPSED=0
 HEALTHY=0
-while [ $ELAPSED -lt 120 ]; do
-  STATUS="$(docker compose ps --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 | cut -d'"' -f4 || echo '')"
+while [ "$ELAPSED" -lt 180 ]; do
+  STATUS="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME" 2>/dev/null || echo 'missing')"
+  printf '  [%3ss] %s\n' "$ELAPSED" "$STATUS"
   if [ "$STATUS" = "healthy" ]; then
     HEALTHY=1
     break
   fi
   sleep 5
   ELAPSED=$((ELAPSED + 5))
-  printf '.'
 done
-printf '\n'
 
 if [ "$HEALTHY" = "0" ]; then
-  _log "ERROR: Solr did not become healthy within 120 seconds"
+  _log "ERROR: Solr did not become healthy within 180 seconds"
   _log "  Container logs:"
   docker compose logs --tail=50 2>&1 | tee -a "$LOG_FILE"
 
@@ -286,24 +316,26 @@ docker compose logs --no-color >> "$LOG_FILE" 2>&1 || true
 
 
 printf '\n'
-printf '╔══════════════════════════════════════════════════════════╗\n'
-printf '║  Solr Multi-Tenant — Setup Complete                     ║\n'
-printf '╠══════════════════════════════════════════════════════════╣\n'
-printf '║  Instance:  %-44s║\n' "$INSTANCE_NAME"
-printf '║  Solr URL:  http://127.0.0.1:%-27s║\n' "${SOLR_PORT}/solr"
-printf '║  Logs:      %-44s║\n' "$LOG_DIR/"
-printf '╠══════════════════════════════════════════════════════════╣\n'
-printf '║  Next steps:                                             ║\n'
-printf '║  1. Add tenants:                                         ║\n'
-printf '║     docker exec %s-solr \\\n' "$INSTANCE_NAME"
-printf '║       /opt/solr/scripts/solr-tenant.sh create <name> \\ ║\n'
-printf '║       --cores <core1>[,<core2>]                          ║\n'
-printf '║                                                          ║\n'
-printf '║  2. List tenants:                                        ║\n'
-printf '║     docker exec %s-solr \\\n' "$INSTANCE_NAME"
-printf '║       /opt/solr/scripts/solr-tenant.sh list              ║\n'
-printf '╚══════════════════════════════════════════════════════════╝\n'
+printf '╔════════════════════════════════════════════════════════════╗\n'
+printf '║  Solr Multi-Tenant — Setup Complete                       ║\n'
+printf '╠════════════════════════════════════════════════════════════╣\n'
+printf '║  Instance:   %-44s║\n' "$INSTANCE_NAME"
+printf '║  Container:  %-44s║\n' "$CONTAINER_NAME"
+printf '║  Solr URL:   http://127.0.0.1:%-28s║\n' "${SOLR_PORT}/solr"
+printf '║  Logs:       %-44s║\n' "$LOG_DIR/"
+printf '╚════════════════════════════════════════════════════════════╝\n'
 printf '\n'
-printf '  Admin credentials are in: .env\n'
-printf '  Tenant credentials are in: tenants.env\n'
+printf 'Next commands:\n'
+printf '  Healthcheck:\n'
+printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh healthcheck\n' "$CONTAINER_NAME"
+printf '  Tenant anlegen:\n'
+printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh create <name> --cores <core1>[,<core2>]\n' "$CONTAINER_NAME"
+printf '  Tenants aus Runtime-API lesen:\n'
+printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh runtime-truth\n' "$CONTAINER_NAME"
+printf '  Tenants listen:\n'
+printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh list\n' "$CONTAINER_NAME"
+printf '\n'
+printf 'Files:\n'
+printf '  Admin credentials:  .env\n'
+printf '  Tenant credentials: tenants.env\n'
 printf '\n'
