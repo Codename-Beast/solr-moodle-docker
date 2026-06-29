@@ -10,7 +10,7 @@ Kurzguide für Reverse-Proxy-Setups vor dem Solr/Moodle-Stack.
 
 ## 🧭 Ziel
 
-Dieses Dokument zeigt, wie der Stack hinter einem Reverse Proxy betrieben wird – sowohl für:
+Diese Anleitung soll zeigen, wie der Stack hinter einem Reverse Proxy betrieben wird – sowohl für:
 
 - **Standalone**-Solr
 - **SolrCloud**-Solr
@@ -20,7 +20,7 @@ Die Proxy-Schicht soll:
 - TLS terminieren
 - saubere Host-/Forwarded-Header setzen
 - Solr/Pfad-Routing stabil halten
-- Moodle und Solr konsistent erreichbar machen
+- Solr erreichbar machen
 
 ---
 
@@ -28,7 +28,7 @@ Die Proxy-Schicht soll:
 
 | Proxy | Status | Hinweis |
 |---|---:|---|
-| **Caddy** | ✅ empfohlen | Funktioniert bereits, einfache Konfiguration, gute Defaults |
+| **Caddy** | ✅ empfohlen | Einfache Konfiguration |
 | **Apache** | ✅ unterstützt | Wird von der Solr-Ansible-Rolle mit eingerichtet |
 | **Nginx** | ✅ unterstützt | Generator unter `nginx/generate-nginx-config.sh` |
 
@@ -181,7 +181,6 @@ solr.example.org {
 - `ProxyPreserveHost On` ist hier wichtig
 - Wenn Apache als Container läuft, `127.0.0.1` durch den Docker-DNS-Namen ersetzen, z. B. `${INSTANCE_NAME}-solr`, oder einen expliziten Alias wie `solr`.
 - `X-Forwarded-Proto` muss korrekt gesetzt sein, sonst geraten Redirects und Session-Cookies durcheinander
-- In SolrCloud darf der Proxy nicht „intelligent“ umschreiben – einfach weiterleiten
 
 ---
 
@@ -208,14 +207,6 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   }
-
-  location /moodle/ {
-    proxy_pass http://moodle:80/moodle/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  }
 }
 ```
 
@@ -237,34 +228,8 @@ Die Rolle deckt aktuell folgende Proxy-Varianten ab:
 
 Das heißt konkret:
 
-- Caddy ist bereits als funktionierender Zielweg dokumentiert
+- Caddy ist als funktionierender Zielweg dokumentiert
 - Apache ist als klassischer Zielweg vorgesehen
 - Nginx musst du aktuell manuell konfigurieren
 
 ---
-
-## 🧪 Checkliste
-
-- [ ] Reverse Proxy termininiert TLS
-- [ ] `Host` und `X-Forwarded-*` werden korrekt gesetzt
-- [ ] Solr ist unter dem erwarteten Pfad erreichbar
-- [ ] Moodle-Redirects funktionieren hinter dem Proxy
-- [ ] SolrCloud-Requests landen ohne zusätzliche Pfad-Manipulation beim Backend
-- [ ] Apache/Caddy wurden bevorzugt, wenn die Ansible-Rolle die Konfiguration setzen soll
-
----
-
-## ✅ Empfehlung
-
-Wenn du einen robusten und schnellen Weg willst:
-
-1. **Caddy** nehmen, wenn du maximale Einfachheit willst
-2. **Apache**, wenn du die Ansible-Rolle direkt nutzen willst
-3. **Nginx**, wenn Nginx der bevorzugte Standard auf dem Zielsystem ist
-
----
-
-## 📝 Merksatz
-
-**Caddy funktioniert bereits.**
-Nach außen HTTPS, intern HTTP zum Solr-Upstream. Pro Installation genau eine Upstream-Variante aktivieren: Host-Port oder Docker-Netzwerk mit passendem Containername und Port.
