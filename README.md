@@ -97,9 +97,9 @@ Solr bleibt lokal gebunden (`SOLR_BIND=127.0.0.1`). Externe Zugriffe laufen übe
 
 | Proxy | Status | Konfiguration |
 |---|---|---|
-| Caddy | empfohlen, bereits unterstützt | `docker exec <containername> /opt/solr/scripts/solr-tenant.sh caddy-config --domain solr.example.com` |
-| Apache | unterstützt, Generator vorhanden | `./apache/generate-apache-config.sh` |
-| Nginx | unterstützt, Generator vorhanden | `./nginx/generate-nginx-config.sh` |
+| Caddy | empfohlen, unterstützt | `docker exec <containername> /opt/solr/scripts/solr-tenant.sh caddy-config --domain solr.example.com` |
+| Apache | unterstützt | `./apache/generate-apache-config.sh` |
+| Nginx | unterstützt, | `./nginx/generate-nginx-config.sh` |
 
 ### Proxy-Betriebsvarianten
 
@@ -122,8 +122,7 @@ Wichtige Regeln:
 - TLS endet am Proxy.
 - `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto` und `X-Forwarded-For` müssen korrekt gesetzt werden.
 - Basic-Auth muss zum Solr-Backend weitergereicht werden.
-- Keine unnötigen Pfad-Rewrites einbauen.
-- Standalone-Tenant-Isolation braucht Proxy-Regeln; SolrCloud nutzt zusätzlich Collection-ACLs.
+- Standalone-Tenant-Isolation bräuchte Proxy-Regeln; SolrCloud nutzt Collection-ACLs.
 
 ---
 
