@@ -30,8 +30,7 @@ Solr bleibt standardmäßig auf `127.0.0.1` gebunden. Externe Zugriffe laufen ü
 | Komponente | Minimum |
 |---|---|
 | Docker | 24+ inkl. Compose-Plugin |
-| Solr | 9.10.1, im Image enthalten |
-| Moodle | 4.1 bis 5.x |
+| Solr | 9.10.1 |
 
 ---
 
@@ -275,12 +274,8 @@ Die CI prüft Lint, Security Scan, Standalone und SolrCloud inklusive Tenant-Iso
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Komponenten, Bootstrap, Runtime |
 | [proxy_guid.md](proxy_guid.md) | Reverse Proxy mit Caddy, Apache und Nginx |
-| [apache/README.md](apache/README.md) | Apache-Generator |
-| [nginx/README.md](nginx/README.md) | Nginx-Generator und Container-Modus |
-| [docs/CI-CD.md](docs/CI-CD.md) | CI und lokale Checks |
-| [docs/monitoring.md](docs/monitoring.md) | Metriken und Logs |
 | [CHANGELOG.md](CHANGELOG.md) | Änderungshistorie |
 
 ---
 
-**eLeDia GmbH**
+**eLeDia GmbH** Developer : Bernd Schreistetter
