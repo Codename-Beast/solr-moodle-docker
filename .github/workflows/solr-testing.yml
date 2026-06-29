@@ -75,7 +75,8 @@ jobs:
         sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=${CI_SUPPORT_PW}/" .env
         echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
         touch tenants.env
-        chmod 666 tenants.env
+        sudo chown 8983:8983 tenants.env 2>/dev/null || true
+        chmod 660 tenants.env
 
     - name: Build and start Solr (Standalone Core)
       run: |
@@ -145,7 +146,8 @@ jobs:
         sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=${CI_SUPPORT_PW}/" .env
         echo 'ELEDIA_LOG_ROOT=/var/log/eledia' >> .env
         touch tenants.env
-        chmod 666 tenants.env
+        sudo chown 8983:8983 tenants.env 2>/dev/null || true
+        chmod 660 tenants.env
 
     - name: Build and start Solr (SolrCloud)
       run: |
