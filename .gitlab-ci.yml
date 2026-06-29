@@ -73,7 +73,8 @@ feature-full-test:
     - sed -i "s/^SOLR_ADMIN_PASSWORD=.*/SOLR_ADMIN_PASSWORD=$(openssl rand -hex 20)/" .env
     - sed -i "s/^SOLR_SUPPORT_PASSWORD=.*/SOLR_SUPPORT_PASSWORD=$(openssl rand -hex 20)/" .env
     - touch tenants.env
-    - chmod 666 tenants.env
+    - chown 8983:8983 tenants.env 2>/dev/null || true
+    - chmod 660 tenants.env
     - mkdir -p /var/log/eledia/solr && chmod 777 /var/log/eledia/solr
   script:
     - docker compose build eLeDia-solr-init solr
