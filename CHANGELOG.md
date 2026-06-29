@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - `powerinit.sh` und `_cloud_authz_api` validieren Solr-Permissions jetzt vor dem Schreiben bzw. API-Call und blockieren ungültige Permission-Namen wie `admin`. Root-cause: Solr lädt `admin` nur als Rolle, nicht als Permission-Name; ein solcher Eintrag führt beim RuleBasedAuthorizationPlugin zu `Permission with name admin is neither a pre-defined permission nor qualifies as a custom permission`.
+- `_cloud_authz_api` lehnt zusätzlich ungültiges JSON und nicht-numerische `delete-permission`-Payloads ab, damit Solr Security API-Fehler nicht erst als eingebettete Runtime-Fehler sichtbar werden.
 - `solr-tenant.sh passwd --password` erzwingt in SolrCloud nach der Credential-Rotation erneut Tenant-Rolle und Permission-Rebuild. Root-cause: Das Passwort wurde gesetzt, aber der Zugriff konnte danach mit HTTP 403 statt 200 enden, wenn der Live-Security-State die Tenant-Rolle/ACL nicht sauber nachgezogen hatte.
 - `solr-tenant-api.sh` und `solr-backup.sh` lesen Admin-Credentials jetzt gezielt aus `.env`, statt die komplette Datei zu sourcen/exportieren. Root-cause: `set -a; . .env` konnte ungewollte Variablen wie `PATH` in Tenant-/Backup-Prozesse übernehmen.
 - `_solr_api` schreibt Response- und Curl-Fehlerdateien jetzt in ein privates temporäres Verzeichnis und räumt es über `RETURN`-Trap sowie explizite Cleanup-Pfade auf. Root-cause: Direkte `/tmp/solr-api-*` Dateien waren unnötig breit sichtbar und konnten bei Abbruch liegen bleiben.

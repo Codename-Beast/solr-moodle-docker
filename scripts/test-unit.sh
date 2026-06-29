@@ -54,6 +54,16 @@ unit_tests() {
 
     # Security API delete-permission requires numeric indexes; names are accepted
     # only syntactically and returned as embedded errorMessages by Solr.
+
+
+    print_test "Runtime rejects non-numeric delete-permission payloads"
+    if grep -q 'delete-permission.*numeric permission index' scripts/solr-tenant-core.sh && \
+       grep -q 'Invalid JSON authorization payload' scripts/solr-tenant-core.sh; then
+        print_pass "Runtime guards reject invalid authorization JSON and named delete-permission payloads"
+    else
+        print_fail "Runtime guards do not reject invalid authorization JSON or named delete-permission payloads"
+    fi
+
     print_test "Tenant permission deletion uses numeric indexes"
     if grep -q -- '--argjson i .*delete-permission' scripts/solr-tenant-security.sh && \
        ! grep -q '_cloud_authz_api.*--arg [nx].*delete-permission' scripts/solr-tenant-security.sh && \

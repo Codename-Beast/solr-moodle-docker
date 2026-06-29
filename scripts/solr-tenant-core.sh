@@ -139,7 +139,22 @@ _cloud_auth_api() {
 # Solr accepts malformed permission names only late during permission loading;
 # reject them here so invalid names such as "admin" never reach runtime state.
 _validate_authz_payload() {
-  local payload="$1" name has_path has_method has_params predefined permission_name
+  local payload="$1" name has_path has_method has_params predefined permission_name delete_value delete_type
+  if ! printf '%s' "$payload" | jq -e . >/dev/null 2>&1; then
+    _log "ERROR" "Invalid JSON authorization payload; refusing Solr Security API call"
+    return 1
+  fi
+
+  if printf '%s' "$payload" | jq -e 'has("delete-permission")' >/dev/null 2>&1; then
+    delete_type="$(printf '%s' "$payload" | jq -r '."delete-permission" | type')"
+    delete_value="$(printf '%s' "$payload" | jq -r '."delete-permission"')"
+    if [ "$delete_type" != "number" ]; then
+      _log "ERROR" "Invalid delete-permission value '$delete_value'; Solr requires a numeric permission index"
+      return 1
+    fi
+    return 0
+  fi
+
   name="$(printf '%s' "$payload" | jq -r '."set-permission"?.name // empty' 2>/dev/null || true)"
   [ -z "$name" ] && return 0
 
