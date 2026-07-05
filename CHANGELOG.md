@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - `solr-backup.sh` unterscheidet jetzt nach `SOLR_MODE`: SolrCloud nutzt die Collections API (`action=BACKUP`) statt der Core-Level Replication API. Root cause: ein Replication-Snapshot einer einzelnen Replica enthält keinen Collection-State und ist als SolrCloud-Collection nicht wiederherstellbar.
+- Der SolrCloud-Backup-Pfad wird jetzt als `BACKUP_DIR` in den Container gegeben und über `solr.allowPaths` freigegeben (`SOLR_BACKUP_ALLOW_PATHS`). Root cause: Collections API BACKUP/RESTORE lehnt explizite `location`-Pfade ab, wenn sie nicht über `solr.allowPaths` erlaubt sind.
 - Standalone-Backups pollen jetzt `replication?command=details`, bis der Snapshot Erfolg meldet, und schlagen nach `BACKUP_WAIT_TIMEOUT` (Default 120s) fehl. Root cause: HTTP 200 der Replication API bedeutet nur "Backup angestoßen", nicht "abgeschlossen".
 - `solr-backup.sh` beendet sich mit Exit-Code ungleich null, wenn ein Core-/Collection-Backup fehlschlägt, damit Cron-Logs und Monitoring Teilfehler erkennen.
 - Von mehreren Tenants geteilte Cores werden vor dem Backup dedupliziert — derselbe Index wird nicht mehr einmal pro Tenant gesichert.

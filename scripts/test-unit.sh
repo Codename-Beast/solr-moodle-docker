@@ -384,6 +384,16 @@ unit_tests() {
         print_fail "Backup script does not branch on SOLR_MODE for SolrCloud backups"
     fi
 
+    print_test "SolrCloud backup path is allowed through solr.allowPaths"
+    if grep -q 'BACKUP_DIR:.*SOLR_BACKUP_DIR' docker-compose.yml && \
+       grep -q 'SOLR_BACKUP_ALLOW_PATHS:.*var/solr/data/backup' docker-compose.yml && \
+       grep -q -- '-Dsolr.allowPaths=${SOLR_BACKUP_ALLOW_PATHS:-/var/solr/data/backup}' docker-compose.yml && \
+       grep -q '^SOLR_BACKUP_DIR=/var/solr/data/backup' .env.example; then
+        print_pass "Compose exports BACKUP_DIR and allows the same path via solr.allowPaths"
+    else
+        print_fail "SolrCloud Collections API backup path is not allowed via solr.allowPaths"
+    fi
+
     # Regression: HTTP 200 from the Replication API only means the
     # backup was INITIATED — the script must poll command=details.
     print_test "Standalone backup verifies snapshot completion"
@@ -435,8 +445,8 @@ unit_tests() {
     fi
 
     # Behavioral test: execute solr-backup.sh end-to-end with a mocked curl.
-    # Verifies /2/11 as actual behavior, not just as source patterns:
-    #   cloud mode  -> exactly one Collections API BACKUP per UNIQUE core
+    # Verifies cloud/standalone branching, details polling and core dedup as
+    # actual behavior, not just as source patterns:
     #   standalone  -> failure when the snapshot never completes (exit 1)
     print_test "Backup behavior: cloud dedup + standalone completion check"
     local backup_behave_dir

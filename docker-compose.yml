@@ -87,6 +87,11 @@ services:
       SOLR_LOGS_REQUESTLOG_ENABLED: ${SOLR_LOGS_REQUESTLOG_ENABLED:-false}
       SOLR_SECURITY_MANAGER_ENABLED: ${SOLR_SECURITY_MANAGER_ENABLED:-false}
       SOLR_PING_HEALTHCHECK_FILE: ${SOLR_PING_HEALTHCHECK_FILE:-/var/solr/data/healthcheck/ping-enabled.txt}
+      # Backup path used by solr-backup.sh / solr-restore.sh. The same path
+      # must be allowed through solr.allowPaths for SolrCloud Collections API
+      # BACKUP/RESTORE requests with an explicit location parameter.
+      BACKUP_DIR: ${SOLR_BACKUP_DIR:-/var/solr/data/backup}
+      SOLR_BACKUP_ALLOW_PATHS: ${SOLR_BACKUP_ALLOW_PATHS:-/var/solr/data/backup}
       # Tenant SOT path override for Docker-in-Docker CI where file bind mounts are not reliable.
       TENANTS_ENV: ${TENANTS_ENV:-/opt/solr/tenants.env}
       SOLR_OPTS: >-
@@ -94,6 +99,7 @@ services:
         -Dsolr.usage.analytics.enabled=false
         -Dsolr.responses.stacktrace.enabled=false
         -Dsolr.security.allow.urls.enabled=false
+        -Dsolr.allowPaths=${SOLR_BACKUP_ALLOW_PATHS:-/var/solr/data/backup}
         ${SOLR_JAVA_OPTS:-}
     ulimits:
       nofile:
