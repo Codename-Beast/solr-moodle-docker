@@ -5,29 +5,29 @@ All notable changes to this project will be documented in this file.
 ## [3.4.11]
 
 ### Fixed
-- `solr-backup.sh` now branches on `SOLR_MODE`: SolrCloud uses the Collections API (`action=BACKUP`) instead of the core-level Replication API. Root cause: a replication snapshot of a single replica does not include collection state and is not restorable as a SolrCloud collection.
-- Standalone backups now poll `replication?command=details` until the snapshot reports success and fail after `BACKUP_WAIT_TIMEOUT` (default 120s). Root cause: HTTP 200 from the Replication API only means the backup was initiated, not completed.
-- `solr-backup.sh` exits non-zero when any core/collection backup fails, so cron logs and monitoring catch partial failures.
-- Cores shared by multiple tenants are deduplicated before backup — the same index is no longer backed up once per tenant.
-- `solr-tenant.sh healthcheck` now reports unhealthy when the bootstrap marker exists but Solr authentication never became active. Root cause: the bootstrap-needed branch always returned 0, so a permanently stuck security bootstrap kept the container "healthy" while Solr answered unauthenticated.
-- `upgrade-docker.sh` executes commands as argv arrays instead of `eval`-ing command strings, eliminating word-splitting and injection risks with paths containing spaces or shell metacharacters.
+- `solr-backup.sh` unterscheidet jetzt nach `SOLR_MODE`: SolrCloud nutzt die Collections API (`action=BACKUP`) statt der Core-Level Replication API. Root cause: ein Replication-Snapshot einer einzelnen Replica enthält keinen Collection-State und ist als SolrCloud-Collection nicht wiederherstellbar.
+- Standalone-Backups pollen jetzt `replication?command=details`, bis der Snapshot Erfolg meldet, und schlagen nach `BACKUP_WAIT_TIMEOUT` (Default 120s) fehl. Root cause: HTTP 200 der Replication API bedeutet nur "Backup angestoßen", nicht "abgeschlossen".
+- `solr-backup.sh` beendet sich mit Exit-Code ungleich null, wenn ein Core-/Collection-Backup fehlschlägt, damit Cron-Logs und Monitoring Teilfehler erkennen.
+- Von mehreren Tenants geteilte Cores werden vor dem Backup dedupliziert — derselbe Index wird nicht mehr einmal pro Tenant gesichert.
+- `solr-tenant.sh healthcheck` meldet jetzt unhealthy, wenn der Bootstrap-Marker existiert, aber die Solr-Authentifizierung nie aktiv wurde. Root cause: der Bootstrap-needed-Zweig gab immer 0 zurück, wodurch ein dauerhaft hängender Security-Bootstrap den Container "healthy" hielt, während Solr unauthentifiziert antwortete.
+- `upgrade-docker.sh` führt Kommandos als Argv-Arrays aus statt Kommando-Strings zu `eval`-en; das beseitigt Word-Splitting- und Injection-Risiken bei Pfaden mit Leerzeichen oder Shell-Metazeichen.
 
 ### Added
-- `scripts/solr-restore.sh`: restore path for both modes — Replication API (`command=restore` + `restorestatus` polling) in standalone, Collections API (`action=RESTORE`) in SolrCloud, with `--list` and `--force` options and latest-backup auto-selection.
-- `solr-tenant.sh passwd --password-stdin` reads the new password from stdin so orchestration layers never expose credentials in the host process list.
-- Unit tests cover all fixed issue classes: SolrCloud-aware backup, snapshot completion polling, core deduplication (also as a behavioral test with mocked curl), restore script presence, stuck-bootstrap healthcheck (RED-case regression), `--password-stdin`, and an eval-free upgrade wrapper.
+- `scripts/solr-restore.sh`: Restore-Pfad für beide Modi — Replication API (`command=restore` + `restorestatus`-Polling) im Standalone-Betrieb, Collections API (`action=RESTORE`) in SolrCloud, mit `--list`- und `--force`-Optionen und automatischer Auswahl des neuesten Backups.
+- `solr-tenant.sh passwd --password-stdin` liest das neue Passwort von stdin, damit Orchestrierungsschichten Credentials nie in der Host-Prozessliste sichtbar machen.
+- Unit-Tests decken alle behobenen Fehlerklassen ab: SolrCloud-bewusstes Backup, Snapshot-Completion-Polling, Core-Deduplizierung (zusätzlich als Verhaltenstest mit gemocktem curl), Restore-Skript, hängender Security-Bootstrap im Healthcheck, `--password-stdin` und eval-freier Upgrade-Wrapper.
 
 ### Changed
-- Backup log summary now reports succeeded and failed counts separately.
+- Die Backup-Log-Zusammenfassung weist erfolgreiche und fehlgeschlagene Sicherungen jetzt getrennt aus.
 
 ### Removed
-- None.
+- Keine.
 
 ### Deprecated
-- None.
+- Keine.
 
 ### Breaking Changes
-- None.
+- Keine.
 
 ## [3.4.10]
 
