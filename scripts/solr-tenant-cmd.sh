@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.10
+# Version: v3.4.11
 #
 # eLeDia Solr Tenant Commands — create, delete, enable, apply, export
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -244,17 +244,32 @@ cmd_enable() {
 
 # --- cmd_passwd ---
 cmd_passwd() {
-  local name="" provided_pass=""
+  local name="" provided_pass="" pass_from_stdin=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --password) provided_pass="$2"; shift 2 ;;
+      --password-stdin) pass_from_stdin=1; shift ;;
       --dry-run) DRY_RUN=1; shift ;;
       -*) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
       *) name="$1"; shift ;;
     esac
   done
 
-  [ -z "$name" ] && { printf 'Usage: solr-tenant.sh passwd <name> [--password <password>]\n' >&2; exit 1; }
+  [ -z "$name" ] && { printf 'Usage: solr-tenant.sh passwd <name> [--password <password> | --password-stdin]\n' >&2; exit 1; }
+
+  # --password-stdin: read the password from stdin so orchestration layers
+  # (Ansible) never expose it in the host process list (/proc/<pid>/cmdline).
+  if [ "$pass_from_stdin" = "1" ]; then
+    if [ -n "$provided_pass" ]; then
+      printf 'ERROR: --password and --password-stdin are mutually exclusive\n' >&2
+      exit 1
+    fi
+    IFS= read -r provided_pass || true
+    if [ -z "$provided_pass" ]; then
+      printf 'ERROR: --password-stdin given but stdin was empty\n' >&2
+      exit 1
+    fi
+  fi
   _validate_name "$name"
 
   if ! _tenant_exists "$name"; then
@@ -859,6 +874,15 @@ cmd_healthcheck() {
   fi
 
   if [ -n "$bootstrap_reason" ]; then
+    # if the bootstrap marker says bootstrap already ran but auth
+    # is still not active, security is stuck — report unhealthy instead of
+    # staying "healthy" forever with an unauthenticated Solr.
+    if [ "$bootstrap_state" = "present" ]; then
+      printf 'ERROR: Security bootstrap incomplete after bootstrap ran (system=%s auth=%s marker=%s): %s\n' \
+        "$system_code" "$auth_code" "$bootstrap_state" "$bootstrap_reason" >&2
+      _log "ERROR" "healthcheck: bootstrap-stuck (${bootstrap_reason}, marker=${bootstrap_state})"
+      return 1
+    fi
     printf '✔ Bootstrap needed (system=%s auth=%s marker=%s): %s\n' \
       "$system_code" "$auth_code" "$bootstrap_state" "$bootstrap_reason"
     _log "INFO" "healthcheck: bootstrap-needed (${bootstrap_reason}, marker=${bootstrap_state})"

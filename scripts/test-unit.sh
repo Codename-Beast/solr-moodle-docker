@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.10
+# Version: v3.4.11
 #
 # eLeDia Unit Tests — file checks, compose config, Dockerfile
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -215,6 +215,53 @@ unit_tests() {
         print_fail "Healthcheck still treats fresh instances as drift"
     fi
 
+    # Regression: bootstrap marker present but auth never became active
+    # must report UNHEALTHY (rc 1) instead of staying healthy forever.
+    print_test "Healthcheck fails when bootstrap ran but auth is inactive"
+    local healthcheck_stuck_dir
+    healthcheck_stuck_dir="$(mktemp -d)"
+    if (
+        set -euo pipefail
+        cd "$repo_root"
+        export SOLR_MODE=solrcloud
+        export SOLR_BASE="http://localhost:8983/solr"
+        export LOG_FILE="${healthcheck_stuck_dir}/tenant.log"
+        export SECURITY_JSON="${healthcheck_stuck_dir}/security.json"
+        export BOOTSTRAP_STATE_FILE="${healthcheck_stuck_dir}/state.env"
+        : > "${LOG_FILE}"
+        # Marker present (non-empty) = bootstrap already ran.
+        printf 'TENANTS_SHA=abc\nLAST_MODE=install\n' > "${BOOTSTRAP_STATE_FILE}"
+        printf '{}' > "${SECURITY_JSON}"
+        source scripts/solr-tenant-api.sh
+        source scripts/solr-tenant-core.sh
+        source scripts/solr-tenant-security.sh
+        source scripts/solr-tenant-cmd.sh
+
+        _load_admin_creds() {
+            export ADMIN_USER=admin ADMIN_PASS=secret
+        }
+
+        curl() {
+            case "$*" in
+                *"/admin/info/system"*) printf '200' ;;
+                *"/admin/authentication"*) printf '404' ;;
+                *) printf 'unexpected curl invocation: %s\n' "$*" >&2; return 2 ;;
+            esac
+        }
+
+        set +e
+        cmd_healthcheck >"${healthcheck_stuck_dir}/out" 2>"${healthcheck_stuck_dir}/err"
+        health_rc=$?
+        set -e
+        [ "$health_rc" -ne 0 ]
+        grep -q 'bootstrap' "${healthcheck_stuck_dir}/err"
+    ); then
+        print_pass "Healthcheck reports stuck security bootstrap as unhealthy"
+    else
+        print_fail "Healthcheck stays healthy although security bootstrap is stuck"
+    fi
+    rm -rf "$healthcheck_stuck_dir"
+
     print_test "docker-compose healthcheck uses tenant-aware command"
     if grep -q '/opt/solr/scripts/solr-tenant.sh healthcheck' docker-compose.yml; then
         print_pass "docker-compose healthcheck delegates to tenant-aware command"
@@ -324,6 +371,128 @@ unit_tests() {
     else
         print_fail "Backup credential loader still sources/exports arbitrary .env variables"
     fi
+
+    # Regression: backup must branch on SOLR_MODE and use the
+    # Collections API in SolrCloud — a replication-only copy of one replica
+    # is not a restorable SolrCloud backup.
+    print_test "Backup script is SolrCloud-aware (Collections API)"
+    if grep -q '_is_cloud_mode()' scripts/solr-backup.sh && \
+       grep -q 'action=BACKUP' scripts/solr-backup.sh && \
+       grep -q 'command=backup' scripts/solr-backup.sh; then
+        print_pass "Backup branches on SOLR_MODE: Collections API (cloud) / Replication API (standalone)"
+    else
+        print_fail "Backup script does not branch on SOLR_MODE for SolrCloud backups"
+    fi
+
+    # Regression: HTTP 200 from the Replication API only means the
+    # backup was INITIATED — the script must poll command=details.
+    print_test "Standalone backup verifies snapshot completion"
+    if grep -q 'command=details' scripts/solr-backup.sh && \
+       grep -q 'BACKUP_WAIT_TIMEOUT' scripts/solr-backup.sh; then
+        print_pass "Backup polls replication details until the snapshot completed"
+    else
+        print_fail "Backup still treats HTTP 200 (initiated) as completed"
+    fi
+
+    # Regression: tenants sharing a collection must not cause
+    # duplicate backups of the same index in one run.
+    print_test "Backup deduplicates cores shared by multiple tenants"
+    if grep -q 'sort -u' scripts/solr-backup.sh && \
+       grep -q 'collect_cores' scripts/solr-backup.sh; then
+        print_pass "Backup collects cores once via deduplicated core list"
+    else
+        print_fail "Backup iterates per-tenant and backs up shared cores repeatedly"
+    fi
+
+    # the stack must ship its own restore path for both modes.
+    print_test "Restore script exists and covers both Solr modes"
+    if [ -f "scripts/solr-restore.sh" ] && \
+       grep -q 'command=restore' scripts/solr-restore.sh && \
+       grep -q 'action=RESTORE' scripts/solr-restore.sh && \
+       grep -q 'restorestatus' scripts/solr-restore.sh; then
+        print_pass "solr-restore.sh provides standalone and SolrCloud restore with status polling"
+    else
+        print_fail "solr-restore.sh missing or lacks standalone/SolrCloud restore paths"
+    fi
+
+    # passwd must accept the password via stdin so
+    # orchestration never exposes it in the host process list.
+    print_test "passwd supports --password-stdin"
+    if grep -q -- '--password-stdin' scripts/solr-tenant-cmd.sh && \
+       awk '/^cmd_passwd\(\) \{/,/^\}/' scripts/solr-tenant-cmd.sh | grep -q 'IFS= read -r provided_pass'; then
+        print_pass "passwd reads the password from stdin when --password-stdin is given"
+    else
+        print_fail "passwd cannot read the password from stdin"
+    fi
+
+    # Regression: the dry-run wrapper must execute argv arrays, not eval
+    # re-parsed command strings.
+    print_test "upgrade-docker run() executes without eval"
+    if ! grep -qE '^\s*eval ' scripts/upgrade-docker.sh; then
+        print_pass "upgrade-docker.sh contains no eval-based command execution"
+    else
+        print_fail "upgrade-docker.sh still uses eval to execute commands"
+    fi
+
+    # Behavioral test: execute solr-backup.sh end-to-end with a mocked curl.
+    # Verifies /2/11 as actual behavior, not just as source patterns:
+    #   cloud mode  -> exactly one Collections API BACKUP per UNIQUE core
+    #   standalone  -> failure when the snapshot never completes (exit 1)
+    print_test "Backup behavior: cloud dedup + standalone completion check"
+    local backup_behave_dir
+    backup_behave_dir="$(mktemp -d)"
+    if (
+        set -euo pipefail
+        repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+        work="$backup_behave_dir"
+        mkdir -p "$work/bin" "$work/data"
+        printf 'SOLR_ADMIN_USER=admin\nSOLR_ADMIN_PASSWORD=test-password-123456\n' > "$work/data/.env"
+        # Two tenants sharing one collection + one distinct = 2 unique cores.
+        printf 'TENANT_a_CORES=shared_core\nTENANT_b_CORES=shared_core\nTENANT_c_CORES=solo_core\n' > "$work/tenants.env"
+
+        # Mock curl: log every URL, answer Collections API with success JSON.
+        cat > "$work/bin/curl" <<'MOCK'
+#!/bin/bash
+url=""
+for a in "$@"; do case "$a" in http*) url="$a" ;; esac; done
+echo "$url" >> "${CURL_LOG:?}"
+case "$url" in
+  *action=BACKUP*) printf '{"responseHeader":{"status":0}}' ;;
+  *command=backup*) # replication backup initiated
+    for a in "$@"; do case "$a" in -w) printf '200'; exit 0 ;; esac; done
+    printf '200' ;;
+  *command=details*) printf '{"details":{}}' ;;  # snapshot never completes
+  *) printf '{}' ;;
+esac
+MOCK
+        chmod +x "$work/bin/curl"
+
+        # Cloud mode: expect 2 BACKUP calls (deduplicated), exit 0.
+        env PATH="$work/bin:$PATH" CURL_LOG="$work/cloud.log" \
+            SOLR_MODE=solrcloud TENANTS_ENV="$work/tenants.env" \
+            BACKUP_DIR="$work/backup" LOG_FILE="$work/backup.log" \
+            SOLR_ADMIN_USER=admin SOLR_ADMIN_PASSWORD=test-password-123456 \
+            bash "$repo_root/scripts/solr-backup.sh" >/dev/null 2>&1
+        backup_calls="$(grep -c 'action=BACKUP' "$work/cloud.log")"
+        [ "$backup_calls" -eq 2 ]
+
+        # Standalone mode: snapshot never completes -> exit non-zero.
+        set +e
+        env PATH="$work/bin:$PATH" CURL_LOG="$work/standalone.log" \
+            TENANTS_ENV="$work/tenants.env" \
+            BACKUP_DIR="$work/backup" LOG_FILE="$work/backup.log" \
+            BACKUP_WAIT_TIMEOUT=3 \
+            SOLR_ADMIN_USER=admin SOLR_ADMIN_PASSWORD=test-password-123456 \
+            bash "$repo_root/scripts/solr-backup.sh" >/dev/null 2>&1
+        standalone_rc=$?
+        set -e
+        [ "$standalone_rc" -ne 0 ]
+    ); then
+        print_pass "Backup deduplicates cloud collections and fails on incomplete standalone snapshots"
+    else
+        print_fail "Backup behavior regression (cloud dedup or standalone completion check)"
+    fi
+    rm -rf "$backup_behave_dir"
 
     print_test "Runtime entrypoint uses Debian runuser instead of gosu"
     if grep -q 'exec runuser -u solr -- "$0" "$@"' scripts/solr-cloud-entrypoint.sh && \
@@ -455,13 +624,13 @@ unit_tests() {
     fi
 
     print_test "release metadata points to current stack version"
-    if grep -q '^STACK_VERSION=v3.4.10$' .env.example && \
-       grep -q '\${STACK_VERSION:-v3.4.10}' docker-compose.yml && \
-       grep -q '# Version: v3.4.10' Dockerfile && \
-       grep -q '# Version: v3.4.10' scripts/solr-tenant.sh; then
-        print_pass "Release metadata consistently points to v3.4.10"
+    if grep -q '^STACK_VERSION=v3.4.11$' .env.example && \
+       grep -q '\${STACK_VERSION:-v3.4.11}' docker-compose.yml && \
+       grep -q '# Version: v3.4.11' Dockerfile && \
+       grep -q '# Version: v3.4.11' scripts/solr-tenant.sh; then
+        print_pass "Release metadata consistently points to v3.4.11"
     else
-        print_fail "Release metadata is not consistent with v3.4.10"
+        print_fail "Release metadata is not consistent with v3.4.11"
     fi
 
     #Docker image availability

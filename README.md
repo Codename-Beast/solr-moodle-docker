@@ -1,7 +1,7 @@
 # Solr für Moodle — Multi-Tenant Docker Stack
 
 ![CI](https://img.shields.io/badge/ci-GitHub%20%2B%20GitLab-brightgreen)
-![Version](https://img.shields.io/badge/version-3.4.10-blue)
+![Version](https://img.shields.io/badge/version-3.4.11-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
@@ -212,7 +212,7 @@ Die wichtigsten Werte aus `.env.example`:
 
 | Variable | Default | Bedeutung |
 |---|---|---|
-| `STACK_VERSION` | `v3.4.10` | Init-Image-Tag |
+| `STACK_VERSION` | `v3.4.11` | Init-Image-Tag |
 | `INSTANCE_NAME` | `solr` | Präfix für Container, Volume und Network |
 | `SOLR_VERSION` | `9.10.1` | Solr-Version |
 | `SOLR_PORT` | `8983` | Solr-Port auf dem Host |

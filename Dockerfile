@@ -3,7 +3,7 @@
 FROM alpine:3.22@sha256:310c62b5e7ca5b08167e4384c68db0fd2905dd9c7493756d356e893909057601
 # =========================================
 # Solr Init Container
-# Version: v3.4.10
+# Version: v3.4.11
 # Multi-Tenant Support
 # =========================================
 # Update musl to fix CVE-2025-26519

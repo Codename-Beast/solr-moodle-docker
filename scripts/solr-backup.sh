@@ -1,11 +1,17 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.10
+# Version: v3.4.11
 
 # =========================================
 # Solr Backup — Multi-Tenant
 # =========================================
-# Backs up all Solr cores defined in tenants.env via Solr Replication API.
+# Backs up all cores/collections defined in tenants.env.
+#   - Standalone : Replication API (/solr/<core>/replication?command=backup)
+#                  and polls command=details until the snapshot completed.
+#   - SolrCloud  : Collections API (action=BACKUP) — includes collection
+#                  state; a replication-only copy of one replica is NOT a
+#                  restorable SolrCloud backup.
+# Cores shared by multiple tenants are deduplicated before backup.
 # Run inside the solr container:
 #   docker exec <container> /opt/solr/scripts/solr-backup.sh
 
@@ -16,6 +22,8 @@ TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
 BACKUP_DIR="${BACKUP_DIR:-/var/solr/data/backup}"
 LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
 TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
+# Max seconds to wait for a standalone snapshot to complete.
+BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-120}"
 
 # _log: Write a timestamped [BACKUP] message to stdout and $LOG_FILE.
 # Args: $@ - message text
@@ -62,28 +70,102 @@ _load_admin_creds() {
   fi
 }
 
-# backup_core: Trigger a Solr Replication API backup for a single core.
-# The backup is written to $BACKUP_DIR/<core>_<timestamp>/ inside the container.
+# _is_cloud_mode: True when the stack runs SolrCloud (SOLR_MODE=solrcloud).
+_is_cloud_mode() {
+  [ "${SOLR_MODE:-}" = "solrcloud" ]
+}
+
+# backup_core_standalone: Replication API backup for a single core, then poll
+# command=details until the snapshot reports success (HTTP 200 only
+# means "initiated", not "completed").
 # Args: $1 - core name
-# Returns: 0 on success (HTTP 200 from Replication API), 1 on failure
-backup_core() {
+# Returns: 0 when the snapshot completed successfully, 1 otherwise
+backup_core_standalone() {
   local core="$1"
   local backup_name="${core}_${TIMESTAMP}"
-  local backup_path="${BACKUP_DIR}/${backup_name}"
 
-  _log "Backing up core '$core' -> $backup_path"
+  _log "Backing up core '$core' -> ${BACKUP_DIR}/${backup_name} (replication API)"
 
   local http_code
   http_code="$(curl -so /dev/null -w '%{http_code}' \
     -u "${ADMIN_USER}:${ADMIN_PASS}" \
     "${SOLR_BASE}/${core}/replication?command=backup&location=${BACKUP_DIR}&name=${backup_name}&wt=json")"
 
-  if [ "$http_code" = "200" ]; then
-    _log "Core '$core' backup initiated (HTTP 200)"
-  else
-    _log "ERROR: Core '$core' backup failed (HTTP $http_code)"
+  if [ "$http_code" != "200" ]; then
+    _log "ERROR: Core '$core' backup request failed (HTTP $http_code)"
     return 1
   fi
+
+  # Poll replication?command=details until the snapshot completed.
+  # NamedList JSON may serialize .details.backup as an object or as a flat
+  # ["key","value",...] array depending on Solr version — match textually.
+  local waited=0 details backup_section
+  while [ "$waited" -lt "$BACKUP_WAIT_TIMEOUT" ]; do
+    details="$(curl -s -u "${ADMIN_USER}:${ADMIN_PASS}" \
+      "${SOLR_BASE}/${core}/replication?command=details&wt=json" 2>/dev/null || true)"
+    backup_section="$(printf '%s' "$details" | jq -c '.details.backup // empty' 2>/dev/null || true)"
+    if [ -n "$backup_section" ]; then
+      if printf '%s' "$backup_section" | grep -q "$backup_name"; then
+        if printf '%s' "$backup_section" | grep -qi '"success"'; then
+          _log "Core '$core' backup completed (snapshot ${backup_name})"
+          return 0
+        fi
+        if printf '%s' "$backup_section" | grep -qiE '"(failed|exception)"|snapshotError'; then
+          _log "ERROR: Core '$core' backup failed (replication details: ${backup_section})"
+          return 1
+        fi
+      fi
+    fi
+    sleep 3
+    waited=$((waited + 3))
+  done
+
+  _log "ERROR: Core '$core' backup did not complete within ${BACKUP_WAIT_TIMEOUT}s"
+  return 1
+}
+
+# backup_collection_cloud: Collections API backup for a single collection.
+# Synchronous call — Solr returns after the backup finished or failed.
+# Args: $1 - collection name
+# Returns: 0 on success (responseHeader.status == 0), 1 on failure
+backup_collection_cloud() {
+  local collection="$1"
+  local backup_name="${collection}_${TIMESTAMP}"
+
+  _log "Backing up collection '$collection' -> ${BACKUP_DIR}/${backup_name} (Collections API)"
+
+  local response rc_status
+  response="$(curl -s -u "${ADMIN_USER}:${ADMIN_PASS}" \
+    "${SOLR_BASE}/admin/collections?action=BACKUP&name=${backup_name}&collection=${collection}&location=${BACKUP_DIR}&wt=json" 2>/dev/null || true)"
+  rc_status="$(printf '%s' "$response" | jq -r '.responseHeader.status // 1' 2>/dev/null || printf '1')"
+
+  if [ "$rc_status" = "0" ]; then
+    _log "Collection '$collection' backup completed (${backup_name})"
+    return 0
+  fi
+
+  local err_msg
+  err_msg="$(printf '%s' "$response" | jq -r '.error.msg // "unknown error"' 2>/dev/null || printf 'unparseable response')"
+  _log "ERROR: Collection '$collection' backup failed: ${err_msg}"
+  return 1
+}
+
+# collect_cores: Print the deduplicated, sorted list of cores from tenants.env.
+# Tenants may intentionally share a collection (supported since v3.4.8) —
+# without dedup the same index would be backed up once per tenant.
+collect_cores() {
+  local key value core
+  while IFS='=' read -r key value; do
+    case "$key" in
+      TENANT_*_CORES)
+        IFS=',' read -ra CORE_ARRAY <<< "$value"
+        for core in "${CORE_ARRAY[@]}"; do
+          core="$(printf '%s' "$core" | tr -d ' ')"
+          [ -n "$core" ] && printf '%s\n' "$core"
+        done
+        ;;
+    esac
+  done < "$TENANTS_ENV" | sort -u
 }
 
 _load_admin_creds
@@ -94,22 +176,30 @@ if [ ! -f "$TENANTS_ENV" ]; then
   exit 0
 fi
 
-_log "=== Starting backup for all tenant cores ==="
+MODE_LABEL="standalone"
+_is_cloud_mode && MODE_LABEL="solrcloud"
+_log "=== Starting backup for all tenant cores (mode: ${MODE_LABEL}) ==="
 
 CORES_BACKED_UP=0
-while IFS='=' read -r key value; do
-  case "$key" in
-    TENANT_*_CORES)
-      IFS=',' read -ra CORE_ARRAY <<< "$value"
-      for core in "${CORE_ARRAY[@]}"; do
-        core="$(echo "$core" | tr -d ' ')"
-        [ -z "$core" ] && continue
-        if backup_core "$core"; then
-          ((CORES_BACKED_UP++)) || true
-        fi
-      done
-      ;;
-  esac
-done < "$TENANTS_ENV"
+CORES_FAILED=0
+while IFS= read -r core; do
+  [ -z "$core" ] && continue
+  if _is_cloud_mode; then
+    if backup_collection_cloud "$core"; then
+      CORES_BACKED_UP=$((CORES_BACKED_UP + 1))
+    else
+      CORES_FAILED=$((CORES_FAILED + 1))
+    fi
+  else
+    if backup_core_standalone "$core"; then
+      CORES_BACKED_UP=$((CORES_BACKED_UP + 1))
+    else
+      CORES_FAILED=$((CORES_FAILED + 1))
+    fi
+  fi
+done < <(collect_cores)
 
-_log "=== Backup complete: ${CORES_BACKED_UP} core(s) ==="
+_log "=== Backup complete: ${CORES_BACKED_UP} succeeded, ${CORES_FAILED} failed ==="
+if [ "$CORES_FAILED" -gt 0 ]; then
+  exit 1
+fi

@@ -62,11 +62,22 @@ sanitize_domain() {
 }
 
 run() {
+  # Executes the command as an argv array — no eval, no re-parsing of
+  # expanded variables (paths with spaces, injection via $(...) etc.).
   if [ "$DRY_RUN" = "true" ]; then
     printf '[dry-run] %s\n' "$*"
   else
-    # shellcheck disable=SC2294
-    eval "$@"
+    "$@"
+  fi
+}
+
+# run_quiet: like run, but discards stdout (replaces inline '>/dev/null'
+# that the old eval-based run() allowed inside command strings).
+run_quiet() {
+  if [ "$DRY_RUN" = "true" ]; then
+    printf '[dry-run] %s\n' "$*"
+  else
+    "$@" >/dev/null
   fi
 }
 
@@ -120,14 +131,14 @@ stop_legacy_service() {
 
   if systemctl is-active --quiet "${LEGACY_SERVICE}.service"; then
     log "Stopping legacy service ${LEGACY_SERVICE}.service"
-    run "systemctl stop '${LEGACY_SERVICE}.service'"
+    run systemctl stop "${LEGACY_SERVICE}.service"
   else
     log "Legacy service already stopped"
   fi
 
   if systemctl is-enabled --quiet "${LEGACY_SERVICE}.service"; then
     log "Disabling legacy service ${LEGACY_SERVICE}.service"
-    run "systemctl disable '${LEGACY_SERVICE}.service'"
+    run systemctl disable "${LEGACY_SERVICE}.service"
   fi
 }
 
@@ -154,7 +165,7 @@ export_legacy_cores() {
   for d in "${core_dirs[@]}"; do
     core="$(basename "$d")"
     log "Export core directory: ${core}"
-    run "rsync -a --delete '${d}/' '${out}/${core}/'"
+    run rsync -a --delete "${d}/" "${out}/${core}/"
     if [ "$DRY_RUN" = "true" ]; then
       mkdir -p "${out}/${core}"
     fi
@@ -209,7 +220,7 @@ import_cores_into_volume() {
     log "No exported cores. Creating Moodle-optimized default core: ${fallback}"
     local container="${INSTANCE_NAME}-solr"
     logc "$container" "create core ${fallback} with configSet=eLeDia-moodle-tenant"
-    run "docker exec '${container}' curl -sS -u admin:${SOLR_ADMIN_PASSWORD:-admin} 'http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/cores?action=CREATE&name=${fallback}&configSet=eLeDia-moodle-tenant&wt=json' >/dev/null"
+    run_quiet docker exec "${container}" curl -sS -u "admin:${SOLR_ADMIN_PASSWORD:-admin}" "http://127.0.0.1:${SOLR_PORT:-8983}/solr/admin/cores?action=CREATE&name=${fallback}&configSet=eLeDia-moodle-tenant&wt=json"
     return 0
   fi
 
@@ -217,11 +228,11 @@ import_cores_into_volume() {
   for core_dir in "${entries[@]}"; do
     core="$(basename "$core_dir")"
     log "Import core directory into Docker volume: ${core}"
-    run "mkdir -p '${mountpoint}/${core}'"
-    run "rsync -a --delete '${core_dir}/' '${mountpoint}/${core}/'"
+    run mkdir -p "${mountpoint}/${core}"
+    run rsync -a --delete "${core_dir}/" "${mountpoint}/${core}/"
   done
 
-  run "chown -R 8983:8983 '${mountpoint}'"
+  run chown -R 8983:8983 "${mountpoint}"
 }
 
 write_state_marker() {
@@ -314,17 +325,17 @@ main() {
     fi
   fi
   if [ "$needs_build" = "yes" ]; then
-    run "INSTANCE_NAME='${INSTANCE_NAME}' SOLR_MODE='${TARGET_MODE}' docker compose -f '${COMPOSE_FILE}' up -d --build"
+    run env "INSTANCE_NAME=${INSTANCE_NAME}" "SOLR_MODE=${TARGET_MODE}" docker compose -f "${COMPOSE_FILE}" up -d --build
     printf '%s' "$current_checksum" > "$build_checksum_file"
   else
-    run "INSTANCE_NAME='${INSTANCE_NAME}' SOLR_MODE='${TARGET_MODE}' docker compose -f '${COMPOSE_FILE}' up -d"
+    run env "INSTANCE_NAME=${INSTANCE_NAME}" "SOLR_MODE=${TARGET_MODE}" docker compose -f "${COMPOSE_FILE}" up -d
   fi
 
   import_cores_into_volume "$export_dir"
 
   local solr_container="${INSTANCE_NAME}-solr"
   logc "$solr_container" "restart after core import"
-  run "docker restart '${solr_container}' >/dev/null"
+  run_quiet docker restart "${solr_container}"
 
   ensure_instance_recognizable
   write_state_marker "$state_file"
