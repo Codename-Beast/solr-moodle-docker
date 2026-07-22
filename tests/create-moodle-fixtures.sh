@@ -31,6 +31,64 @@ cat > "$BASE_DIR/fixture-announcement.rtf" <<'EOF'
 {\rtf1\ansi\deff0 {\fonttbl {\f0 Arial;}}\f0\fs24 Moodle Workplace maintenance window with Solr reindex. Marker: ELEDIA RTF FIXTURE MARKER}
 EOF
 
+# Create a minimal DOCX fixture with only standard library tooling.
+# Tika must extract this marker during Moodle/Solr file indexing.
+if command -v python3 >/dev/null 2>&1; then
+  python3 - "$BASE_DIR/fixture-word-document.docx" <<'PY'
+import html
+import sys
+import zipfile
+
+out = sys.argv[1]
+marker = "ELEDIA DOCX FIXTURE MARKER"
+text = (
+    "Moodle Solr Word document fixture. "
+    f"Marker: {marker}. "
+    "This validates DOCX full-text extraction through Apache Tika."
+)
+content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'''
+rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'''
+doc = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>eLeDia Moodle Solr DOCX Fixture</w:t></w:r></w:p><w:p><w:r><w:t>{html.escape(text)}</w:t></w:r></w:p><w:sectPr/></w:body></w:document>'''
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+    zf.writestr("[Content_Types].xml", content_types)
+    zf.writestr("_rels/.rels", rels)
+    zf.writestr("word/document.xml", doc)
+PY
+else
+  echo "INFO: no python3 found; DOCX fixture will be skipped by tests" >&2
+fi
+
+# Create a PPTX fixture when python-pptx is available.
+# The fallback intentionally skips instead of writing a hand-rolled OOXML file:
+# Apache Tika is stricter than zip/XML smoke checks for PowerPoint packages.
+if command -v python3 >/dev/null 2>&1 && python3 - <<'PY' >/dev/null 2>&1
+import pptx
+PY
+then
+  python3 - "$BASE_DIR/fixture-presentation.pptx" <<'PY'
+import sys
+from pptx import Presentation
+
+out = sys.argv[1]
+marker = "ELEDIA PPTX FIXTURE MARKER"
+prs = Presentation()
+slide = prs.slides.add_slide(prs.slide_layouts[5])
+slide.shapes.title.text = "eLeDia Moodle Solr PPTX Fixture"
+box = slide.shapes.add_textbox(914400, 1828800, 7772400, 1828800)
+box.text_frame.text = (
+    "Moodle Solr PowerPoint fixture. "
+    f"Marker: {marker}. "
+    "This validates PPTX full-text extraction through Apache Tika."
+)
+prs.save(out)
+PY
+else
+  echo "INFO: python-pptx not available; PPTX fixture will be skipped by tests" >&2
+fi
+
 # Create PNG "photo" fixture (prefer ImageMagick; otherwise keep checked-in PNG)
 if command -v convert >/dev/null 2>&1; then
   convert -size 1200x630 xc:'#202024' \

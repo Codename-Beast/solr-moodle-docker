@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.4.12]
+
+### Added
+- `setup.sh` kann optional direkt initiale Tenants anlegen oder bestehende Tenants um Cores erweitern. Dazu nutzt es weiterhin den vorhandenen Container-Helper `solr-tenant.sh`; in SolrCloud werden dieselben Namen als Collections angelegt.
+- `setup.sh` fragt die wichtigsten Basiswerte interaktiv ab: Instanzname, Hostname, Bind-Adresse, Port, Heap, Solr-Modus und Environment-Banner.
+- Nach dem Stack-Start kann direkt eine interaktive Tenant-Verwaltung geöffnet werden: listen, anlegen, Core/Collection hinzufügen oder entfernen, Passwort setzen, deaktivieren, reaktivieren, apply und healthcheck.
+- Wenn `setup.sh` einen vorhandenen `${INSTANCE_NAME}-solr`-Container erkennt, springt es in ein Runtime-Management statt die Installation erneut zu starten; ohne vorhandenen Container läuft die normale Installationsroutine weiter.
+- Das Runtime-Management kann die Solr-Runtime mit `tenants.env` synchronisieren (`apply`, `sync-sot`), Drift erkennen/beheben und `runtime-truth` anzeigen.
+- Die interaktive Proxy-Verwaltung kann Proxy-Werte in `.env` setzen, Caddy-/Nginx-Proxy-Container starten, Proxy-Status anzeigen/stoppen und Host-Nginx-/Host-Apache-Konfigurationen generieren.
+- `SETUP_TENANTS` unterstützt automatisierte Setups ohne zusätzliche Dateien, z. B. `SETUP_TENANTS='schule_a:moodle_prod,moodle_test;schule_b:moodle_prod_b' ./setup.sh`.
+- `scripts/test-moodle-search-tuning.sh` vergleicht mehrere Solr-Suchprofile (`/select`, explizites `content OR solr_filecontent`, optimierter `/moodle` eDisMax-Handler, Resource-Filter) gegen vorhandene Moodle-Indexdaten.
+- `docs/moodle-solr-optimal-search.md` dokumentiert optimale Moodle-Solr-Einstellungen, Indexierung, Dateiindexierung, Host-Moodle-Betrieb, Tuning-Tests und Config-Self-Healing.
+
+### Fixed
+- Die Setup-Ausgabe und Unit-Tests decken jetzt ab, dass Tenant-/Core-/Collection-Anlage über die vorhandenen Runtime-Ressourcen läuft statt über separate Hilfsdateien.
+- `setup.sh` erzwingt jetzt Schreibzugriff für Solr-Runtime-UID `8983` auf `tenants.env`: bevorzugt `chown 8983:8983` mit Mode `660`, sonst POSIX-ACL `u:8983:rw,m::rw`, sonst expliziter Fallback mit Warnung. Root cause: ein interaktiver Docker-Test erzeugte `tenants.env` als Host-User-Datei, wodurch `solr-tenant.sh apply` im Container mit `Permission denied` scheiterte.
+- `setup.sh` baut jetzt sowohl `eLeDia-solr-init` als auch das Runtime-Image `solr`. Root cause: nur das Init-Image wurde neu gebaut, wodurch der laufende Runtime-Container alte Helper-Scripts behalten konnte und neue Befehle wie `runtime-truth` fehlten.
+- `solr-tenant.sh healthcheck` validiert jetzt auch die Moodle-Dateiindexierung pro Tenant-Core/-Collection: Feld `solr_filecontent`, Handler `/update/extract` und in SolrCloud das Configset `eLeDia-moodle-tenant`. Root cause: ein reiner System/Auth-Healthcheck konnte grün sein, obwohl Moodle-Dateiindexierung falsch oder unvollständig konfiguriert war.
+- `solr-tenant.sh config-repair` heilt kaputte Moodle-Configsets selbst: es kopiert `managed-schema`/`solrconfig.xml` aus der eLeDia-Configquelle nach `eLeDia-moodle-tenant` und `_default`, lädt in SolrCloud nach ZooKeeper hoch, reloadet Tenant-Collections/-Cores und führt danach den Healthcheck aus.
+- Der Moodle-Diagnosehandler `/moodle` nutzt jetzt explizit `edismax` und boostet neben `title`/`content` auch `description1`, `description2`, `intro` und `solr_filecontent`. Root cause: `qf`/`pf`-Parameter wirken nur mit DisMax/eDisMax und waren vorher als reine Defaults nicht zuverlässig wirksam.
+- Der Standalone-Backup-Unit-Test setzt `SOLR_MODE=standalone` explizit, damit die Testabsicht nicht durch Umgebungsdefaults auf SolrCloud kippt.
+
+### Tested
+- `bash -n setup.sh scripts/*.sh init/*.sh nginx/*.sh apache/*.sh` erfolgreich.
+- `./scripts/run-tests.sh --unit-only` erfolgreich mit `52 passed, 0 failed`.
+- Interaktiver Docker-Setup-Lauf in `/tmp/solr-setup-interactive-test` erfolgreich: `itestsolr-solr` healthy, Tenant-CLI Healthcheck OK inklusive `schema=ok`, Runtime-Truth verfügbar und UID-8983-Schreibzugriff auf `tenants.env` verifiziert.
+- Docker-Moodle-E2E gegen den interaktiven Solr-Container erfolgreich: Moodle 4.5.10 mit PHP-Solr-Extension auf `http://127.0.0.1:18084`, Solr-Plugin auf `itestsolr-solr:19083/eLeDia_core` konfiguriert, Schema-Setup ausgeführt, Global Search Indexing gelaufen und Solr-Abfrage auf den Moodle-Testmarker mit Treffer bestätigt.
+- Moodle-Dateiindexierung erfolgreich gegen echte Kursressourcen getestet: PDF-, DOCX- und PPTX-Dateien hochgeladen, über Moodle Search indexiert und sowohl in Solr `solr_filecontent` als auch über Moodle Global Search gefunden.
+
+### Removed
+- Keine.
+
+### Deprecated
+- Keine.
+
+### Breaking Changes
+- Keine.
+
 ## [3.4.11]
 
 ### Fixed

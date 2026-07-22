@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.11
+# Version: v3.4.12
 #
 # eLeDia Solr Tenant Commands — create, delete, enable, apply, export
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -889,8 +889,109 @@ cmd_healthcheck() {
     return 0
   fi
 
-  printf '✔ Healthcheck passed (system=%s auth=%s mode=%s)\n' "$system_code" "$auth_code" "${SOLR_MODE:-standalone}"
+  local health_cores core schema_resp handler_resp cluster_resp
+  health_cores="$(awk -F= '/^TENANT_.*_CORES=/{print $2}' "$TENANTS_ENV" 2>/dev/null | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed '/^$/d' | sort -u)"
+  if [ -z "$health_cores" ] && [ -n "${SOLR_CORE_NAME:-}" ]; then
+    health_cores="$SOLR_CORE_NAME"
+  fi
+
+  for core in $health_cores; do
+    schema_resp="$(curl -s -u "${ADMIN_USER}:${ADMIN_PASS}" \
+      "${SOLR_BASE}/${core}/schema/fields/solr_filecontent?wt=json" 2>/dev/null || true)"
+    if ! printf '%s' "$schema_resp" | grep -q '"name":"solr_filecontent"'; then
+      printf 'ERROR: Moodle file schema missing for %s: field solr_filecontent not available\n' "$core" >&2
+      return 1
+    fi
+
+    handler_resp="$(curl -s -u "${ADMIN_USER}:${ADMIN_PASS}" \
+      "${SOLR_BASE}/${core}/config/requestHandler?componentName=/update/extract&wt=json" 2>/dev/null || true)"
+    if ! printf '%s' "$handler_resp" | grep -q 'solr.extraction.ExtractingRequestHandler'; then
+      printf 'ERROR: Moodle file indexing handler missing for %s: /update/extract not configured\n' "$core" >&2
+      return 1
+    fi
+
+    if _is_cloud_mode; then
+      cluster_resp="$(curl -s -u "${ADMIN_USER}:${ADMIN_PASS}" \
+        "${SOLR_BASE}/admin/collections?action=CLUSTERSTATUS&collection=${core}&wt=json" 2>/dev/null || true)"
+      if ! printf '%s' "$cluster_resp" | grep -q '"configName":"eLeDia-moodle-tenant"'; then
+        printf 'ERROR: SolrCloud collection %s does not use configset eLeDia-moodle-tenant\n' "$core" >&2
+        return 1
+      fi
+    fi
+  done
+
+  printf '✔ Healthcheck passed (system=%s auth=%s mode=%s schema=ok)\n' "$system_code" "$auth_code" "${SOLR_MODE:-standalone}"
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: config-repair
+# Self-heals Moodle Solr configsets from the image/repo source, uploads them to
+# ZooKeeper in SolrCloud, reloads tenant cores/collections, then runs healthcheck.
+# ---------------------------------------------------------------------------
+
+cmd_config_repair() {
+  _load_admin_creds
+  _log_action "config-repair"
+
+  local src_dir dst_dir default_dst_dir legacy_dst_dir health_cores core reload_resp
+  if [ -d "/opt/solr/eledia-config" ] && [ -f "/opt/solr/eledia-config/managed-schema" ] && [ -f "/opt/solr/eledia-config/solrconfig.xml" ]; then
+    src_dir="/opt/solr/eledia-config"
+  elif [ -d "/opt/solr/eledia-config-image" ] && [ -f "/opt/solr/eledia-config-image/managed-schema" ] && [ -f "/opt/solr/eledia-config-image/solrconfig.xml" ]; then
+    src_dir="/opt/solr/eledia-config-image"
+  else
+    printf 'ERROR: no valid eLeDia config source found (/opt/solr/eledia-config or /opt/solr/eledia-config-image)\n' >&2
+    return 1
+  fi
+
+  dst_dir="/var/solr/data/configsets/eLeDia-moodle-tenant/conf"
+  default_dst_dir="/var/solr/data/configsets/_default/conf"
+  legacy_dst_dir="/var/solr/data/configsets/moodle-tenant/conf"
+
+  for target in "$dst_dir" "$default_dst_dir"; do
+    mkdir -p "$target"
+    cp -f "$src_dir/managed-schema" "$target/managed-schema"
+    cp -f "$src_dir/solrconfig.xml" "$target/solrconfig.xml"
+    if [ -d "$src_dir/lang" ]; then
+      mkdir -p "$target/lang"
+      cp -f "$src_dir/lang"/* "$target/lang/" 2>/dev/null || true
+    fi
+  done
+  if [ -d "$legacy_dst_dir" ]; then
+    cp -f "$src_dir/managed-schema" "$legacy_dst_dir/managed-schema"
+    cp -f "$src_dir/solrconfig.xml" "$legacy_dst_dir/solrconfig.xml"
+  fi
+  chown -R 8983:8983 /var/solr/data/configsets 2>/dev/null || true
+  printf '✔ Local configsets refreshed from %s\n' "$src_dir"
+
+  health_cores="$(awk -F= '/^TENANT_.*_CORES=/{print $2}' "$TENANTS_ENV" 2>/dev/null | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed '/^$/d' | sort -u)"
+  if [ -z "$health_cores" ] && [ -n "${SOLR_CORE_NAME:-}" ]; then
+    health_cores="$SOLR_CORE_NAME"
+  fi
+
+  if _is_cloud_mode; then
+    /opt/solr/bin/solr zk upconfig -n eLeDia-moodle-tenant -d "$dst_dir" -z "$ZK_HOST" 2>&1 | while IFS= read -r line; do _log "INFO" "[zk] $line"; done
+    printf '✔ ZooKeeper configset eLeDia-moodle-tenant uploaded\n'
+    for core in $health_cores; do
+      reload_resp="$(_solr_api GET "/admin/collections?action=RELOAD&name=${core}&wt=json" 2>/dev/null || true)"
+      if printf '%s' "$reload_resp" | grep -q '"status":0'; then
+        printf '✔ Collection reloaded: %s\n' "$core"
+      else
+        printf 'WARN: collection reload may have failed for %s\n' "$core" >&2
+      fi
+    done
+  else
+    for core in $health_cores; do
+      reload_resp="$(_solr_api GET "/admin/cores?action=RELOAD&core=${core}&wt=json" 2>/dev/null || true)"
+      if printf '%s' "$reload_resp" | grep -q '"status":0'; then
+        printf '✔ Core reloaded: %s\n' "$core"
+      else
+        printf 'WARN: core reload may have failed for %s\n' "$core" >&2
+      fi
+    done
+  fi
+
+  cmd_healthcheck
 }
 
 # ---------------------------------------------------------------------------
@@ -1136,7 +1237,8 @@ Commands:
   apply                               Re-apply all tenants from tenants.env (idempotent)
   sync-sot                            Enforce .env+tenants.env as SOT and rotate unknown API users
   rebuild-permissions                 Rebuild tenant ACLs from tenants.env and keep all last
-  healthcheck                         Validate Solr availability, bootstrap state, and tenant drift
+  config-repair                       Self-heal Moodle configsets, upload/reload, then healthcheck
+  healthcheck                         Validate Solr availability, bootstrap state, schema/configsets, and tenant drift
   drift-detect                        Detect runtime drift vs tenants.env (users/collections)
   drift-remediate                     Reconcile runtime drift via sync-sot
   export                              YAML output for Ansible host_vars

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.11
+# Version: v3.4.12
 #
 # eLeDia Solr Tenant Dispatcher
 # Sources modular sub-scripts and dispatches commands.
@@ -40,6 +40,7 @@ case "$cmd" in
   apply)        cmd_apply ;;
   sync-sot)       cmd_sync_sot ;;
   rebuild-permissions) cmd_rebuild_permissions ;;
+  config-repair) cmd_config_repair ;;
   healthcheck)   cmd_healthcheck ;;
   drift-detect)   cmd_drift_detect ;;
   drift-remediate) cmd_drift_remediate ;;

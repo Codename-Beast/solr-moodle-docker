@@ -1,7 +1,7 @@
 # =========================================
 # Solr for Moodle — Multi-Tenant SolrCloud
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.11
+# Version: v3.4.12
 # =========================================
 # Init container is reintroduced as global bootstrap worker:
 #   service: eLeDia-solr-init
@@ -24,7 +24,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: eledia-solr-init:${STACK_VERSION:-v3.4.11}
+    image: eledia-solr-init:${STACK_VERSION:-v3.4.12}
     container_name: ${INSTANCE_NAME:-solr}-eLeDia-solr-init
     user: "0:0"
     volumes:

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.11
+# Version: v3.4.12
 #
 # eLeDia Unit Tests — file checks, compose config, Dockerfile
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -120,6 +120,132 @@ unit_tests() {
         print_fail "Core names are not validated consistently before tenant mutations"
     fi
 
+    print_test "setup.sh provisions initial tenants through existing runtime helper"
+    if grep -q 'SETUP_TENANTS' setup.sh && \
+       grep -q '_setup_tenant_exists' setup.sh && \
+       grep -q '_setup_provision_tenants' setup.sh && \
+       grep -q 'solr-tenant.sh create' setup.sh && \
+       grep -q 'solr-tenant.sh core-add' setup.sh; then
+        print_pass "setup.sh can create/update tenants with cores or SolrCloud collections via solr-tenant.sh"
+    else
+        print_fail "setup.sh does not expose initial tenant provisioning via existing solr-tenant.sh resources"
+    fi
+
+    print_test "setup.sh offers interactive setup and tenant management menus"
+    if grep -q '_prompt_default()' setup.sh && \
+       grep -q '_configure_environment_interactive' setup.sh && \
+       grep -q '_tenant_management_menu' setup.sh && \
+       grep -q 'Tenant-Verwaltung' setup.sh && \
+       grep -q 'solr-tenant.sh passwd' setup.sh && \
+       grep -q 'solr-tenant.sh delete' setup.sh && \
+       grep -q 'solr-tenant.sh apply' setup.sh; then
+        print_pass "setup.sh has interactive environment prompts and tenant management actions"
+    else
+        print_fail "setup.sh is still missing interactive setup or tenant management menu support"
+    fi
+
+    print_test "setup.sh routes existing stacks to runtime management with sync and proxy actions"
+    if grep -q '_existing_stack_available()' setup.sh && \
+       grep -q '_management_menu()' setup.sh && \
+       grep -q '_proxy_management_menu()' setup.sh && \
+       grep -q 'Bestehende Installation erkannt' setup.sh && \
+       grep -q 'solr-tenant.sh sync-sot' setup.sh && \
+       grep -q 'drift-remediate' setup.sh && \
+       grep -q 'config-repair' setup.sh && \
+       grep -q 'docker compose -f docker-compose.proxy.yml --profile' setup.sh; then
+        print_pass "setup.sh opens runtime management for existing stacks and exposes sync/proxy/self-heal actions"
+    else
+        print_fail "setup.sh does not yet route existing stacks to runtime management with sync/proxy/self-heal actions"
+    fi
+
+    print_test "setup.sh management helper functions execute under mocks"
+    local setup_helper_test_dir
+    setup_helper_test_dir="$(mktemp -d)"
+    if (
+        set -euo pipefail
+        repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+        cd "$setup_helper_test_dir"
+        printf 'INSTANCE_NAME=demo\nSOLR_HOSTNAME=solr.example.test\nSOLR_PORT=18983\n' > .env
+        export SETUP_LIBRARY_ONLY=1
+        # shellcheck source=/dev/null
+        source "${repo_root}/setup.sh"
+        LOG_FILE="${setup_helper_test_dir}/setup.log"
+        docker_call_log="${setup_helper_test_dir}/docker.calls"
+        docker() {
+            printf 'docker %s\n' "$*" >> "$docker_call_log"
+            case "$*" in
+                "inspect demo-solr") return 0 ;;
+                "inspect missing-solr") return 1 ;;
+                *) return 0 ;;
+            esac
+        }
+        _log() { :; }
+
+        detected="$(_existing_stack_available)"
+        [ "$detected" = "demo-solr" ]
+
+        printf 'INSTANCE_NAME=missing\n' > .env
+        if _existing_stack_available >/dev/null 2>&1; then
+            printf 'missing container was detected as available\n' >&2
+            exit 1
+        fi
+
+        printf 'INSTANCE_NAME=demo\nSOLR_HOSTNAME=solr.example.test\nSOLR_PORT=18983\n' > .env
+        _configure_proxy_env
+        grep -q '^PROXY_HOSTNAME=solr.example.test$' .env
+        grep -q '^PROXY_HTTP_PORT=80$' .env
+        grep -q '^PROXY_HTTPS_PORT=443$' .env
+
+        _compose_proxy caddy ps >/dev/null
+        grep -q 'docker compose -f docker-compose.proxy.yml --profile caddy ps' "$docker_call_log"
+
+        _proxy_management_menu demo-solr </dev/null
+        _management_menu demo-solr </dev/null
+    ); then
+        print_pass "setup.sh existing-stack, proxy env, proxy compose, and noninteractive menu helpers run under mocks"
+    else
+        print_fail "setup.sh management helper functions failed under mocks"
+    fi
+    rm -rf "$setup_helper_test_dir"
+
+    print_test "setup.sh builds both init and runtime images"
+    if grep -q 'docker compose build eLeDia-solr-init solr' setup.sh; then
+        print_pass "setup.sh rebuilds runtime image so container helper scripts are current"
+    else
+        print_fail "setup.sh only builds init image and can leave stale runtime helper scripts"
+    fi
+
+    print_test "setup.sh keeps tenants.env writable for the solr runtime UID"
+    if grep -q '_ensure_tenants_env_permissions()' setup.sh && \
+       grep -q 'chown 8983:8983' setup.sh && \
+       grep -q 'setfacl -m u:8983:rw,m::rw' setup.sh && \
+       grep -q 'mode 666 fallback' setup.sh; then
+        print_pass "setup.sh enforces UID 8983 rw access via chown, ACL, or explicit fallback"
+    else
+        print_fail "setup.sh can leave tenants.env without UID 8983 write access"
+    fi
+
+    print_test "Moodle configsets and Tika file-indexing schema stay aligned"
+    if grep -q 'class="solr.extraction.ExtractingRequestHandler"' eLeDia-config/solrconfig.xml && \
+       grep -q '<str name="literalsOverride">true</str>' eLeDia-config/solrconfig.xml && \
+       grep -q '<str name="defType">edismax</str>' eLeDia-config/solrconfig.xml && \
+       grep -q 'solr_filecontent\^1.0' eLeDia-config/solrconfig.xml && \
+       grep -q '<str name="fmap.content">content</str>' eLeDia-config/solrconfig.xml && \
+       grep -q '<str name="defaultField">solr_filecontent</str>' eLeDia-config/solrconfig.xml && \
+       grep -q '<field name="solr_filecontent"' eLeDia-config/managed-schema && \
+       grep -q '<copyField source="content" dest="solr_filecontent"' eLeDia-config/managed-schema && \
+       grep -q 'collection.configName=eLeDia-moodle-tenant' scripts/solr-tenant-core.sh && \
+       grep -q 'configSet=eLeDia-moodle-tenant' scripts/solr-tenant-core.sh && \
+       grep -q 'eLeDia-moodle-tenant' scripts/solr-cloud-entrypoint.sh && \
+       grep -q 'schema=ok' scripts/solr-tenant-cmd.sh && \
+       grep -q '/schema/fields/solr_filecontent' scripts/solr-tenant-cmd.sh && \
+       grep -q 'componentName=/update/extract' scripts/solr-tenant-cmd.sh && \
+       grep -q '"/select","/moodle"' scripts/solr-tenant-security.sh; then
+        print_pass "Moodle schema/configset/Tika mappings are present for standalone and SolrCloud"
+    else
+        print_fail "Moodle schema/configset/Tika mappings are incomplete"
+    fi
+
     # Security reload timeouts must fail fast in standalone mode. SolrCloud
     # skips the local wait because the auth state is ZooKeeper-persisted.
     print_test "Security reload timeouts fail fast"
@@ -147,12 +273,14 @@ unit_tests() {
     # own curl/jq authorization writer.
     print_test "Tenant permission rebuild command is public"
     if grep -q 'rebuild-permissions).*cmd_rebuild_permissions' scripts/solr-tenant.sh && \
+       grep -q 'config-repair).*cmd_config_repair' scripts/solr-tenant.sh && \
        grep -q 'healthcheck).*cmd_healthcheck' scripts/solr-tenant.sh && \
        grep -q '^cmd_rebuild_permissions()' scripts/solr-tenant-cmd.sh && \
+       grep -q '^cmd_config_repair()' scripts/solr-tenant-cmd.sh && \
        grep -q '^cmd_healthcheck()' scripts/solr-tenant-cmd.sh; then
-        print_pass "solr-tenant.sh exposes rebuild-permissions and healthcheck"
+        print_pass "solr-tenant.sh exposes rebuild-permissions, config-repair, and healthcheck"
     else
-        print_fail "solr-tenant.sh does not expose rebuild-permissions and healthcheck"
+        print_fail "solr-tenant.sh does not expose rebuild-permissions, config-repair, and healthcheck"
     fi
 
     print_test "Healthcheck skips drift on bootstrap-needed state"
@@ -489,7 +617,7 @@ MOCK
         # Standalone mode: snapshot never completes -> exit non-zero.
         set +e
         env PATH="$work/bin:$PATH" CURL_LOG="$work/standalone.log" \
-            TENANTS_ENV="$work/tenants.env" \
+            SOLR_MODE=standalone TENANTS_ENV="$work/tenants.env" \
             BACKUP_DIR="$work/backup" LOG_FILE="$work/backup.log" \
             BACKUP_WAIT_TIMEOUT=3 \
             SOLR_ADMIN_USER=admin SOLR_ADMIN_PASSWORD=test-password-123456 \
@@ -634,13 +762,13 @@ MOCK
     fi
 
     print_test "release metadata points to current stack version"
-    if grep -q '^STACK_VERSION=v3.4.11$' .env.example && \
-       grep -q '\${STACK_VERSION:-v3.4.11}' docker-compose.yml && \
-       grep -q '# Version: v3.4.11' Dockerfile && \
-       grep -q '# Version: v3.4.11' scripts/solr-tenant.sh; then
-        print_pass "Release metadata consistently points to v3.4.11"
+    if grep -q '^STACK_VERSION=v3.4.12$' .env.example && \
+       grep -q '\${STACK_VERSION:-v3.4.12}' docker-compose.yml && \
+       grep -q '# Version: v3.4.12' Dockerfile && \
+       grep -q '# Version: v3.4.12' scripts/solr-tenant.sh; then
+        print_pass "Release metadata consistently points to v3.4.12"
     else
-        print_fail "Release metadata is not consistent with v3.4.11"
+        print_fail "Release metadata is not consistent with v3.4.12"
     fi
 
     #Docker image availability

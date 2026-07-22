@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.11
+# Version: v3.4.12
 #
 # eLeDia Solr Tenant Security — credentials, roles, permissions
 # Part of the eLeDia Solr Multi-Tenant Docker Stack.
@@ -84,7 +84,7 @@ _write_user_role() {
 
 # Add permissions for a core/collection.
 # SolrCloud: per-collection permissions (collection field enforced by Solr):
-#   <name>-read  — role: [admin, support, tenant-x], paths: read-only Moodle endpoints
+#   <name>-read  — role: [admin, support, tenant-x], paths: read-only Moodle endpoints (/select, /moodle, schema/ping)
 #   <name>-write — role: [admin, tenant-x],          paths: write endpoints (/update, /update/extract)
 # Standalone: shared permissions without collection field — "tenant-read" and "tenant-write"
 #   are idempotently upserted on every call (safe: Security API set-permission is a replace).
@@ -103,7 +103,7 @@ _add_permission() {
         "name": $n,
         "role": ["admin","support",$r],
         "collection": [$c],
-        "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
+        "path": ["/select","/moodle","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
       }}')"
     _cloud_authz_api "$read_payload" || return 1
 
@@ -118,7 +118,7 @@ _add_permission() {
   else
     _log "INFO" "Ensuring standalone shared tenant-read and tenant-write permissions"
     local read_payload write_payload
-    read_payload='{"set-permission": {"name": "tenant-read", "role": ["admin","support","tenant"], "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]}}'
+    read_payload='{"set-permission": {"name": "tenant-read", "role": ["admin","support","tenant"], "path": ["/select","/moodle","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]}}'
     _cloud_authz_api "$read_payload"
     write_payload='{"set-permission": {"name": "tenant-write", "role": ["admin","tenant"], "path": ["/update","/update/extract"]}}'
     _cloud_authz_api "$write_payload"
@@ -191,7 +191,7 @@ _rebuild_tenant_permissions() {
         "name": $n,
         "role": $roles,
         "collection": [$col],
-        "path": ["/select","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
+        "path": ["/select","/moodle","/admin/ping","/admin/system","/admin/system/","/schema","/schema/*","/replication"]
       } + (if $before == null then {} else {"before": $before} end))}')"
     _cloud_authz_api "$read_payload" || return 1
 

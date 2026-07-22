@@ -1,7 +1,7 @@
 # Solr für Moodle — Multi-Tenant Docker Stack
 
 ![CI](https://img.shields.io/badge/ci-GitHub%20%2B%20GitLab-brightgreen)
-![Version](https://img.shields.io/badge/version-3.4.11-blue)
+![Version](https://img.shields.io/badge/version-3.4.12-blue)
 ![Solr](https://img.shields.io/badge/solr-9.10.1-orange)
 ![Moodle](https://img.shields.io/badge/moodle-4.1--5.x-purple)
 ![Tested](https://img.shields.io/badge/getestet-Debian%2012%2F13-green)
@@ -40,9 +40,14 @@ Solr bleibt standardmäßig auf `127.0.0.1` gebunden. Externe Zugriffe laufen ü
 git clone <repo-url>
 cd solr-moodle-docker
 ./setup.sh
+
+# Optional direkt beim Setup Tenants anlegen oder erweitern:
+SETUP_TENANTS='schule_a:moodle_prod,moodle_test;schule_b:moodle_prod_b' ./setup.sh
 ```
 
-Das Setup fragt die wichtigsten Werte ab, erzeugt Passwörter, baut die Images und startet den Stack.
+Das Setup fragt die wichtigsten Werte ab, erzeugt Passwörter, baut die Images und startet den Stack. Interaktiv werden jetzt u. a. Instanzname, Hostname, Bind-Adresse, Port, Heap, Solr-Modus und Environment-Banner abgefragt. Wenn `SETUP_TENANTS` gesetzt ist oder interaktiv eingegeben wird, legt das Setup die Tenants über den vorhandenen Container-Helper `solr-tenant.sh` an. In SolrCloud werden daraus Collections, im Standalone-Modus Cores. Nach dem Start kann direkt die Tenant-Verwaltung geöffnet werden.
+
+Wenn der Stack bereits existiert und der `${INSTANCE_NAME}-solr`-Container vorhanden ist, startet `./setup.sh` nicht erneut die Installationsroutine, sondern öffnet direkt das Runtime-Management. Dort können Tenants verwaltet, `tenants.env` per `apply`/`sync-sot` in die Solr-Runtime synchronisiert, Drift geprüft oder behoben und Caddy-/Nginx-/Apache-Proxy-Wege eingerichtet werden. Wenn kein Container vorhanden ist, läuft die normale Installation weiter.
 
 Manuell:
 
@@ -212,7 +217,7 @@ Die wichtigsten Werte aus `.env.example`:
 
 | Variable | Default | Bedeutung |
 |---|---|---|
-| `STACK_VERSION` | `v3.4.11` | Init-Image-Tag |
+| `STACK_VERSION` | `v3.4.12` | Init-Image-Tag |
 | `INSTANCE_NAME` | `solr` | Präfix für Container, Volume und Network |
 | `SOLR_VERSION` | `9.10.1` | Solr-Version |
 | `SOLR_PORT` | `8983` | Solr-Port auf dem Host |
@@ -266,6 +271,49 @@ solr-moodle-docker/
 
 Die CI prüft Lint, Security Scan, Standalone und SolrCloud inklusive Tenant-Isolation.
 
+### Manuell verifizierter Setup-/Moodle-E2E-Test für 3.4.12
+
+Zusätzlich zu den Unit-Tests wurde das neue interaktive Setup in einem isolierten Workspace real gegen Docker ausgeführt:
+
+- Workspace: `/tmp/solr-setup-interactive-test`
+- Instanz: `itestsolr`
+- Host-Bind: `127.0.0.1:19083`
+- Modus: `solrcloud`
+- Tenant für Moodle-E2E: `moodle_e2e` mit Collection/Core `eLeDia_core`
+- Docker-Moodle-Teststack: `/tmp/moodle-solr-e2e`, URL `http://127.0.0.1:18084`
+
+Nachweise aus dem Lauf:
+
+- Solr-Container `itestsolr-solr` lief `healthy`.
+- `solr-tenant.sh healthcheck` meldete erfolgreich `system=200 auth=401 mode=solrcloud`.
+- `solr-tenant.sh runtime-truth` zeigte die live vorhandenen Tenants/Collections.
+- `tenants.env` wurde für UID `8983` schreibbar gemacht. Root-Installationen nutzen `chown 8983:8983` + `660`; nicht-root Installationen nutzen ACL `u:8983:rw,m::rw`; nur als letzte Fallback-Option wird `666` gesetzt.
+- Moodle 4.5.10 wurde als Docker-Container mit PHP-Solr-Extension installiert und über die Moodle-CLI auf `itestsolr-solr:19083`, User `solr_moodle_e2e`, Index `eLeDia_core` konfiguriert.
+- Moodle-Solr-Schema-Setup lief erfolgreich (`schema setup done`). Wichtig: der Stack stellt das Configset bereit; Moodle muss beim ersten Verbinden trotzdem seine Search-Engine-/Schema-Initialisierung gegen den Ziel-Core ausführen.
+- Moodle Global Search Indexing lief erfolgreich und erzeugte Solr-Dokumente.
+- Direkte Solr-Abfrage auf den Moodle-Testmarker lieferte Treffer in `core_course-course`.
+- Moodle-Dateiindexierung wurde mit echten Ressourcen geprüft: PDF, DOCX und PPTX wurden in einen Moodle-Kurs hochgeladen, über `search/cli/indexer.php --force` indexiert und anschließend sowohl direkt in Solr (`solr_filecontent`) als auch über Moodle Global Search gefunden.
+- Nachgewiesene Inhaltsmarker: `PDF_MARKER_ELEDIA_SOLR_TIKA_1784763001`, `DOCX_MARKER_ELEDIA_SOLR_TIKA_1784763002`, `PPTX_MARKER_ELEDIA_SOLR_TIKA_1784763003` sowie echte Inhaltsbegriffe wie `Rechnungsfreigabe`, `Vertragsanlage` und `Schulungsfolie`.
+- Moodle meldete per CLI `server_configured=true`, `server_ready=true` und `moodle_solr_status_green`.
+- `solr-tenant.sh healthcheck` prüft zusätzlich zu System/Auth jetzt auch, ob die Tenant-Cores/-Collections das Moodle-Dateischema (`solr_filecontent`), den `/update/extract` Tika-Handler und in SolrCloud das Configset `eLeDia-moodle-tenant` nutzen.
+
+Gefundene und behobene Fehler im E2E-Lauf:
+
+1. `tenants.env` war bei Host-Owner `bernd:bernd` mit `660` für UID `8983` im Container nicht schreibbar. Behebung: explizite UID-8983-Rechtestrategie mit chown/ACL/Fallback.
+2. `setup.sh` baute nur das Init-Image. Dadurch konnte der Runtime-Container mit alten Helper-Scripts laufen, und neue Kommandos wie `runtime-truth` fehlten. Behebung: `setup.sh` baut jetzt `eLeDia-solr-init` und `solr`.
+3. Der erste Moodle-Test nutzte ein Image ohne PHP-Solr-Extension; Moodle meldete `enginenotinstalled`. Behebung im Test: Docker-Moodle mit `moodle405-solr-ui:latest` gestartet.
+4. Das Moodle-Schema musste vor der Indexierung per Moodle-CLI eingerichtet werden. Behebung im Test: `\\search_solr\\schema()->setup(false)` gegen den interaktiven Solr-Container ausgeführt.
+
+### Moodle außerhalb von Docker
+
+Ein Moodle auf demselben Host muss nicht im Docker-Netzwerk hängen. Für Host-Moodle sind dieselben Tenant-Credentials und derselbe Core/Collection-Name zu verwenden, aber als Hostname wird der Host-Bind bzw. der Proxy genutzt:
+
+- gleicher Server ohne Proxy: `server_hostname=127.0.0.1`, `server_port=<SOLR_PORT>`, z. B. `19083`, wenn Compose `127.0.0.1:19083` bindet.
+- anderer Server oder sauberer Betrieb: Reverse Proxy mit TLS und Tenant-Auth verwenden.
+- `indexname` muss exakt der Tenant-Core/-Collection entsprechen, z. B. `eLeDia_core`.
+- `fileindexing=1` aktivieren, damit Moodle Dateien per `/update/extract` an Solr/Tika sendet.
+- Nach Erstkonfiguration einmal Moodle-Schema-Setup bzw. Admin-Check ausführen und danach `search/cli/indexer.php --force` oder Cron laufen lassen.
+
 ---
 
 ## Weitere Dokumentation
@@ -273,6 +321,7 @@ Die CI prüft Lint, Security Scan, Standalone und SolrCloud inklusive Tenant-Iso
 | Dokument | Inhalt |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Komponenten, Bootstrap, Runtime |
+| [docs/moodle-solr-optimal-search.md](docs/moodle-solr-optimal-search.md) | Moodle Global Search optimal mit Solr konfigurieren, indexieren, testen und reparieren |
 | [proxy_guid.md](proxy_guid.md) | Reverse Proxy mit Caddy, Apache und Nginx |
 | [CHANGELOG.md](CHANGELOG.md) | Änderungshistorie |
 

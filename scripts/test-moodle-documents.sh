@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2026 eLeDia.de / Bernd Schreistetter (bsc)
-# Version: v3.4.11
+# Version: v3.4.12
 
 # =========================================
 # Moodle Document Testing for Solr
@@ -647,6 +647,8 @@ FILE_FIXTURES=(
   "tests/fixture-course-overview.html|tika_fixture_html|ELEDIA HTML FIXTURE MARKER"
   "tests/fixture-gradebook.csv|tika_fixture_csv|workplace indexing"
   "tests/fixture-announcement.rtf|tika_fixture_rtf|ELEDIA RTF FIXTURE MARKER"
+  "tests/fixture-word-document.docx|tika_fixture_docx|ELEDIA DOCX FIXTURE MARKER"
+  "tests/fixture-presentation.pptx|tika_fixture_pptx|ELEDIA PPTX FIXTURE MARKER"
   "tests/fixture-campus-photo.png|tika_fixture_png|"
 )
 
