@@ -131,22 +131,35 @@ unit_tests() {
         print_fail "setup.sh does not expose initial tenant provisioning via existing solr-tenant.sh resources"
     fi
 
+    print_test "setup.sh provisions non-tenant admin users non-interactively"
+    if grep -q 'SETUP_ADMIN_USERS' setup.sh && \
+       grep -q '_setup_provision_admin_users()' setup.sh && \
+       grep -q 'user:role\[:password\]' setup.sh && \
+       grep -q '_admin_users_upsert' setup.sh; then
+        print_pass "setup.sh can seed extra admin/support users from SETUP_ADMIN_USERS"
+    else
+        print_fail "setup.sh lacks non-interactive admin/support user provisioning"
+    fi
+
     print_test "setup.sh offers interactive setup and tenant management menus"
     if grep -q '_prompt_default()' setup.sh && \
        grep -q '_configure_environment_interactive' setup.sh && \
        grep -q '_tenant_management_menu' setup.sh && \
+       grep -q '_admin_user_management_menu' setup.sh && \
+       grep -q 'admin-users.env' setup.sh && \
        grep -q 'Tenant-Verwaltung' setup.sh && \
        grep -q 'solr-tenant.sh passwd' setup.sh && \
        grep -q 'solr-tenant.sh delete' setup.sh && \
        grep -q 'solr-tenant.sh apply' setup.sh; then
-        print_pass "setup.sh has interactive environment prompts and tenant management actions"
+        print_pass "setup.sh has interactive environment prompts plus tenant/admin management actions"
     else
-        print_fail "setup.sh is still missing interactive setup or tenant management menu support"
+        print_fail "setup.sh is still missing interactive setup or tenant/admin management menu support"
     fi
 
     print_test "setup.sh routes existing stacks to runtime management with sync and proxy actions"
     if grep -q '_existing_stack_available()' setup.sh && \
        grep -q '_management_menu()' setup.sh && \
+       grep -q 'Admin-/Ops-User-Verwaltung' setup.sh && \
        grep -q '_proxy_management_menu()' setup.sh && \
        grep -q 'Bestehende Installation erkannt' setup.sh && \
        grep -q 'solr-tenant.sh sync-sot' setup.sh && \
@@ -216,13 +229,34 @@ unit_tests() {
     fi
 
     print_test "setup.sh keeps tenants.env writable for the solr runtime UID"
-    if grep -q '_ensure_tenants_env_permissions()' setup.sh && \
+    if grep -q '_ensure_solr_managed_file_permissions()' setup.sh && \
        grep -q 'chown 8983:8983' setup.sh && \
        grep -q 'setfacl -m u:8983:rw,m::rw' setup.sh && \
-       grep -q 'mode 666 fallback' setup.sh; then
-        print_pass "setup.sh enforces UID 8983 rw access via chown, ACL, or explicit fallback"
+       grep -q 'mode 666 fallback' setup.sh && \
+       grep -q 'admin-users.env' setup.sh; then
+        print_pass "setup.sh enforces UID 8983 rw access for tenant/admin source files via chown, ACL, or explicit fallback"
     else
-        print_fail "setup.sh can leave tenants.env without UID 8983 write access"
+        print_fail "setup.sh can leave tenant/admin source files without UID 8983 write access"
+    fi
+
+    print_test "extra admin users flow into bootstrap and sync"
+    if grep -q 'ADMIN_USERS_ENV' docker-compose.yml && \
+       grep -q 'admin-users.env' .env.example && \
+       grep -q 'ADMIN_USERS_ENV' init/powerinit.sh && \
+       grep -q 'EXTRA_ADMIN_ROLE' init/powerinit.sh && \
+       grep -q 'Adding extra admin/support user' init/powerinit.sh && \
+       grep -q 'ADMIN_USERS_ENV' scripts/solr-tenant-cmd.sh && \
+       grep -q '_write_user_role' scripts/solr-tenant-cmd.sh; then
+        print_pass "extra non-tenant admin/support users are mounted, bootstrapped, and syncable"
+    else
+        print_fail "extra non-tenant admin/support users are not wired through bootstrap/sync"
+    fi
+
+    print_test "system user roles are not forced into tenant role arrays"
+    if awk '/^_write_user_role\(\) \{/,/^\}/' scripts/solr-tenant-security.sh | grep -q '^  elif printf .*tenant-'; then
+        print_pass "system users keep exact roles while tenant-* users still get tenant+specific roles"
+    else
+        print_fail "_write_user_role still risks forcing system users into tenant role arrays"
     fi
 
     print_test "Moodle configsets and Tika file-indexing schema stay aligned"

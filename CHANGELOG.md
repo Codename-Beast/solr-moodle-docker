@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [3.4.12]
 
 ### Added
+- `setup.sh` zeigt die Interaktion jetzt strukturierter an (Boxen/Statusblöcke) und kann zusätzliche nicht-tenantbezogene Admin-/Ops-User über `admin-users.env` verwalten.
+- Das Runtime-Management enthält eine eigene Admin-/Ops-User-Verwaltung für `admin-users.env`; `sync-sot` übernimmt diese User in die Solr-Runtime.
+- Nicht-interaktive Setups können zusätzliche Admin-/Support-User jetzt direkt über `SETUP_ADMIN_USERS='user:role[:password];...' ./setup.sh` anlegen.
 - `setup.sh` kann optional direkt initiale Tenants anlegen oder bestehende Tenants um Cores erweitern. Dazu nutzt es weiterhin den vorhandenen Container-Helper `solr-tenant.sh`; in SolrCloud werden dieselben Namen als Collections angelegt.
 - `setup.sh` fragt die wichtigsten Basiswerte interaktiv ab: Instanzname, Hostname, Bind-Adresse, Port, Heap, Solr-Modus und Environment-Banner.
 - Nach dem Stack-Start kann direkt eine interaktive Tenant-Verwaltung geöffnet werden: listen, anlegen, Core/Collection hinzufügen oder entfernen, Passwort setzen, deaktivieren, reaktivieren, apply und healthcheck.
@@ -16,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - `docs/moodle-solr-optimal-search.md` dokumentiert optimale Moodle-Solr-Einstellungen, Indexierung, Dateiindexierung, Host-Moodle-Betrieb, Tuning-Tests und Config-Self-Healing.
 
 ### Fixed
+- `powerinit.sh` und `sync-sot` berücksichtigen jetzt auch zusätzliche System-User aus `admin-users.env`, damit Reboots/Re-Syncs keine separat gepflegten Admin-/Support-Accounts verlieren.
 - Die Setup-Ausgabe und Unit-Tests decken jetzt ab, dass Tenant-/Core-/Collection-Anlage über die vorhandenen Runtime-Ressourcen läuft statt über separate Hilfsdateien.
 - `setup.sh` erzwingt jetzt Schreibzugriff für Solr-Runtime-UID `8983` auf `tenants.env`: bevorzugt `chown 8983:8983` mit Mode `660`, sonst POSIX-ACL `u:8983:rw,m::rw`, sonst expliziter Fallback mit Warnung. Root cause: ein interaktiver Docker-Test erzeugte `tenants.env` als Host-User-Datei, wodurch `solr-tenant.sh apply` im Container mit `Permission denied` scheiterte.
 - `setup.sh` baut jetzt sowohl `eLeDia-solr-init` als auch das Runtime-Image `solr`. Root cause: nur das Init-Image wurde neu gebaut, wodurch der laufende Runtime-Container alte Helper-Scripts behalten konnte und neue Befehle wie `runtime-truth` fehlten.

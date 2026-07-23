@@ -31,6 +31,7 @@ services:
       - solr_data:/var/solr/data
       - ./.env:/.env:ro,z
       - ./tenants.env:${TENANTS_ENV:-/opt/solr/tenants.env}:ro
+      - ./admin-users.env:${ADMIN_USERS_ENV:-/opt/solr/admin-users.env}:ro
       - ./eLeDia-config:/config:ro
       - ${ELEDIA_LOG_ROOT:-/var/log/eledia/solr}/${INSTANCE_NAME:-solr}:/var/log/solr:z
     env_file:
@@ -39,6 +40,7 @@ services:
       ENV_FILE_PATH: /.env
       SOLR_MODE: ${SOLR_MODE:-solrcloud}
       TENANTS_ENV: ${TENANTS_ENV:-/opt/solr/tenants.env}
+      ADMIN_USERS_ENV: ${ADMIN_USERS_ENV:-/opt/solr/admin-users.env}
       # Optional comma-separated runtime targets (for globalized init orchestration metadata)
       INIT_TARGETS: ${INIT_TARGETS:-solr-a,solr-b,solr-c}
     networks:
@@ -69,6 +71,8 @@ services:
       - solr_data:/var/solr/data
       # tenants.env: source of truth for tenant CRUD operations
       - ./tenants.env:${TENANTS_ENV:-/opt/solr/tenants.env}:rw
+      # admin-users.env: source of truth for non-tenant admin/support users
+      - ./admin-users.env:${ADMIN_USERS_ENV:-/opt/solr/admin-users.env}:rw
       # eLeDia-config: schema + solrconfig source for configset upload
       - ./eLeDia-config:/opt/solr/eledia-config:ro
       # Host log mount — all Solr logs go to /var/log/eledia/<instance>/
@@ -94,6 +98,7 @@ services:
       SOLR_BACKUP_ALLOW_PATHS: ${SOLR_BACKUP_ALLOW_PATHS:-/var/solr/data/backup}
       # Tenant SOT path override for Docker-in-Docker CI where file bind mounts are not reliable.
       TENANTS_ENV: ${TENANTS_ENV:-/opt/solr/tenants.env}
+      ADMIN_USERS_ENV: ${ADMIN_USERS_ENV:-/opt/solr/admin-users.env}
       SOLR_OPTS: >-
         -XX:-UseLargePages
         -Dsolr.usage.analytics.enabled=false

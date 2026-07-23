@@ -6,7 +6,7 @@
 # Solr Multi-Tenant — Interactive Setup
 # =========================================
 # Idempotent: safe to re-run.
-# First run: creates .env, tenants.env, /var/log/eledia/solr-<instance>.log, logrotate, starts Solr.
+# First run: creates .env, tenants.env, admin-users.env, /var/log/eledia/solr-<instance>.log, logrotate, starts Solr.
 # Re-run: backs up .env (max 3 generations), updates passwords if requested.
 
 set -euo pipefail
@@ -32,6 +32,19 @@ _print_header() {
   printf '╔════════════════════════════════════════════════════════════╗\n'
   printf '║  eLeDia Solr Multi-Tenant Setup                           ║\n'
   printf '╚════════════════════════════════════════════════════════════╝\n'
+}
+
+_print_box_title() {
+  local title="$1"
+  printf '\n'
+  printf '┌────────────────────────────────────────────────────────────┐\n'
+  printf '│ %-58s │\n' "$title"
+  printf '└────────────────────────────────────────────────────────────┘\n'
+}
+
+_print_kv() {
+  local key="$1" value="$2"
+  printf '  %-22s %s\n' "$key" "$value"
 }
 
 _print_step() {
@@ -134,7 +147,7 @@ _prompt_secret() {
 _configure_environment_interactive() {
   local value current
 
-  printf '\n=== Basis-Konfiguration ===\n'
+  _print_box_title "Basis-Konfiguration"
   current="$(_env_get INSTANCE_NAME)"; current="${current:-solr}"
   value="$(_prompt_default 'Instance name' "$current")"
   _env_set "INSTANCE_NAME" "$value"
@@ -166,6 +179,229 @@ _configure_environment_interactive() {
   current="$(_env_get SOLR_ENVIRONMENT)"; current="${current:-prod,label=Production,color=red}"
   value="$(_prompt_default 'Solr environment banner' "$current")"
   _env_set "SOLR_ENVIRONMENT" "$value"
+
+  printf '\n'
+  _print_kv 'Instance' "$(_env_get INSTANCE_NAME)"
+  _print_kv 'Hostname' "$(_env_get SOLR_HOSTNAME)"
+  _print_kv 'Bind' "$(_env_get SOLR_BIND)"
+  _print_kv 'Port' "$(_env_get SOLR_PORT)"
+  _print_kv 'Heap' "$(_env_get SOLR_HEAP)"
+  _print_kv 'Mode' "$(_env_get SOLR_MODE)"
+  _print_kv 'Banner' "$(_env_get SOLR_ENVIRONMENT)"
+}
+
+_ensure_solr_managed_file_permissions() {
+  local path="$1"
+
+  # Preferred: make the Solr runtime UID the owner and keep the file non-world-writable.
+  if chown 8983:8983 "$path" 2>/dev/null; then
+    chmod 660 "$path"
+    _log "  ${path}: owner set to 8983:8983, mode 660"
+    return 0
+  fi
+
+  # Non-root installs cannot chown arbitrary host files. Use a POSIX ACL when available
+  # so UID 8983 can still read/write the bind-mounted file without opening it to everyone.
+  if command -v setfacl >/dev/null 2>&1 && chmod 640 "$path" 2>/dev/null && setfacl -m u:8983:rw,m::rw "$path" 2>/dev/null; then
+    _log "  ${path}: granted rw ACL for UID 8983"
+    return 0
+  fi
+
+  # Last fallback for filesystems without usable chown/ACL. This is less strict, but keeps
+  # setup functional and is still better than a Solr startup failure.
+  chmod 666 "$path"
+  _log "  WARNING: ${path}: could not chown or set ACL for UID 8983; using mode 666 fallback"
+}
+
+_admin_user_slug() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '_'
+}
+
+_admin_users_list() {
+  if [ ! -f "admin-users.env" ]; then
+    printf '  Keine zusätzlichen Admin-/Ops-User konfiguriert.\n'
+    return 0
+  fi
+
+  awk -F= '
+    /^ADMIN_[A-Za-z0-9_-]+_PASS=/ {
+      key=$1
+      sub(/^ADMIN_/, "", key)
+      sub(/_PASS$/, "", key)
+      pass[key]=$2
+    }
+    /^ADMIN_[A-Za-z0-9_-]+_ROLE=/ {
+      key=$1
+      sub(/^ADMIN_/, "", key)
+      sub(/_ROLE$/, "", key)
+      role[key]=$2
+    }
+    END {
+      count=0
+      for (key in pass) {
+        count++
+        r=(key in role ? role[key] : "admin")
+        printf("  - %s (%s)\n", key, r)
+      }
+      if (count == 0) {
+        printf("  Keine zusätzlichen Admin-/Ops-User konfiguriert.\n")
+      }
+    }
+  ' admin-users.env | sort
+}
+
+_admin_user_exists() {
+  local slug="$1"
+  [ -f "admin-users.env" ] && grep -q "^ADMIN_${slug}_PASS=" admin-users.env
+}
+
+_admin_users_upsert() {
+  local slug="$1" role="$2" pass="$3" tmp line
+  tmp="$(mktemp)"
+  [ -f admin-users.env ] || touch admin-users.env
+
+  awk -v slug="$slug" 'index($0, "ADMIN_" slug "_") != 1 { print }' admin-users.env > "$tmp"
+  printf 'ADMIN_%s_ROLE=%s\n' "$slug" "$role" >> "$tmp"
+  printf 'ADMIN_%s_PASS=%s\n' "$slug" "$pass" >> "$tmp"
+  mv "$tmp" admin-users.env
+  _ensure_solr_managed_file_permissions admin-users.env
+}
+
+_admin_users_remove() {
+  local slug="$1" tmp
+  [ -f admin-users.env ] || return 0
+  tmp="$(mktemp)"
+  awk -v slug="$slug" 'index($0, "ADMIN_" slug "_") != 1 { print }' admin-users.env > "$tmp"
+  mv "$tmp" admin-users.env
+  _ensure_solr_managed_file_permissions admin-users.env
+}
+
+_admin_users_sync_runtime() {
+  local container="$1"
+  _tenant_exec "$container" sync-sot || true
+}
+
+_setup_provision_admin_users() {
+  local container="$1" admin_spec="$2"
+  local entry username role password slug
+  local -a admin_entries
+
+  [ -z "$admin_spec" ] && return 0
+
+  IFS=';' read -ra admin_entries <<< "$admin_spec"
+  for entry in "${admin_entries[@]}"; do
+    entry="$(printf '%s' "$entry" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [ -z "$entry" ] && continue
+
+    username="${entry%%:*}"
+    [ "$username" != "$entry" ] || _die "Invalid SETUP_ADMIN_USERS entry '$entry' (expected user:role[:password])"
+
+    role="${entry#*:}"
+    password=""
+    if printf '%s' "$role" | grep -q ':'; then
+      password="${role#*:}"
+      role="${role%%:*}"
+    fi
+
+    username="$(printf '%s' "$username" | tr -d ' ')"
+    role="$(printf '%s' "$role" | tr -d ' ')"
+    [ -n "$username" ] || _die "Invalid SETUP_ADMIN_USERS entry '$entry' (empty username)"
+    case "$role" in
+      admin|support) ;;
+      *) _die "Invalid SETUP_ADMIN_USERS role '$role' for user '$username' (allowed: admin|support)" ;;
+    esac
+
+    slug="$(_admin_user_slug "$username")"
+    [ -n "$password" ] || password="$(_gen_password)"
+    _admin_users_upsert "$slug" "$role" "$password"
+    _log "  Provisioned admin/support user '${slug}' (${role}) from SETUP_ADMIN_USERS"
+  done
+
+  _admin_users_sync_runtime "$container"
+}
+
+_admin_user_management_menu() {
+  local container="$1" choice username slug role password
+  if [ ! -t 0 ]; then
+    _log "  Admin user management skipped (non-interactive stdin)"
+    return 0
+  fi
+
+  while true; do
+    _print_box_title "Admin-/Ops-User-Verwaltung (${container})"
+    printf '  Diese User sind unabhängig von tenants.env und werden in admin-users.env gehalten.\n\n'
+    printf '  Aktuelle User:\n'
+    _admin_users_list
+    printf '\n'
+    printf '  1) User anlegen/aktualisieren\n'
+    printf '  2) Passwort neu setzen\n'
+    printf '  3) User entfernen und Runtime sperren\n'
+    printf '  4) Runtime mit admin-users.env synchronisieren\n'
+    printf '  0) Zurück\n'
+    printf '  Auswahl: '
+    read -r choice
+
+    case "$choice" in
+      1)
+        username="$(_prompt_default 'Username (a-z, 0-9, _.-)' '')"
+        [ -n "$username" ] || { printf '  Username ist Pflicht.\n'; continue; }
+        _tenant_exec "$container" usage >/dev/null 2>&1 || true
+        slug="$(_admin_user_slug "$username")"
+        if [ "$slug" != "$username" ]; then
+          printf '  Hinweis: gespeichert als %s\n' "$slug"
+        fi
+        role="$(_prompt_choice 'Rolle' 'admin' 'admin|support')"
+        password="$(_prompt_secret 'Passwort leer=generieren')"
+        [ -n "$password" ] || password="$(_gen_password)"
+        _admin_users_upsert "$slug" "$role" "$password"
+        _admin_users_sync_runtime "$container"
+        printf '  ✔ User %s (%s) gespeichert und synchronisiert.\n' "$slug" "$role"
+        ;;
+      2)
+        username="$(_prompt_default 'Username' '')"
+        [ -n "$username" ] || { printf '  Username ist Pflicht.\n'; continue; }
+        slug="$(_admin_user_slug "$username")"
+        if ! _admin_user_exists "$slug"; then
+          printf '  User %s nicht in admin-users.env gefunden.\n' "$slug"
+          continue
+        fi
+        role="$(grep "^ADMIN_${slug}_ROLE=" admin-users.env | tail -n 1 | cut -d= -f2-)"
+        role="${role:-admin}"
+        password="$(_prompt_secret 'Neues Passwort leer=generieren')"
+        [ -n "$password" ] || password="$(_gen_password)"
+        _admin_users_upsert "$slug" "$role" "$password"
+        _admin_users_sync_runtime "$container"
+        printf '  ✔ Passwort für %s aktualisiert und synchronisiert.\n' "$slug"
+        ;;
+      3)
+        username="$(_prompt_default 'Username' '')"
+        [ -n "$username" ] || { printf '  Username ist Pflicht.\n'; continue; }
+        slug="$(_admin_user_slug "$username")"
+        if ! _admin_user_exists "$slug"; then
+          printf '  User %s nicht in admin-users.env gefunden.\n' "$slug"
+          continue
+        fi
+        printf '  User %s wirklich aus admin-users.env entfernen und in der Runtime sperren? [y/N]: ' "$slug"
+        read -r confirm
+        case "$confirm" in
+          y|Y|yes|YES)
+            _admin_users_remove "$slug"
+            _admin_users_sync_runtime "$container"
+            printf '  ✔ User %s entfernt und Runtime synchronisiert.\n' "$slug"
+            ;;
+        esac
+        ;;
+      4)
+        _admin_users_sync_runtime "$container"
+        ;;
+      0|q|Q)
+        return 0
+        ;;
+      *)
+        printf '  Ungültige Auswahl.\n'
+        ;;
+    esac
+  done
 }
 
 # _tenant_exec: Run solr-tenant.sh in the target runtime container.
@@ -192,7 +428,7 @@ _tenant_management_menu() {
   fi
 
   while true; do
-    printf '\n=== Tenant-Verwaltung (%s) ===\n' "$container"
+    _print_box_title "Tenant-Verwaltung (${container})"
     printf '  1) Tenants listen\n'
     printf '  2) Tenant anlegen\n'
     printf '  3) Core/Collection hinzufügen\n'
@@ -316,7 +552,7 @@ _proxy_management_menu() {
   fi
 
   while true; do
-    printf '\n=== Proxy-Verwaltung ===\n'
+    _print_box_title 'Proxy-Verwaltung'
     printf '  1) Proxy-Werte in .env setzen\n'
     printf '  2) Caddy Proxy-Container starten/aktualisieren\n'
     printf '  3) Nginx Proxy-Container starten/aktualisieren\n'
@@ -397,17 +633,18 @@ _management_menu() {
 
   printf '\nBestehende Installation erkannt: %s\n' "$container"
   while true; do
-    printf '\n=== Runtime-Management (%s) ===\n' "$container"
+    _print_box_title "Runtime-Management (${container})"
     printf '  1) Status / Healthcheck\n'
     printf '  2) Tenant-Verwaltung\n'
-    printf '  3) Runtime aus tenants.env anwenden (apply)\n'
-    printf '  4) Runtime mit .env + tenants.env synchronisieren (sync-sot)\n'
-    printf '  5) Drift erkennen\n'
-    printf '  6) Drift beheben\n'
-    printf '  7) Runtime-Wahrheit anzeigen\n'
-    printf '  8) Proxy-Verwaltung\n'
-    printf '  9) Stack neu starten\n'
-    printf '  10) Logs anzeigen\n'
+    printf '  3) Admin-/Ops-User-Verwaltung\n'
+    printf '  4) Runtime aus tenants.env anwenden (apply)\n'
+    printf '  5) Runtime mit .env + tenants.env + admin-users.env synchronisieren (sync-sot)\n'
+    printf '  6) Drift erkennen\n'
+    printf '  7) Drift beheben\n'
+    printf '  8) Runtime-Wahrheit anzeigen\n'
+    printf '  9) Proxy-Verwaltung\n'
+    printf '  10) Stack neu starten\n'
+    printf '  11) Logs anzeigen\n'
     printf '  0) Beenden\n'
     printf '  Auswahl: '
     read -r choice
@@ -421,29 +658,32 @@ _management_menu() {
         _tenant_management_menu "$container"
         ;;
       3)
-        _tenant_exec "$container" apply || true
+        _admin_user_management_menu "$container"
         ;;
       4)
+        _tenant_exec "$container" apply || true
+        ;;
+      5)
         # solr-tenant.sh sync-sot keeps runtime users/permissions aligned with .env + tenants.env.
         _tenant_exec "$container" sync-sot || true
         ;;
-      5)
+      6)
         _tenant_exec "$container" drift-detect || true
         ;;
-      6)
+      7)
         # solr-tenant.sh drift-remediate delegates remediation to sync-sot in the runtime helper.
         _tenant_exec "$container" drift-remediate || true
         ;;
-      7)
+      8)
         _tenant_exec "$container" runtime-truth || true
         ;;
-      8)
+      9)
         _proxy_management_menu "$container"
         ;;
-      9)
+      10)
         docker compose restart solr 2>&1 | tee -a "$LOG_FILE" || true
         ;;
-      10)
+      11)
         docker compose logs --tail=120 --no-color 2>&1 | tee -a "$LOG_FILE" || true
         ;;
       0|q|Q)
@@ -625,40 +865,26 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2: tenants.env
+# Step 2: source files
 # ---------------------------------------------------------------------------
-_print_step "2" "Tenant source file"
-
-_ensure_tenants_env_permissions() {
-  local path="${1:-tenants.env}"
-
-  # Preferred: make the Solr runtime UID the owner and keep the file non-world-writable.
-  if chown 8983:8983 "$path" 2>/dev/null; then
-    chmod 660 "$path"
-    _log "  ${path}: owner set to 8983:8983, mode 660"
-    return 0
-  fi
-
-  # Non-root installs cannot chown arbitrary host files. Use a POSIX ACL when available
-  # so UID 8983 can still read/write the bind-mounted file without opening it to everyone.
-  if command -v setfacl >/dev/null 2>&1 && chmod 640 "$path" 2>/dev/null && setfacl -m u:8983:rw,m::rw "$path" 2>/dev/null; then
-    _log "  ${path}: granted rw ACL for UID 8983"
-    return 0
-  fi
-
-  # Last fallback for filesystems without usable chown/ACL. This is less strict, but keeps
-  # setup functional and is still better than a Solr startup failure.
-  chmod 666 "$path"
-  _log "  WARNING: ${path}: could not chown or set ACL for UID 8983; using mode 666 fallback"
-}
+_print_step "2" "Source files"
 
 if [ ! -f "tenants.env" ]; then
   touch "tenants.env"
-  _ensure_tenants_env_permissions "tenants.env"
+  _ensure_solr_managed_file_permissions "tenants.env"
   _log "  Created empty tenants.env"
 else
-  _ensure_tenants_env_permissions "tenants.env"
+  _ensure_solr_managed_file_permissions "tenants.env"
   _log "  tenants.env already exists — preserving content, enforcing UID 8983 access"
+fi
+
+if [ ! -f "admin-users.env" ]; then
+  touch "admin-users.env"
+  _ensure_solr_managed_file_permissions "admin-users.env"
+  _log "  Created empty admin-users.env"
+else
+  _ensure_solr_managed_file_permissions "admin-users.env"
+  _log "  admin-users.env already exists — preserving content, enforcing UID 8983 access"
 fi
 
 # ---------------------------------------------------------------------------
@@ -759,9 +985,9 @@ if [ "$HEALTHY" = "0" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 7: Optional tenant provisioning
+# Step 7: Optional runtime provisioning
 # ---------------------------------------------------------------------------
-_print_step "7" "Initial tenants"
+_print_step "7" "Initial runtime state"
 
 SETUP_TENANTS="${SETUP_TENANTS:-}"
 if [ -z "$SETUP_TENANTS" ] && [ -t 0 ]; then
@@ -779,11 +1005,33 @@ else
   _log "  No initial tenants requested"
 fi
 
+SETUP_ADMIN_USERS="${SETUP_ADMIN_USERS:-}"
+if [ -z "$SETUP_ADMIN_USERS" ] && [ -t 0 ]; then
+  printf '\n'
+  printf 'Optionale Admin-/Ops-User direkt über das Setup.\n'
+  printf 'Format: user1:admin[:password];user2:support[:password]\n'
+  printf 'Passwort optional: leerer dritter Teil erzeugt automatisch ein Passwort. Leer lassen zum Überspringen.\n'
+  printf '  Admin-/Ops-User: '
+  read -r SETUP_ADMIN_USERS
+fi
+
+if [ -n "$SETUP_ADMIN_USERS" ]; then
+  _setup_provision_admin_users "$CONTAINER_NAME" "$SETUP_ADMIN_USERS"
+else
+  _log "  No initial admin/support users requested"
+fi
+
 if [ -t 0 ]; then
   printf '  Tenant-Verwaltung jetzt öffnen? [y/N]: '
   read -r OPEN_TENANT_MENU
   case "$OPEN_TENANT_MENU" in
     y|Y|yes|YES) _tenant_management_menu "$CONTAINER_NAME" ;;
+  esac
+
+  printf '  Admin-/Ops-User-Verwaltung jetzt öffnen? [y/N]: '
+  read -r OPEN_ADMIN_MENU
+  case "$OPEN_ADMIN_MENU" in
+    y|Y|yes|YES) _admin_user_management_menu "$CONTAINER_NAME" ;;
   esac
 fi
 
@@ -815,6 +1063,8 @@ printf '  Healthcheck:\n'
 printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh healthcheck\n' "$CONTAINER_NAME"
 printf '  Tenant anlegen:\n'
 printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh create <name> --cores <core1>[,<core2>]\n' "$CONTAINER_NAME"
+printf '  Runtime mit allen SOT-Dateien synchronisieren:\n'
+printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh sync-sot\n' "$CONTAINER_NAME"
 printf '  Tenants aus Runtime-API lesen:\n'
 printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh runtime-truth\n' "$CONTAINER_NAME"
 printf '  Tenants listen:\n'
@@ -822,5 +1072,6 @@ printf '    docker exec %s /opt/solr/scripts/solr-tenant.sh list\n' "$CONTAINER_
 printf '\n'
 printf 'Files:\n'
 printf '  Admin credentials:  .env\n'
+printf '  Extra admin users:  admin-users.env\n'
 printf '  Tenant credentials: tenants.env\n'
 printf '\n'

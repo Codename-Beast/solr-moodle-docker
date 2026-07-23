@@ -8,6 +8,7 @@
 # Runs as init container (exit 0 = Solr starts, exit != 0 = Solr blocked)
 # Rebuilds security.json COMPLETELY on every start from:
 #   - .env (admin + support credentials)
+#   - /opt/solr/admin-users.env (extra non-tenant admin/support users)
 #   - /opt/solr/tenants.env (all tenant configurations)
 
 set -euo pipefail
@@ -50,6 +51,7 @@ fi
 CONFIGSET_DST="${DATA_DIR}/configsets/eLeDia-moodle-tenant/conf"
 DEFAULT_CONFIGSET_DST="${DATA_DIR}/configsets/_default/conf"
 TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
+ADMIN_USERS_ENV="${ADMIN_USERS_ENV:-/opt/solr/admin-users.env}"
 ENV_FILE_PATH="${ENV_FILE_PATH:-/.env}"
 
 # Init state tracking (install vs upgrade/update)
@@ -277,13 +279,18 @@ _validate_name "$SUPPORT_USER" "SOLR_SUPPORT_USER"
 _log "  Admin user: $ADMIN_USER, Support user: $SUPPORT_USER"
 
 # ---------------------------------------------------------------------------
-# Step 1: Load tenants.env
+# Step 1: Load source files
 # ---------------------------------------------------------------------------
-_log "Step 1: Loading tenants.env"
+_log "Step 1: Loading source files"
 
 if [ ! -f "$TENANTS_ENV" ]; then
   _log "  No tenants.env found at $TENANTS_ENV — creating empty file"
   touch "$TENANTS_ENV" 2>/dev/null || true
+fi
+
+if [ ! -f "$ADMIN_USERS_ENV" ]; then
+  _log "  No admin-users.env found at $ADMIN_USERS_ENV — creating empty file"
+  touch "$ADMIN_USERS_ENV" 2>/dev/null || true
 fi
 
 # Parse tenants into arrays.
@@ -292,6 +299,9 @@ fi
 TENANT_NAMES=()
 TENANT_COUNT=0
 declare -A TENANT_CORES=() TENANT_USER=() TENANT_PASS=() TENANT_ACTIVE=()
+EXTRA_ADMIN_NAMES=()
+EXTRA_ADMIN_COUNT=0
+declare -A EXTRA_ADMIN_ROLE=() EXTRA_ADMIN_PASS=()
 
 # _load_tenants: Parse tenants.env and populate the TENANT_* associative arrays.
 # Reads TENANT_<name>_CORES, TENANT_<name>_USER, TENANT_<name>_PASS, TENANT_<name>_ACTIVE.
@@ -333,6 +343,40 @@ _load_tenants() {
 
 _load_tenants
 _log "  Found $TENANT_COUNT tenant(s)"
+
+_load_extra_admin_users() {
+  local key value name
+  while IFS='=' read -r key value; do
+    case "$key" in
+      '#'*|'') continue ;;
+    esac
+    if echo "$key" | grep -qE '^ADMIN_[A-Za-z0-9_]+_(ROLE|PASS)$'; then
+      name="${key#ADMIN_}"
+      field="${name##*_}"
+      name="${name%_*}"
+      _validate_name "$name" "extra admin user"
+      case "$field" in
+        ROLE)
+          case "$value" in
+            admin|support) EXTRA_ADMIN_ROLE["$name"]="$value" ;;
+            *) _log "ERROR: Invalid role '$value' for extra admin user '$name' (allowed: admin|support)"; exit 1 ;;
+          esac
+          ;;
+        PASS)
+          EXTRA_ADMIN_PASS["$name"]="$value"
+          ;;
+      esac
+    fi
+  done < "$ADMIN_USERS_ENV"
+
+  for name in "${!EXTRA_ADMIN_PASS[@]}"; do
+    EXTRA_ADMIN_NAMES+=("$name")
+  done
+  EXTRA_ADMIN_COUNT="${#EXTRA_ADMIN_NAMES[@]}"
+}
+
+_load_extra_admin_users
+_log "  Found $EXTRA_ADMIN_COUNT extra admin/support user(s)"
 
 # ---------------------------------------------------------------------------
 # Step 1b: Enable Solr PingRequestHandler healthcheck file
@@ -462,6 +506,31 @@ if [ -n "$MOODLE_USER" ] && [ -n "$MOODLE_PASS" ]; then
     }]' "$TMP_SEC" > "$TMP2"
   mv "$TMP2" "$TMP_SEC"
 fi
+
+for extra_admin in "${EXTRA_ADMIN_NAMES[@]+"${EXTRA_ADMIN_NAMES[@]}"}"; do
+  extra_role="${EXTRA_ADMIN_ROLE[$extra_admin]:-admin}"
+  extra_pass="${EXTRA_ADMIN_PASS[$extra_admin]:-}"
+
+  if [ -z "$extra_pass" ]; then
+    _log "  WARNING: No password for extra admin/support user $extra_admin — skipping"
+    continue
+  fi
+
+  _log "  Adding extra admin/support user: $extra_admin (role: $extra_role)"
+  extra_hash="$(hash_solr_password "$extra_pass")"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$extra_admin" --arg h "$extra_hash" \
+    '.authentication.credentials[$u] = $h' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+
+  TMP2="$(mktemp)"
+  chmod 600 "$TMP2"
+  jq --arg u "$extra_admin" --arg r "$extra_role" \
+    '.authorization["user-role"][$u] = $r' "$TMP_SEC" > "$TMP2"
+  mv "$TMP2" "$TMP_SEC"
+done
 
 # Merge each active tenant using jq
 for tenant_name in "${TENANT_NAMES[@]+"${TENANT_NAMES[@]}"}"; do

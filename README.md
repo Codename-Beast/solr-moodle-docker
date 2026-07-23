@@ -45,9 +45,26 @@ cd solr-moodle-docker
 SETUP_TENANTS='schule_a:moodle_prod,moodle_test;schule_b:moodle_prod_b' ./setup.sh
 ```
 
-Das Setup fragt die wichtigsten Werte ab, erzeugt Passwörter, baut die Images und startet den Stack. Interaktiv werden jetzt u. a. Instanzname, Hostname, Bind-Adresse, Port, Heap, Solr-Modus und Environment-Banner abgefragt. Wenn `SETUP_TENANTS` gesetzt ist oder interaktiv eingegeben wird, legt das Setup die Tenants über den vorhandenen Container-Helper `solr-tenant.sh` an. In SolrCloud werden daraus Collections, im Standalone-Modus Cores. Nach dem Start kann direkt die Tenant-Verwaltung geöffnet werden.
+Das Setup fragt die wichtigsten Werte ab, erzeugt Passwörter, baut die Images und startet den Stack. Interaktiv werden jetzt u. a. Instanzname, Hostname, Bind-Adresse, Port, Heap, Solr-Modus und Environment-Banner abgefragt. Die Oberfläche ist dabei klarer gegliedert und zeigt die gewählten Basiswerte direkt im Terminal an. Wenn `SETUP_TENANTS` gesetzt ist oder interaktiv eingegeben wird, legt das Setup die Tenants über den vorhandenen Container-Helper `solr-tenant.sh` an. In SolrCloud werden daraus Collections, im Standalone-Modus Cores. Nach dem Start kann direkt die Tenant-Verwaltung oder die neue Admin-/Ops-User-Verwaltung geöffnet werden.
 
-Wenn der Stack bereits existiert und der `${INSTANCE_NAME}-solr`-Container vorhanden ist, startet `./setup.sh` nicht erneut die Installationsroutine, sondern öffnet direkt das Runtime-Management. Dort können Tenants verwaltet, `tenants.env` per `apply`/`sync-sot` in die Solr-Runtime synchronisiert, Drift geprüft oder behoben und Caddy-/Nginx-/Apache-Proxy-Wege eingerichtet werden. Wenn kein Container vorhanden ist, läuft die normale Installation weiter.
+Wenn der Stack bereits existiert und der `${INSTANCE_NAME}-solr`-Container vorhanden ist, startet `./setup.sh` nicht erneut die Installationsroutine, sondern öffnet direkt das Runtime-Management. Dort können Tenants verwaltet, zusätzliche nicht-tenantbezogene Admin-/Support-User über `admin-users.env` gepflegt, alle SOT-Dateien per `apply`/`sync-sot` in die Solr-Runtime synchronisiert, Drift geprüft oder behoben und Caddy-/Nginx-/Apache-Proxy-Wege eingerichtet werden. Wenn kein Container vorhanden ist, läuft die normale Installation weiter.
+
+Zusätzliche System-User ohne Tenant-Bezug werden in `admin-users.env` verwaltet. Format pro User:
+
+```text
+ADMIN_alice_ROLE=admin
+ADMIN_alice_PASS=<password>
+ADMIN_bob_ROLE=support
+ADMIN_bob_PASS=<password>
+```
+
+Für voll nicht-interaktive Setups kannst du sie auch direkt beim ersten Lauf setzen:
+
+```bash
+SETUP_ADMIN_USERS='alice:admin:Secret1234!;bob:support' ./setup.sh
+```
+
+Format: `user:role[:password]` mit `role=admin|support`. Ohne Passwort wird automatisch eines erzeugt.
 
 Manuell:
 

@@ -21,6 +21,7 @@ if [ -z "${ZK_HOST:-}" ]; then
   esac
 fi
 TENANTS_ENV="${TENANTS_ENV:-/opt/solr/tenants.env}"
+ADMIN_USERS_ENV="${ADMIN_USERS_ENV:-/opt/solr/admin-users.env}"
 LOG_FILE="${LOG_FILE:-/var/log/solr/tenant.log}"
 SECURITY_JSON="${SECURITY_JSON:-/var/solr/data/security.json}"
 BOOTSTRAP_STATE_FILE="${BOOTSTRAP_STATE_FILE:-/var/solr/data/.eledia-init/state.env}"
@@ -558,12 +559,13 @@ cmd_apply() {
 }
 
 # ---------------------------------------------------------------------------
-# Subcommand: sync-sot (.env + tenants.env are source of truth)
+# Subcommand: sync-sot (.env + tenants.env + admin-users.env are source of truth)
 #
 # Strategy:
 #  1) Apply desired state from tenants.env to API (cmd_apply)
 #  2) Read users from Solr API
-#  3) Build allow-list from .env fixed users + tenants.env users
+#  3) Apply extra admin/support users from admin-users.env
+#  4) Build allow-list from .env fixed users + admin-users.env + tenants.env users
 #  4) For API users not in allow-list: rotate to random password via API
 #     (blocks unknown/out-of-band credentials without deleting user entries)
 # ---------------------------------------------------------------------------
@@ -585,6 +587,38 @@ cmd_sync_sot() {
     _ensure_all_permission_last || return 1
   fi
 
+  if [ -f "$ADMIN_USERS_ENV" ]; then
+    local admin_key admin_value admin_name admin_field admin_role admin_pass
+    declare -A extra_admin_role_map extra_admin_pass_map
+
+    while IFS='=' read -r admin_key admin_value; do
+      case "$admin_key" in
+        '#'*|'') continue ;;
+      esac
+      if echo "$admin_key" | grep -qE '^ADMIN_[A-Za-z0-9_]+_(ROLE|PASS)$'; then
+        admin_name="${admin_key#ADMIN_}"
+        admin_field="${admin_name##*_}"
+        admin_name="${admin_name%_*}"
+        case "$admin_field" in
+          ROLE) extra_admin_role_map["$admin_name"]="$admin_value" ;;
+          PASS) extra_admin_pass_map["$admin_name"]="$admin_value" ;;
+        esac
+      fi
+    done < "$ADMIN_USERS_ENV"
+
+    for admin_name in "${!extra_admin_pass_map[@]}"; do
+      admin_role="${extra_admin_role_map[$admin_name]:-admin}"
+      admin_pass="${extra_admin_pass_map[$admin_name]:-}"
+      [ -n "$admin_pass" ] || continue
+      case "$admin_role" in
+        admin|support) ;;
+        *) printf 'ERROR: invalid role in %s for user %s: %s\n' "$ADMIN_USERS_ENV" "$admin_name" "$admin_role" >&2; return 1 ;;
+      esac
+      _write_credential "$admin_name" "$admin_pass" || return 1
+      _write_user_role "$admin_name" "$admin_role" || return 1
+    done
+  fi
+
   local auth_json api_users
   auth_json="$(_solr_api GET "/admin/authentication" 2>/dev/null || true)"
   if [ -z "$auth_json" ]; then
@@ -602,6 +636,10 @@ cmd_sync_sot() {
     printf '%s\n' "${SOLR_ADMIN_USER:-admin}"
     printf '%s\n' "${SOLR_SUPPORT_USER:-support}"
     [ -n "${SOLR_MOODLE_USER:-}" ] && printf '%s\n' "${SOLR_MOODLE_USER}"
+
+    if [ -f "$ADMIN_USERS_ENV" ]; then
+      awk -F= '/^ADMIN_[A-Za-z0-9_]+_PASS=/ { key=$1; sub(/^ADMIN_/, "", key); sub(/_PASS$/, "", key); print key }' "$ADMIN_USERS_ENV"
+    fi
 
     if [ -f "$TENANTS_ENV" ]; then
       local -A tenant_user_map tenant_active_map tenant_has_cores

@@ -64,8 +64,8 @@ _block_user() {
 # _write_user_role: Assign Solr authorization roles to a user via the Security API.
 # SolrCloud tenants get both a shared `tenant` role for Moodle's core-level
 # /admin/system readiness check and their tenant-specific role for collection
-# isolation. Standalone uses the shared `tenant` role only.
-# Args: $1 - Solr username, $2 - role name (e.g. "tenant" or "tenant-schule_a")
+# isolation. System users such as extra admin/support users keep their exact role.
+# Args: $1 - Solr username, $2 - role name (e.g. "tenant", "tenant-schule_a", "admin", "support")
 # Returns: 0 on success, 1 on API failure
 
 # --- _write_user_role ---
@@ -76,8 +76,10 @@ _write_user_role() {
   local payload
   if [ "$role" = "tenant" ]; then
     payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): $r}}')"
-  else
+  elif printf '%s' "$role" | grep -q '^tenant-'; then
     payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): ["tenant", $r]}}')"
+  else
+    payload="$(jq -n --arg u "$user" --arg r "$role" '{"set-user-role": {($u): $r}}')"
   fi
   _cloud_authz_api "$payload"
 }
